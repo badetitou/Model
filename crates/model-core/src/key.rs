@@ -104,6 +104,16 @@ impl SymbolKey {
         k
     }
 
+    /// Key of a source file: one namespace per path segment, as
+    /// scip-typescript names modules (`src/`a.ts`/`).
+    pub fn for_file(language: &LanguageId, path: &str) -> SymbolKey {
+        path.split('/')
+            .filter(|s| !s.is_empty())
+            .fold(SymbolKey::new(language), |k, s| {
+                k.child(Descriptor::Namespace(s.to_string()))
+            })
+    }
+
     pub fn descriptors(&self) -> &[Descriptor] {
         match self {
             SymbolKey::Global { descriptors, .. } => descriptors,
@@ -436,6 +446,17 @@ mod tests {
             "model pharo My  Project . `src/A.java`/`at:put:`().`a``b`."
         );
         assert_eq!(SymbolKey::parse(&s).unwrap(), k);
+    }
+
+    #[test]
+    fn file_keys_have_one_namespace_per_segment() {
+        let k = SymbolKey::for_file(&LanguageId::new("typescript"), "src/app/a.service.ts");
+        assert_eq!(
+            k.to_string(),
+            "model typescript . . src/app/`a.service.ts`/"
+        );
+        let scip = SymbolKey::parse("scip-typescript npm app 1.0 src/app/`a.service.ts`/").unwrap();
+        assert!(k.same_descriptors(&scip));
     }
 
     #[test]

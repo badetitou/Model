@@ -467,7 +467,7 @@ fn builds_a_model_from_scip_alone() {
         .unwrap();
     assert_eq!((x.kind(), x.parent()), (K::Field, Some(a)));
 
-    let file = m.by_key("model typescript . . `src/a.ts`/").unwrap();
+    let file = m.by_key("model typescript . . src/`a.ts`/").unwrap();
     assert_eq!((file.kind(), file.name()), (K::File, "a.ts"));
     assert_eq!(file.range(), Some(r(0, 0, 9, 0)));
     assert_eq!(
@@ -540,6 +540,6 @@ fn language_override_and_normalisation() {
     assert_eq!(crate::language_of_path("Makefile"), None);
     let (b, _) = from_scip(&ts_index(), Some(LanguageId::new("ts")));
     let m = b.build();
-    assert!(m.by_key("model ts . . `src/a.ts`/").is_some());
+    assert!(m.by_key("model ts . . src/`a.ts`/").is_some());
     assert_eq!(m.languages(), [LanguageId::new("ts")]);
 }

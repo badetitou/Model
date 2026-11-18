@@ -18,8 +18,7 @@ use std::collections::{HashMap, HashSet};
 use rayon::prelude::*;
 
 use model_core::{
-    Descriptor, EntityId, EntityKind, LanguageId, ModelBuilder, Provenance, Range, RelationKind,
-    SymbolKey,
+    EntityId, EntityKind, LanguageId, ModelBuilder, Provenance, Range, RelationKind, SymbolKey,
 };
 use model_scip::{Definition, ScipDocument, ScipIndex, SymbolId};
 
@@ -390,9 +389,7 @@ fn add_file_entity(b: &mut ModelBuilder, doc: &ScipDocument, language: Option<La
     let lang = language
         .clone()
         .unwrap_or_else(|| LanguageId::new("unknown"));
-    let key = SymbolKey::new(&lang)
-        .child(Descriptor::Namespace(doc.relative_path.clone()))
-        .to_string();
+    let key = SymbolKey::for_file(&lang, &doc.relative_path).to_string();
     let name = doc
         .relative_path
         .rsplit('/')
