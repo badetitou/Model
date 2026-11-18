@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1
+
+Toolchain and dependency refresh; no API change.
+
+- Rust 1.100, pinned by `rust-toolchain.toml`. `rust-version` and CI's MSRV
+  job updated accordingly.
+- `scip` 0.10 (protobuf 3.7.2) and refreshed lockfile.
+- CI verified on Linux and macOS, with each grammar feature alone.
+
 ## 0.1.0
 
 First version, extracted from [Structure](https://github.com/badetitou/Structure).

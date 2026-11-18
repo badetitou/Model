@@ -28,7 +28,7 @@ Design: [`docs/design.md`](docs/design.md).
 
 ```toml
 [dependencies]
-model = { git = "https://github.com/badetitou/Model", tag = "v0.1.0" }
+model = { git = "https://github.com/badetitou/Model", tag = "v0.1.1" }
 ```
 
 ```rust
