@@ -1,0 +1,28 @@
+[package]
+name = "model-treesitter"
+description = "Extracts a model from sources with tree-sitter, driven by query files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["java", "typescript", "python"]
+java = ["dep:tree-sitter-java"]
+typescript = ["dep:tree-sitter-typescript"]
+python = ["dep:tree-sitter-python"]
+
+[dependencies]
+model-core.workspace = true
+anyhow.workspace = true
+ignore.workspace = true
+rayon.workspace = true
+tree-sitter.workspace = true
+tree-sitter-java = { workspace = true, optional = true }
+tree-sitter-typescript = { workspace = true, optional = true }
+tree-sitter-python = { workspace = true, optional = true }
+
+[dev-dependencies]
+model-link = { path = "../model-link" }
+model-scip.workspace = true
+model-detect.workspace = true

@@ -17,7 +17,7 @@ Design: [`docs/design.md`](docs/design.md).
 | `model-detect` | usable | languages of a tree, file counts, project roots |
 | `model-scip` | usable | reads `index.scip` (parallel, bounded memory) |
 | `model-link` | usable | SCIP → model: fusion onto syntactic entities, or SCIP-only models |
-| `model-treesitter` | planned | query-driven syntactic extraction |
+| `model-treesitter` | usable | query-driven extraction (Java, TypeScript, Python); [captures](crates/model-treesitter/README.md) |
 | `model-graphql` | planned | GraphQL plugin |
 
 ## Use
@@ -29,6 +29,14 @@ model-detect = { git = "https://github.com/badetitou/Model" }
 ```
 
 ```rust
+// Tree-sitter entities, then SCIP linked onto them.
+let mut builder = model_core::ModelBuilder::new();
+let opts = model_treesitter::ExtractOptions { relations: false, ..Default::default() };
+model_treesitter::extract(&mut builder, root, &opts)?;
+let index = model_scip::load(&root.join("index.scip"))?;
+model_link::link(&mut builder, &index, &Default::default());
+let model = builder.build();
+
 // A model from a SCIP index alone.
 let index = model_scip::load("index.scip".as_ref())?;
 let (builder, stats) = model_link::from_scip(&index, None);

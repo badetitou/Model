@@ -2,7 +2,7 @@
 
 Status: draft. Done: `model-core` (metamodel, keys, compact storage),
 `model-detect`, `model-scip` (loader), `model-link` (SCIP fusion and
-SCIP-only models).
+SCIP-only models), `model-treesitter` (Java, TypeScript, Python).
 
 ## 1. Goal
 
@@ -39,7 +39,7 @@ model-core = { git = "https://github.com/badetitou/Model", tag = "v0.1.0" }
 model-core         metamodel + builder + navigation API      (serde only)
   ^
   ├── model-detect      language detection, project roots        ✅
-  ├── model-treesitter  generic extractor driven by queries      ⏳
+  ├── model-treesitter  generic extractor driven by queries      ✅
   ├── model-scip        SCIP loading ✅, indexer runner, cache ⏳
   ├── model-link        SCIP → builder (fusion, SCIP-only)       ✅
   ├── model-lang-*      optional per-language enrichers          ⏳
@@ -191,7 +191,7 @@ detect ──► for each detected language / project root:
    timeout, progress and the per-document cache already in Structure
    (`pipeline/indexer.rs`, `scip_cache.rs`). Missing indexer = warning, not an
    error.
-3. **Extract**. Generic tree-sitter extractor (§5).
+3. **Extract** (`model-treesitter`, done). Generic tree-sitter extractor (§5).
 4. **Link** (`model-link`, done). Port of Structure's `link.rs` onto the
    builder:
    - SCIP definitions are matched to existing entities by identifier line
@@ -253,30 +253,41 @@ that most grammars already ship as `queries/tags.scm`:
 (method_invocation name: (identifier) @name) @reference.call
 ```
 
-- Captures map to entity kinds (`@definition.class` → `Class`,
-  `@definition.method` → `Method`, ...); `@name` gives `name_range`.
-- **Containment is inferred from range nesting** (innermost enclosing
-  definition), so queries stay flat.
-- Model ships its own `queries/<lang>/model.scm` when it needs more than
-  `tags.scm` gives, with extra captures: `@definition.field`,
-  `@definition.namespace`, `@relation.inherits`, `@relation.implements`,
-  `@relation.imports`, `@prop.<name>` (annotation, modifier, visibility).
-  Fallback: the grammar's `tags.scm`.
-- **Enrichers** (`model-lang-*`) are the escape hatch for facts a query
-  cannot express (Java/TS HTTP endpoints, GWT RPC, Pharo send resolution).
-  They receive the tree and the builder and only add `props`/relations.
+Implemented in `model-treesitter`; captures, rules and measurements are in
+[its README](../crates/model-treesitter/README.md). In short:
 
-So a new language needs: a grammar crate, a query file (often just its
-`tags.scm`), optionally a SCIP indexer row. No Rust code.
+- Captures map to entity kinds (`@definition.class` → `Class`, ...); `@name`
+  gives `name_range`. Model adds `@namespace`, `@relation.inherits|implements|imports`,
+  `@reference.type` and `@prop.<key>`; plain `tags.scm` files work as is
+  (Python uses its grammar's, unchanged).
+- **Containment is inferred from extent nesting**, so queries stay flat.
+- Keys are SCIP-like, with the indexer's constructor names and overload
+  numbering, so that keys stay comparable with SCIP's.
+- Relations are resolved by name, best effort (`TreeSitter` provenance).
+  With an index, extraction skips them (`relations: false`) and
+  `model-link` (`Lift`) resolves them exactly. Definitions, extents and
+  props still come from tree-sitter.
+- **Enrichers** (`model-lang-*`, not started) are the escape hatch for facts
+  a query cannot express (Java/TS HTTP endpoints, GWT RPC, Pharo send
+  resolution). They receive the tree and the builder and only add
+  props/relations.
 
-Initial matrix:
+So a new language needs a grammar crate, a query file (often just its
+`tags.scm`) and a row in `grammars.rs`; optionally a SCIP indexer row in
+`model-detect`.
 
-| Language | Grammar | Queries | SCIP indexer |
-|---|---|---|---|
-| Java | tree-sitter-java | model.scm (from Structure) | scip-java |
-| TypeScript/JS | tree-sitter-typescript / -javascript | model.scm (from Structure) | scip-typescript |
-| Pharo (Tonel) | tree-sitter-tonel-smalltalk (see below) | model.scm to write | none — `Frontend` enricher |
-| Python, Go, Rust, C/C++, C#, Ruby, PHP | official grammars | `tags.scm` | scip-python, scip-go, rust-analyzer, scip-clang, scip-dotnet, scip-ruby, scip-php |
+| Language | Grammar | Query | SCIP indexer | Status |
+|---|---|---|---|---|
+| Java | tree-sitter-java | `java.scm` | scip-java | ✅ |
+| TypeScript/TSX | tree-sitter-typescript | `typescript.scm` | scip-typescript | ✅ |
+| Python | tree-sitter-python | its `tags.scm` | scip-python | ✅ baseline |
+| Pharo (Tonel) | tree-sitter-tonel-smalltalk (see below) | to write | none — `Frontend` enricher | ⏳ |
+| Go, Rust, C/C++, C#, Ruby, PHP | official grammars | `tags.scm` | scip-go, rust-analyzer, scip-clang, scip-dotnet, scip-ruby, scip-php | ⏳ a row each |
+
+Tree-sitter extents are what fix SCIP-only attribution: on
+angular-realworld, references at file level go from 67% to the code that
+really is outside any named definition (test callbacks 54%, imports 9%,
+top-level config 4%).
 
 ### Pharo / Tonel
 
@@ -377,9 +388,11 @@ Each step is one PR, Structure's tests and goldens staying green:
 2. **model-scip + model-link** — loader and linker ported ✅; the indexer
    runner and per-document cache (`pipeline/indexer.rs`, `scip_cache.rs`) are
    still to move (2b).
-3. **model-treesitter** — the query-driven extractor; port the Java and TS
-   extractors of `structure-lang-java`/`-ts` to `model.scm` + enrichers;
-   compare with Structure's output on the fixtures (same entities/edges).
+3. **model-treesitter** — query-driven extractor ✅ (Java, TS, Python);
+   linked with SCIP, it meets Structure's mapping-ratio test on its fixtures
+   (1.000 jpetstore, 0.989 angular-realworld, Structure requires 0.8). Still
+   to port from `structure-lang-java`/`-ts`: HTTP endpoints/calls and GWT RPC
+   (enrichers), and a side-by-side comparison of entities.
 4. **Pharo** — tonel grammar binding, `model.scm`, sends enricher; compare with
    `structure-lang-pharo`.
 5. **Structure switches** — depends on Model by git tag; a thin adapter

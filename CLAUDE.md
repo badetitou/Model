@@ -28,6 +28,12 @@ Structure (`../Structure`), its first client.
   `Implements`/`Inherits`; `from_scip` = SCIP-only model. `symbols.rs`:
   per-symbol facts computed once. `examples/scip_model.rs` runs on a real
   index (Structure's `fixtures/*/index.scip`).
+- `crates/model-treesitter` — `extract(builder, root, opts)`: `facts.rs`
+  runs a grammar's query (capture roles, nesting by extent), `apply.rs` makes
+  entities/keys and resolves uses by name; `grammars.rs` registry (features
+  `java`, `typescript`, `python`); `queries/*.scm`. Captures documented in its
+  README. `tests/fixtures.rs` needs `MODEL_FIXTURES` (absolute path, e.g.
+  Structure's `fixtures/`), skipped otherwise; `examples/build_model.rs`.
 - `crates/model-detect` — `detect(root)`: languages, file counts, project
   roots; `languages.rs` is the data table (`LanguageSpec`).
 
