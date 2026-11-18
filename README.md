@@ -1,5 +1,7 @@
 # Model
 
+[![CI](https://github.com/badetitou/Model/actions/workflows/ci.yml/badge.svg)](https://github.com/badetitou/Model/actions/workflows/ci.yml)
+
 A language-neutral model of a codebase, built from
 [tree-sitter](https://tree-sitter.github.io/) (syntax) and
 [SCIP](https://github.com/sourcegraph/scip) (resolved symbols), with
@@ -26,7 +28,7 @@ Design: [`docs/design.md`](docs/design.md).
 
 ```toml
 [dependencies]
-model = { git = "https://github.com/badetitou/Model" }
+model = { git = "https://github.com/badetitou/Model", tag = "v0.1.0" }
 ```
 
 ```rust
@@ -55,6 +57,10 @@ Try it: `cargo run --release -p model --example build -- <root>` (add
 `--reindex if-stale` to run indexers, `--json model.json` to export).
 
 ## Development
+
+Rust 1.90 or later. CI (`.github/workflows/ci.yml`) runs the commands below
+on Linux and macOS, each grammar feature alone, and the minimum Rust version.
+
 
 - `cargo fmt --check`
 - `cargo clippy --workspace --all-targets -- -D warnings`
