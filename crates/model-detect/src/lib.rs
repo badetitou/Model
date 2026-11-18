@@ -103,7 +103,7 @@ pub fn detect(root: &Path) -> anyhow::Result<Detection> {
             project_roots: r.into_iter().collect(),
         })
         .collect();
-    languages.sort_by(|a, b| b.files.cmp(&a.files));
+    languages.sort_by_key(|l| std::cmp::Reverse(l.files));
     Ok(Detection {
         root: root.to_path_buf(),
         languages,
