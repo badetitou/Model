@@ -1,0 +1,12 @@
+[package]
+name = "model-detect"
+description = "Detects the languages of a source tree and their project roots"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+model-core.workspace = true
+anyhow.workspace = true
+ignore.workspace = true

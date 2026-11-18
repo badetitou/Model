@@ -1,0 +1,19 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/model-core",
+    "crates/model-detect",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/badetitou/Model"
+
+[workspace.dependencies]
+model-core = { path = "crates/model-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+ignore = "0.4"
