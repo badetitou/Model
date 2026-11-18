@@ -41,6 +41,7 @@ tree-sitter = "0.27"
 async-graphql = "7.2"
 async-graphql-axum = "7.2"
 axum = "0.8"
+tower-http = { version = "0.6", features = ["cors"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
 tree-sitter-java = "0.23.5"
 tree-sitter-typescript = "0.23.2"

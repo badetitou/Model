@@ -141,7 +141,17 @@ cargo run --release -p model-graphql -- ../Structure --reindex if-stale
 ```
 
 The server also accepts an exported `model.json` instead of a source root, and
-`--schema` prints the SDL.
+`--schema` prints the SDL. Introspection is enabled (GraphiQL uses it). For a
+browser client on another origin — e.g. Fluid on `http://localhost:5173` —
+allow it explicitly:
+
+```sh
+cargo run --release -p model-graphql -- ../Structure \
+  --allow-origin http://localhost:5173
+```
+
+`--allow-origin` is repeatable, accepts comma-separated origins, and `*` allows
+any origin. Without it, no CORS header is sent.
 
 ## Use it as a library
 

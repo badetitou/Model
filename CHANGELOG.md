@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `model-graphql`: `--allow-origin <origin|*>` (repeatable, comma-separated)
+  enables CORS for browser clients such as Fluid. Without it the server keeps
+  sending no CORS header. `router_with_origins` exposes it as a library API;
+  introspection stays enabled.
+
 ## 0.1.2
 
 - `model-analysis`: language-neutral `Analysis` trait and generic analyses —

@@ -383,7 +383,8 @@ this one.
 `model::build` or loaded from an exported `model.json`:
 
 ```sh
-cargo run --release -p model-graphql -- <root | model.json> [--port 8000]
+cargo run --release -p model-graphql -- <root | model.json> [--port 8000] \
+  [--allow-origin http://localhost:5173]
 # GraphiQL on http://127.0.0.1:8000/, API on /graphql
 ```
 
@@ -414,7 +415,9 @@ type Relation { id kind from to provenance siteCount sites(first, after): RangeC
   copied. Relation kinds are strings (`calls`, ..., or custom like `http`).
 - Every list is a forward connection (`first` default 50, at most 1000;
   `after` cursor; `totalCount`). Query depth is limited to 16.
-- Read-only: the model is immutable while served.
+- Read-only: the model is immutable while served. Introspection is enabled;
+  browser clients from another origin need `--allow-origin` (repeatable,
+  comma-separated, or `*`), otherwise no CORS header is sent.
 
 Example, "who calls the methods of AccountService" (jpetstore):
 

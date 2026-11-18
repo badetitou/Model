@@ -3,7 +3,7 @@ use std::sync::Arc;
 use model_core::{Model, ModelBuilder};
 use model_treesitter::{ExtractOptions, extract_sources};
 
-use crate::{ModelSchema, router, schema};
+use crate::{ModelSchema, router, router_with_origins, schema};
 
 const A: &str = r#"package app;
 
@@ -279,4 +279,52 @@ async fn serves_over_http() {
         resp.ends_with(r#"{"data":{"entity":{"name":"A"}}}"#),
         "{resp}"
     );
+}
+
+#[tokio::test]
+async fn cors_allows_only_configured_origins() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let app = router_with_origins(schema(model()), &["http://localhost:5173".into()]).unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await });
+
+    async fn http(addr: std::net::SocketAddr, req: String) -> String {
+        let mut c = tokio::net::TcpStream::connect(addr).await.unwrap();
+        c.write_all(req.as_bytes()).await.unwrap();
+        let mut out = String::new();
+        c.read_to_string(&mut out).await.unwrap();
+        out
+    }
+
+    let preflight = http(
+        addr,
+        "OPTIONS /graphql HTTP/1.1\r\nHost: x\r\nOrigin: http://localhost:5173\r\nAccess-Control-Request-Method: POST\r\nAccess-Control-Request-Headers: content-type\r\nConnection: close\r\n\r\n".into(),
+    )
+    .await
+    .to_ascii_lowercase();
+    assert!(preflight.starts_with("http/1.1 200"), "{preflight}");
+    assert!(
+        preflight.contains("access-control-allow-origin: http://localhost:5173"),
+        "{preflight}"
+    );
+    assert!(
+        preflight.contains("access-control-allow-methods"),
+        "{preflight}"
+    );
+
+    let body = r#"{"query":"{ __typename }"}"#;
+    let req = format!(
+        "POST /graphql HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nOrigin: http://evil.example\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    let denied = http(addr, req).await.to_ascii_lowercase();
+    assert!(denied.starts_with("http/1.1 200"), "{denied}");
+    assert!(!denied.contains("access-control-allow-origin"), "{denied}");
+}
+
+#[test]
+fn invalid_origin_is_rejected() {
+    let m = Arc::new(ModelBuilder::new().build());
+    assert!(router_with_origins(schema(m), &["not an origin".into()]).is_err());
 }
