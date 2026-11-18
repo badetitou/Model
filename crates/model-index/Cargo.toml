@@ -1,0 +1,17 @@
+[package]
+name = "model-index"
+description = "Runs SCIP indexers and caches their documents"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+model-detect.workspace = true
+model-scip.workspace = true
+anyhow.workspace = true
+ignore.workspace = true
+
+[dev-dependencies]
+protobuf.workspace = true
+scip.workspace = true

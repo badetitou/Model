@@ -167,6 +167,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "model-index"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ignore",
+ "model-detect",
+ "model-scip",
+ "protobuf",
+ "scip",
+]
+
+[[package]]
 name = "model-link"
 version = "0.1.0"
 dependencies = [
