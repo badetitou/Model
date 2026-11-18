@@ -39,6 +39,10 @@ type Class implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type ClassConnection {
@@ -366,6 +370,10 @@ type Enum implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type EnumConnection {
@@ -518,6 +526,10 @@ type File implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type FileConnection {
@@ -670,6 +682,10 @@ type Interface implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type InterfaceConnection {
@@ -827,6 +843,10 @@ type Namespace implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type NamespaceConnection {
@@ -993,6 +1013,74 @@ type Query {
 	The `File` entity of a path relative to the analysed root.
 	"""
 	file(path: String!): Entity
+	"""
+	An entity by its stable key, whatever its kind.
+	
+	Introspection-driven clients recognise a concept's by-key lookup when
+	the root field returns that concrete concept and takes one required
+	scalar argument; the `…ByKey` fields below provide exactly that.
+	"""
+	entityByKey(key: String!): Entity
+	"""
+	The `Namespace` with this key.
+	"""
+	namespaceByKey(key: String!): Namespace
+	"""
+	The `File` with this key.
+	"""
+	fileByKey(key: String!): File
+	"""
+	The `Class` with this key.
+	"""
+	classByKey(key: String!): Class
+	"""
+	The `Interface` with this key.
+	"""
+	interfaceByKey(key: String!): Interface
+	"""
+	The `Trait` with this key.
+	"""
+	traitByKey(key: String!): Trait
+	"""
+	The `Enum` with this key.
+	"""
+	enumByKey(key: String!): Enum
+	"""
+	The `Struct` with this key.
+	"""
+	structByKey(key: String!): Struct
+	"""
+	The `TypeAlias` with this key.
+	"""
+	typeAliasByKey(key: String!): TypeAlias
+	"""
+	The `Method` with this key.
+	"""
+	methodByKey(key: String!): Method
+	"""
+	The `Constructor` with this key.
+	"""
+	constructorByKey(key: String!): Constructor
+	"""
+	The `Function` with this key.
+	"""
+	functionByKey(key: String!): Function
+	"""
+	The `Field` with this key.
+	"""
+	fieldByKey(key: String!): Field
+	"""
+	The `Property` with this key.
+	"""
+	propertyByKey(key: String!): Property
+	"""
+	The `Constant` with this key.
+	"""
+	constantByKey(key: String!): Constant
+	"""
+	The `Variable` with this key.
+	"""
+	variableByKey(key: String!): Variable
 	"""
 	Entities matching every given filter, in model order.
 	"""
@@ -1223,6 +1311,10 @@ type Struct implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type StructConnection {
@@ -1299,6 +1391,10 @@ type Trait implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type TraitConnection {

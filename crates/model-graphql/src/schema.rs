@@ -243,11 +243,36 @@ impl EntityBase {
     }
 }
 
+/// Methods contained in an entity, as a plain typed list. `children(kind:
+/// METHOD)` stays available for pagination and returns the `Entity` interface;
+/// this convenience field makes the methods a navigable relation to `Method`
+/// for introspection-driven clients.
+fn methods_of(base: &EntityBase, first: Option<i32>) -> Result<Vec<Method>> {
+    let n = match first {
+        None => DEFAULT_PAGE,
+        Some(f) if f < 0 => return Err(Error::new("`first` must not be negative")),
+        Some(f) => (f as usize).min(MAX_PAGE),
+    };
+    Ok(base
+        .r()?
+        .children()
+        .filter(|c| c.kind() == model_core::EntityKind::Method)
+        .take(n)
+        .map(|c| {
+            Method(EntityBase {
+                model: base.model.clone(),
+                id: c.id(),
+            })
+        })
+        .collect())
+}
+
 /// Generate one GraphQL object per `EntityKind`. All resolvers are identical
 /// and forward to [`EntityBase`]; only the GraphQL type name differs. The
-/// field signatures must match the `Entity` interface below exactly.
+/// field signatures must match the `Entity` interface below exactly. A type
+/// may add extra fields (`methods` below) as trailing items.
 macro_rules! entity_objects {
-    ($(($name:ident, $desc:literal)),* $(,)?) => {
+    ($(($name:ident, $desc:literal $(, $extra:item)*)),* $(,)?) => {
         $(
             #[doc = $desc]
             #[derive(Clone)]
@@ -340,19 +365,56 @@ macro_rules! entity_objects {
                 ) -> Result<Page<Relation>> {
                     self.0.incoming(kind, provenance, first, after).await
                 }
+
+                $($extra)*
             }
         )*
     };
 }
 
 entity_objects! {
-    (Namespace, "A namespace, package or module."),
-    (File, "A source file."),
-    (Class, "A class declaration."),
-    (Interface, "An interface declaration."),
-    (Trait, "A trait or mixin declaration."),
-    (Enum, "An enumeration declaration."),
-    (Struct, "A struct or record declaration."),
+    (Namespace, "A namespace, package or module.",
+        /// Methods contained in this entity.
+        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
+            methods_of(&self.0, first)
+        }
+    ),
+    (File, "A source file.",
+        /// Methods contained in this entity.
+        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
+            methods_of(&self.0, first)
+        }
+    ),
+    (Class, "A class declaration.",
+        /// Methods contained in this entity.
+        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
+            methods_of(&self.0, first)
+        }
+    ),
+    (Interface, "An interface declaration.",
+        /// Methods contained in this entity.
+        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
+            methods_of(&self.0, first)
+        }
+    ),
+    (Trait, "A trait or mixin declaration.",
+        /// Methods contained in this entity.
+        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
+            methods_of(&self.0, first)
+        }
+    ),
+    (Enum, "An enumeration declaration.",
+        /// Methods contained in this entity.
+        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
+            methods_of(&self.0, first)
+        }
+    ),
+    (Struct, "A struct or record declaration.",
+        /// Methods contained in this entity.
+        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
+            methods_of(&self.0, first)
+        }
+    ),
     (TypeAlias, "A type alias."),
     (Method, "A method inside a type."),
     (Constructor, "A constructor."),
@@ -551,6 +613,27 @@ pub struct Query {
 }
 
 impl Query {
+    /// The single entity of a kind with this stable key, when it has the
+    /// expected kind. Backs the per-kind `…ByKey` root fields: introspection-
+    /// driven clients need one root field with a single required scalar key
+    /// argument to recognise the by-key lookup of each concept.
+    fn one_of<T>(
+        &self,
+        kind: model_core::EntityKind,
+        key: &str,
+        wrap: fn(EntityBase) -> T,
+    ) -> Option<T> {
+        self.model
+            .by_key(key)
+            .filter(|e| e.kind() == kind)
+            .map(|e| {
+                wrap(EntityBase {
+                    model: self.model.clone(),
+                    id: e.id(),
+                })
+            })
+    }
+
     /// Generic list query for a kind: shared by the per-kind root fields.
     fn list_of<T>(
         &self,
@@ -605,6 +688,90 @@ impl Query {
             .of_kind(model_core::EntityKind::File)
             .find(|e| e.file() == Some(path.as_str()))
             .map(|e| entity_of(&self.model, e))
+    }
+
+    /// An entity by its stable key, whatever its kind.
+    ///
+    /// Introspection-driven clients recognise a concept's by-key lookup when
+    /// the root field returns that concrete concept and takes one required
+    /// scalar argument; the `…ByKey` fields below provide exactly that.
+    async fn entity_by_key(&self, key: String) -> Option<Entity> {
+        self.model.by_key(&key).map(|e| entity_of(&self.model, e))
+    }
+
+    /// The `Namespace` with this key.
+    async fn namespace_by_key(&self, key: String) -> Option<Namespace> {
+        self.one_of(model_core::EntityKind::Namespace, &key, Namespace)
+    }
+
+    /// The `File` with this key.
+    async fn file_by_key(&self, key: String) -> Option<File> {
+        self.one_of(model_core::EntityKind::File, &key, File)
+    }
+
+    /// The `Class` with this key.
+    async fn class_by_key(&self, key: String) -> Option<Class> {
+        self.one_of(model_core::EntityKind::Class, &key, Class)
+    }
+
+    /// The `Interface` with this key.
+    async fn interface_by_key(&self, key: String) -> Option<Interface> {
+        self.one_of(model_core::EntityKind::Interface, &key, Interface)
+    }
+
+    /// The `Trait` with this key.
+    async fn trait_by_key(&self, key: String) -> Option<Trait> {
+        self.one_of(model_core::EntityKind::Trait, &key, Trait)
+    }
+
+    /// The `Enum` with this key.
+    async fn enum_by_key(&self, key: String) -> Option<Enum> {
+        self.one_of(model_core::EntityKind::Enum, &key, Enum)
+    }
+
+    /// The `Struct` with this key.
+    async fn struct_by_key(&self, key: String) -> Option<Struct> {
+        self.one_of(model_core::EntityKind::Struct, &key, Struct)
+    }
+
+    /// The `TypeAlias` with this key.
+    async fn type_alias_by_key(&self, key: String) -> Option<TypeAlias> {
+        self.one_of(model_core::EntityKind::TypeAlias, &key, TypeAlias)
+    }
+
+    /// The `Method` with this key.
+    async fn method_by_key(&self, key: String) -> Option<Method> {
+        self.one_of(model_core::EntityKind::Method, &key, Method)
+    }
+
+    /// The `Constructor` with this key.
+    async fn constructor_by_key(&self, key: String) -> Option<Constructor> {
+        self.one_of(model_core::EntityKind::Constructor, &key, Constructor)
+    }
+
+    /// The `Function` with this key.
+    async fn function_by_key(&self, key: String) -> Option<Function> {
+        self.one_of(model_core::EntityKind::Function, &key, Function)
+    }
+
+    /// The `Field` with this key.
+    async fn field_by_key(&self, key: String) -> Option<Field> {
+        self.one_of(model_core::EntityKind::Field, &key, Field)
+    }
+
+    /// The `Property` with this key.
+    async fn property_by_key(&self, key: String) -> Option<Property> {
+        self.one_of(model_core::EntityKind::Property, &key, Property)
+    }
+
+    /// The `Constant` with this key.
+    async fn constant_by_key(&self, key: String) -> Option<Constant> {
+        self.one_of(model_core::EntityKind::Constant, &key, Constant)
+    }
+
+    /// The `Variable` with this key.
+    async fn variable_by_key(&self, key: String) -> Option<Variable> {
+        self.one_of(model_core::EntityKind::Variable, &key, Variable)
     }
 
     /// Entities matching every given filter, in model order.

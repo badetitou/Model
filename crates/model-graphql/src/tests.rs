@@ -301,6 +301,62 @@ async fn per_kind_root_fields_expose_the_concrete_types() {
     }
 }
 
+/// Introspection-driven clients (fluid in particular) only drill into a
+/// concept when the root Query has a single-item field returning that concrete
+/// concept and taking exactly one required scalar key argument.
+#[tokio::test]
+async fn every_concrete_kind_has_a_by_key_root_field() {
+    let s = schema(model());
+    let d = run(
+        &s,
+        r#"{ __type(name: "Query") { fields {
+            name
+            type { kind name ofType { kind name } }
+            args { name type { kind ofType { kind name } } }
+        } } }"#,
+    )
+    .await;
+    let fields = d["__type"]["fields"].as_array().unwrap();
+    for (field, concept) in [
+        ("entityByKey", "Entity"),
+        ("namespaceByKey", "Namespace"),
+        ("fileByKey", "File"),
+        ("classByKey", "Class"),
+        ("interfaceByKey", "Interface"),
+        ("traitByKey", "Trait"),
+        ("enumByKey", "Enum"),
+        ("structByKey", "Struct"),
+        ("typeAliasByKey", "TypeAlias"),
+        ("methodByKey", "Method"),
+        ("constructorByKey", "Constructor"),
+        ("functionByKey", "Function"),
+        ("fieldByKey", "Field"),
+        ("propertyByKey", "Property"),
+        ("constantByKey", "Constant"),
+        ("variableByKey", "Variable"),
+    ] {
+        let f = fields
+            .iter()
+            .find(|f| f["name"] == field)
+            .unwrap_or_else(|| panic!("missing {field}"));
+        assert_eq!(
+            f["type"]["kind"],
+            if field == "entityByKey" {
+                "INTERFACE"
+            } else {
+                "OBJECT"
+            },
+            "{field}"
+        );
+        assert_eq!(f["type"]["name"], concept, "{field}");
+        let args = f["args"].as_array().unwrap();
+        assert_eq!(args.len(), 1, "{field}: {args:?}");
+        assert_eq!(args[0]["name"], "key", "{field}");
+        assert_eq!(args[0]["type"]["kind"], "NON_NULL", "{field}");
+        assert_eq!(args[0]["type"]["ofType"]["name"], "String", "{field}");
+    }
+}
+
 #[tokio::test]
 async fn concrete_fragments_select_kind_specific_fields() {
     let s = schema(model());
@@ -359,6 +415,83 @@ async fn entity_introspection_lists_every_kind_as_a_possible_type() {
     ] {
         assert!(names.contains(&expected), "missing {expected}: {names:?}");
     }
+}
+
+const PHARO: &str = r#"
+Class {
+  #name : #OrderService,
+  #superclass : #Object,
+  #package : 'MyApp-Core'
+}
+
+OrderService >> place: anOrder [
+  ^ anOrder
+]
+
+OrderService >> total [
+  ^ 1
+]
+
+OrderService class >> new [
+  ^ super new
+]
+"#;
+
+fn pharo_model() -> Arc<Model> {
+    let mut b = ModelBuilder::new();
+    let mut warnings = Vec::new();
+    model_lang_pharo::extract_sources(
+        &mut b,
+        &[("src/OrderService.class.st".to_string(), PHARO.to_string())],
+        &mut warnings,
+    );
+    assert!(warnings.is_empty(), "{warnings:?}");
+    Arc::new(b.build())
+}
+
+/// The shape fluid needs to open a class and list its methods without an LLM:
+/// a by-key root field per concept, and a typed `methods` relation.
+#[tokio::test]
+async fn pharo_class_can_be_opened_and_its_methods_navigated() {
+    let s = schema(pharo_model());
+    let d = run(
+        &s,
+        r#"{
+            classByKey(key: "model pharo . . OrderService#") {
+                __typename key name
+                methods { __typename key name }
+            }
+            methodByKey(key: "model pharo . . OrderService#`place:`().") {
+                __typename name parent { name }
+            }
+            unknown: methodByKey(key: "model pharo . . OrderService#") { name }
+            entityByKey(key: "model pharo . . OrderService#") { __typename name }
+        }"#,
+    )
+    .await;
+    let class = &d["classByKey"];
+    assert_eq!(class["__typename"], "Class");
+    assert_eq!(class["name"], "OrderService");
+    let methods = class["methods"].as_array().unwrap();
+    assert_eq!(methods.len(), 3, "{methods:?}");
+    assert!(methods.iter().all(|m| m["__typename"] == "Method"));
+    let names: Vec<&str> = methods
+        .iter()
+        .map(|m| m["name"].as_str().unwrap())
+        .collect();
+    assert!(names.contains(&"place:"), "{names:?}");
+    assert!(names.contains(&"total"), "{names:?}");
+    assert!(names.contains(&"new"), "{names:?}");
+
+    let method = &d["methodByKey"];
+    assert_eq!(method["__typename"], "Method");
+    assert_eq!(method["name"], "place:");
+    assert_eq!(method["parent"]["name"], "OrderService");
+    assert_eq!(d["unknown"], serde_json::json!(null));
+    assert_eq!(
+        d["entityByKey"],
+        serde_json::json!({"__typename": "Class", "name": "OrderService"})
+    );
 }
 
 /// `schema.graphql` documents the API; regenerate with `UPDATE_SCHEMA=1`.

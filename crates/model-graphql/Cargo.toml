@@ -24,4 +24,5 @@ serde_json.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+model-lang-pharo.workspace = true
 model-treesitter.workspace = true

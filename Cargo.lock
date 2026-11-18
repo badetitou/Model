@@ -905,6 +905,7 @@ dependencies = [
  "axum",
  "model",
  "model-core",
+ "model-lang-pharo",
  "model-treesitter",
  "serde_json",
  "tokio",

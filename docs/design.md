@@ -411,11 +411,13 @@ type Query {
   languages: [String!]!
   stats: Stats!
   entity(key: String, id: Int): Entity
+  entityByKey(key: String!): Entity
   file(path: String!): Entity
   entities(kind, language, name, nameContains, external, filePrefix, roots,
            first, after): EntityConnection!
   relations(kind: String, provenance: Provenance, first, after): RelationConnection!
   classes methods interfaces namespaces files ... (first, after): <Kind>Connection!
+  classByKey(key: String!): Class   # one per kind: methodByKey, traitByKey, ...
 }
 interface Entity {
   id key kind name language external file range nameRange props: JSON
@@ -424,14 +426,21 @@ interface Entity {
   outgoing(kind: String, provenance, first, after): RelationConnection!
   incoming(kind: String, provenance, first, after): RelationConnection!
 }
-type Class implements Entity { ... }  # + Method, Interface, Namespace, ...
+type Class implements Entity { ...   # + Method, Interface, Namespace, ...
+  methods(first): [Method!]!        # typed shortcut for children(kind: METHOD)
+}
 type Relation { id kind from to provenance siteCount sites(first, after): RangeConnection! }
 ```
 
 - `Entity` is an interface with one concrete object per `EntityKind` (15 in
   all). Navigation fields return the interface; each kind also has a root
   field (`classes`, `methods`, `interfaces`, …) returning a typed connection,
-  so introspection-based clients see the kinds as distinct concepts.
+  so introspection-based clients see the kinds as distinct concepts. Each
+  concept also has a single-item lookup (`classByKey`, `methodByKey`, …) taking
+  one required `key: String!` argument: introspection-driven UIs such as fluid
+  use that shape as the by-id query of a concept, which is what makes their
+  auto-generated tables clickable and their detail columns possible.
+  Containers additionally expose `methods: [Method!]!` as a typed relation.
 - Resolvers hold an `Arc<Model>` and an id and map onto §6; nothing is
   copied. Relation kinds are strings (`calls`, ..., or custom like `http`).
   Breaking change: `__typename` on an entity is now `Class`, `Method`, …,

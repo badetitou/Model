@@ -336,6 +336,19 @@ kinds are strings so plugins can introduce their own, and the model is
 immutable while served. `__typename` on an entity used to be `Entity`; it is
 now the concrete type name — clients matching on it must be updated.
 
+Each kind also has a single-item lookup with one required `key` argument
+(`classByKey`, `methodByKey`, `traitByKey`, …), and containers expose a typed
+`methods` list. Introspection-driven clients such as fluid need both: the
+list/by-key pair makes their generated tables clickable, and `methods` is the
+relation a class detail view can show without hand-written queries:
+
+```graphql
+{ classByKey(key: "model pharo . . OrderService#") {
+    name
+    methods { key name }
+} }
+```
+
 ## Development
 
 Rust 1.100, pinned by [`rust-toolchain.toml`](rust-toolchain.toml). CI runs the

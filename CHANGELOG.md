@@ -4,6 +4,13 @@
 
 ### Added
 
+- `model-graphql`: one by-key root field per entity kind (`classByKey`,
+  `methodByKey`, …, plus `entityByKey`), each with a single required
+  `key: String!` argument. Introspection-driven clients such as fluid use this
+  shape as a concept's by-id lookup: it enables links in generated tables and
+  opens detail columns. `Class` and the other containers also expose a typed
+  `methods: [Method!]!` relation, so a class's methods can be listed and
+  navigated without a hand-written query.
 - `model-lang-pharo`: direct Pharo/Tonel frontend. Parses `Class`, `Trait` and
   `Extension` files into `model pharo . . ` entities, emits `Inherits` and
   `References`, and resolves message sends into `Calls` with

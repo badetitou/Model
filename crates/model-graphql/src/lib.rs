@@ -9,7 +9,9 @@
 //!
 //! `Entity` is an interface with one concrete object per entity kind
 //! (`Class`, `Method`, ...); navigation fields return the interface, and
-//! `Query` has one list field per kind so clients can enumerate them.
+//! `Query` has one list field per kind so clients can enumerate them. Each
+//! kind also has a single-item `…ByKey(key: String!)` field, the shape
+//! introspection-driven clients use as a concept's by-id lookup.
 //!
 //! Introspection is enabled by default (GraphiQL needs it). Browser clients on
 //! another origin need CORS: `router_with_origins` adds it for the origins
