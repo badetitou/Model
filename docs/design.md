@@ -3,8 +3,8 @@
 Status: draft. Done: `model-core` (metamodel, keys, compact storage),
 `model-detect`, `model-scip` (loader), `model-link` (SCIP fusion and
 SCIP-only models), `model-treesitter` (Java, TypeScript, Python),
-`model-index` (indexer runs, document cache), the `model` facade and
-`model-graphql`.
+`model-index` (indexer runs, document cache), `model-analysis` (generic
+analyses), the `model` facade and `model-graphql`.
 
 ## 1. Goal
 
@@ -34,7 +34,7 @@ Standalone repository `badetitou/Model`, a Cargo workspace (edition 2024).
 Clients depend on it via Cargo git dependencies:
 
 ```toml
-model-core = { git = "https://github.com/badetitou/Model", tag = "v0.1.1" }
+model-core = { git = "https://github.com/badetitou/Model", tag = "v0.1.2" }
 ```
 
 ```
@@ -46,7 +46,7 @@ model-core         metamodel + builder + navigation API      (serde only)
   ├── model-index       indexer runs, staleness, document cache  ✅
   ├── model-link        SCIP → builder (fusion, SCIP-only)       ✅
   ├── model-lang-*      optional per-language enrichers          ⏳
-  └── model-analysis    Analysis trait + generic analyses        ⏳
+  └── model-analysis    Analysis trait + generic analyses        ✅
         ^
   model (facade)   `model::build(root, &BuildOptions, progress)`  ✅
                    detect → index → extract → link
@@ -341,7 +341,7 @@ Next additions, driven by the first analyses: `descendants`, filtered
 iterators by language/file, a `ModelView` (sub-model restricted to a scope:
 package, files changed in a diff), site → entity lookup by file and position.
 
-## 7. Analyses (MDE)
+## 7. Analyses (MDE) ✅
 
 ```rust
 pub trait Analysis {
@@ -352,15 +352,30 @@ pub trait Analysis {
 ```
 
 - Read-only analyses return a value (metrics, dead code, cycles,
-  layer violations, impact of a diff).
+  layer violations, impact of a diff). `model_analysis::run` prefixes failures
+  with the analysis name.
 - **Transformations** return a new `Model` (or relations to add with
   `Provenance::Derived`): HTTP linking (TS `http.calls` ⨝ Java
   `http.endpoints`), GWT RPC linking, quotient by package/layer.
 
-Generic analyses that belong in `model-analysis`: fan-in/fan-out, dependency
-cycles (Tarjan), unused entities, quotient graph by an arbitrary
-entity → group function. Structure keeps its domain-specific ones:
-`layer × domain` classification, matrix, git impact.
+`model-analysis` (v0.1, language-neutral) implements:
+
+| Analysis | Output |
+|---|---|
+| `Metrics` | counts by entity kind, relation kind/provenance, language, file, site |
+| `Degree` / `Degrees` | fan-in/fan-out, filtered by kinds/provenance, weighted by sites, ranked |
+| `Cycle` / `Cycles` | dependency SCCs (iterative Tarjan), default `Calls` + `References` |
+| `Unused` | isolated entities; `Calls`, `References`, `Implements` connect ancestors too |
+| `Propagation` / `Impact` | BFS distance from seeds, direction (callers/callees/both), max depth |
+| `quotient` / `QuotientAnalysis` | collapse entities by an arbitrary `EntityRef → group` function |
+| `InterfaceCalls` | derived calls to implementations of interface methods |
+
+`InterfaceCalls` is deliberately an analysis, not a linker: it returns
+`DerivedRelation`s carrying the original call sites, which the caller can add
+to a `ModelBuilder` with `Provenance::Derived` via `DerivedRelations::apply`.
+Structure keeps its domain-specific analyses: `layer × domain` classification,
+matrix, git impact, and its own interface-call propagation until it consumes
+this one.
 
 ## 8. Plugins — GraphQL (part 2) ✅
 
@@ -416,8 +431,8 @@ queries answer in 1–8 ms: a `nameContains` search over every entity, all
 `calls` relations counted, or a class with its 157 methods and their caller
 counts (4 ms).
 
-Later: `analysis(name, args)` fields once `model-analysis` exists,
-subscriptions for incremental rebuilds.
+Next: expose registered analyses as `analysis(name, args)` fields now that
+`model-analysis` exists, plus subscriptions for incremental rebuilds.
 
 ## 9. Migration of Structure
 
@@ -440,7 +455,8 @@ Each step is one PR, Structure's tests and goldens staying green:
    converts `Model` to its IR, then classify/matrix/impact move to `Model`
    directly and `structure-ir`'s `Graph` is removed. Language detection in
    Structure uses `model-detect` (gaining multi-language roots).
-6. **model-graphql** ✅; **model-cli**, **model-analysis** to do.
+6. **model-graphql** ✅; **model-analysis** ✅ (generic socle); **model-cli**
+   to do.
 
 ## 10. Open questions
 

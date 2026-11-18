@@ -266,3 +266,20 @@ fn language_filter_and_missing_root() {
     assert!(build(&d.join("nope"), &opts, &|_| {}).is_err());
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn facade_exposes_generic_analyses() {
+    let d = tree("analysis", &[("A.java", A_JAVA)]);
+    let opts = BuildOptions {
+        scip: false,
+        ..offline()
+    };
+    let b = build(&d, &opts, &|_| {}).unwrap();
+
+    let metrics = crate::analysis::Metrics::default();
+    let out = crate::analysis::run(&metrics, &b.model).unwrap();
+    assert_eq!(out.entities, b.model.entity_count());
+    assert_eq!(crate::Analysis::name(&metrics), "metrics");
+    assert!(out.relations_by_kind.contains_key("calls"));
+    let _ = std::fs::remove_dir_all(&d);
+}

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Model (monochrome)">
+  <title>Model — monochrome</title>
+  <defs>
+    <mask id="holes" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#FFFFFF"/>
+      <g fill="#000000">
+        <circle cx="56" cy="78" r="11.5"/>
+        <circle cx="200" cy="78" r="11.5"/>
+        <circle cx="56" cy="190" r="11.5"/>
+        <circle cx="200" cy="190" r="11.5"/>
+        <circle cx="128" cy="150" r="6.5"/>
+      </g>
+    </mask>
+  </defs>
+
+  <g mask="url(#holes)" fill="none" stroke="#0B1020" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M56 190 V78 L128 150 L200 78 V190" stroke-width="9"/>
+    <g stroke-width="7">
+      <circle cx="56" cy="78" r="15"/>
+      <circle cx="200" cy="78" r="15"/>
+      <circle cx="56" cy="190" r="15"/>
+      <circle cx="200" cy="190" r="15"/>
+    </g>
+    <circle cx="128" cy="150" r="17" fill="#0B1020" stroke="none"/>
+  </g>
+</svg>

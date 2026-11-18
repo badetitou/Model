@@ -10,6 +10,7 @@ publish.workspace = true
 
 [dependencies]
 model-core.workspace = true
+model-analysis.workspace = true
 model-detect.workspace = true
 model-index.workspace = true
 model-link.workspace = true

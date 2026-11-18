@@ -853,9 +853,10 @@ dependencies = [
 
 [[package]]
 name = "model"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
+ "model-analysis",
  "model-core",
  "model-detect",
  "model-index",
@@ -868,8 +869,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "model-analysis"
+version = "0.1.2"
+dependencies = [
+ "anyhow",
+ "model-core",
+ "serde",
+]
+
+[[package]]
 name = "model-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -877,7 +887,7 @@ dependencies = [
 
 [[package]]
 name = "model-detect"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "ignore",
@@ -886,7 +896,7 @@ dependencies = [
 
 [[package]]
 name = "model-graphql"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -901,7 +911,7 @@ dependencies = [
 
 [[package]]
 name = "model-index"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "ignore",
@@ -913,7 +923,7 @@ dependencies = [
 
 [[package]]
 name = "model-link"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "model-core",
@@ -925,7 +935,7 @@ dependencies = [
 
 [[package]]
 name = "model-scip"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "model-core",
@@ -936,7 +946,7 @@ dependencies = [
 
 [[package]]
 name = "model-treesitter"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "ignore",

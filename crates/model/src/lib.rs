@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::bail;
 
+pub use model_analysis as analysis;
 pub use model_core as core;
 pub use model_detect as detect;
 pub use model_index as index;
@@ -22,6 +23,7 @@ pub use model_link as link;
 pub use model_scip as scip;
 pub use model_treesitter as treesitter;
 
+pub use model_analysis::Analysis;
 pub use model_core::{EntityKind, EntityRef, Model, RelationKind, RelationRef};
 
 use model_core::ModelBuilder;

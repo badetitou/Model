@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.2
+
+- `model-analysis`: language-neutral `Analysis` trait and generic analyses —
+  `Metrics`, `Degree`/`Degrees`, `Cycle`/`Cycles` (iterative Tarjan),
+  `Unused`, `Propagation`/`Impact`, `quotient`/`QuotientAnalysis`, and
+  `InterfaceCalls` returning `Provenance::Derived` relations with their sites.
+- `model` re-exports the crate as `model::analysis` and the trait as
+  `model::Analysis`.
+- Refreshed README and build example output; clients now point at tag `v0.1.2`.
+
 ## 0.1.1
 
 Toolchain and dependency refresh; no API change.
