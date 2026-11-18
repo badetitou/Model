@@ -20,4 +20,4 @@ First version, extracted from [Structure](https://github.com/badetitou/Structure
 - `model`: `build(root)` runs detection, indexing, extraction and linking.
 - `model-graphql`: serves a model over GraphQL, with GraphiQL.
 
-Requires Rust 1.90.
+Requires Rust 1.100.

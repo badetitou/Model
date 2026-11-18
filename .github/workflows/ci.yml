@@ -51,11 +51,11 @@ jobs:
             cargo check -p model-treesitter --locked --no-default-features --features "$f"
           done
 
-  # `rust-version` in Cargo.toml (tree-sitter 0.27 needs 1.90).
+  # `rust-version` in Cargo.toml, also pinned by rust-toolchain.toml.
   msrv:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.90
+      - uses: dtolnay/rust-toolchain@1.100
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --all-targets --locked

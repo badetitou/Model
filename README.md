@@ -58,7 +58,7 @@ Try it: `cargo run --release -p model --example build -- <root>` (add
 
 ## Development
 
-Rust 1.90 or later. CI (`.github/workflows/ci.yml`) runs the commands below
+Rust 1.100 (pinned by `rust-toolchain.toml`). CI (`.github/workflows/ci.yml`) runs the commands below
 on Linux and macOS, each grammar feature alone, and the minimum Rust version.
 
 

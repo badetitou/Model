@@ -424,6 +424,7 @@ subscriptions for incremental rebuilds.
 Each step is one PR, Structure's tests and goldens staying green:
 
 1. **Model v0.1** — `model-core`, `model-detect`, CI and tag `v0.1.0` ✅.
+   Updated to Rust 1.100 and `scip` 0.10.
 2. **model-scip + model-link** — loader and linker ported ✅.
    2b. **model-index + `model` facade** ✅ — indexer runner, staleness and
    document cache ported from Structure's `pipeline/`; `model::build` runs
