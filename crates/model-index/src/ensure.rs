@@ -86,17 +86,30 @@ pub fn newer_sources(root: &Path, extensions: &[&str], index: &Path) -> usize {
         .count()
 }
 
-/// `root/index.scip`, reused or produced per `opts`; `None` (with a warning)
-/// when there is none to use.
+/// `root/<output>` (e.g. `index.scip`), reused or produced per `opts`;
+/// `None` (with a warning) when there is none to use. An index written by
+/// another tool is neither used nor overwritten.
 pub fn ensure_index(
     root: &Path,
     indexer: &Indexer,
     extensions: &[&str],
+    output: &str,
     opts: &IndexOptions,
     warn: &mut dyn FnMut(String),
     progress: &mut dyn FnMut(u8, String),
 ) -> Option<(PathBuf, IndexSource)> {
-    let index = root.join("index.scip");
+    let index = root.join(output);
+    if index.is_file()
+        && let Ok(Some(tool)) = model_scip::tool(&index)
+        && tool != indexer.name
+    {
+        warn(format!(
+            "{}: {output} was written by {tool}, not {}; not used",
+            root.display(),
+            indexer.name
+        ));
+        return None;
+    }
     if index.is_file() && opts.reindex != Reindex::Always {
         let stale = newer_sources(root, extensions, &index);
         if stale == 0 {
@@ -104,7 +117,7 @@ pub fn ensure_index(
         }
         if opts.reindex != Reindex::IfStale {
             warn(format!(
-                "{}: index.scip is older than {stale} source file(s); their relations may be off until it is rebuilt",
+                "{}: {output} is older than {stale} source file(s); their relations may be off until it is rebuilt",
                 root.display()
             ));
             return Some((index, IndexSource::Stale(stale)));
@@ -113,7 +126,7 @@ pub fn ensure_index(
     if opts.reindex == Reindex::Never {
         return None;
     }
-    let Some(cmd) = indexer.command(root) else {
+    let Some(cmd) = indexer.command(root, output) else {
         warn(format!(
             "{}: {} is not installed; using tree-sitter only",
             root.display(),
@@ -126,7 +139,7 @@ pub fn ensure_index(
         Ok(()) if index.is_file() => Some((index, IndexSource::Indexed)),
         Ok(()) => {
             warn(format!(
-                "{}: {} succeeded but wrote no index.scip; using tree-sitter only",
+                "{}: {} succeeded but wrote no {output}; using tree-sitter only",
                 root.display(),
                 indexer.name
             ));
@@ -166,6 +179,15 @@ mod tests {
         d
     }
 
+    fn write_tool_index(path: &Path, tool: &str) {
+        use protobuf::Message;
+        let mut idx = scip::types::Index::new();
+        let mut meta = scip::types::Metadata::new();
+        meta.tool_info.mut_or_insert_default().name = tool.into();
+        idx.metadata = protobuf::MessageField::some(meta);
+        std::fs::write(path, idx.write_to_bytes().unwrap()).unwrap();
+    }
+
     fn ts() -> &'static Indexer {
         crate::for_language("typescript").unwrap()
     }
@@ -201,6 +223,7 @@ mod tests {
                 &d,
                 ts(),
                 &["ts"],
+                "index.scip",
                 &opts,
                 &mut |w| warnings.borrow_mut().push(w),
                 &mut |_, _| {},
@@ -221,6 +244,20 @@ mod tests {
         assert!(w[0].contains("older than 1 source file"));
         std::fs::remove_file(d.join("index.scip")).unwrap();
         assert_eq!(run(Reindex::Never), None);
+        // Another tool's index is neither used nor overwritten.
+        write_tool_index(&d.join("index.scip"), "scip-java");
+        assert_eq!(run(Reindex::Always), None);
+        assert!(
+            warnings
+                .borrow()
+                .last()
+                .unwrap()
+                .contains("written by scip-java, not scip-typescript")
+        );
+        assert_eq!(
+            model_scip::tool(&d.join("index.scip")).unwrap().as_deref(),
+            Some("scip-java")
+        );
         let _ = std::fs::remove_dir_all(&d);
     }
 }

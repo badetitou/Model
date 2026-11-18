@@ -137,6 +137,18 @@ impl ScipIndex {
             references: self.documents.iter().map(|d| d.references.len()).sum(),
         }
     }
+
+    /// Prefixes document paths with `dir/`: for an index written in a
+    /// sub-directory of the analysed root. Empty `dir`: unchanged.
+    pub fn prefix_paths(&mut self, dir: &str) {
+        let dir = dir.trim_matches('/');
+        if dir.is_empty() {
+            return;
+        }
+        for d in &mut self.documents {
+            d.relative_path = format!("{dir}/{}", d.relative_path);
+        }
+    }
 }
 
 pub fn is_local(symbol: &str) -> bool {
@@ -154,6 +166,26 @@ pub fn load(path: &Path) -> anyhow::Result<ScipIndex> {
 
 pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<ScipIndex> {
     decode(&mut CodedInputStream::from_bytes(bytes), BATCH_BYTES)
+}
+
+/// Name of the tool that wrote the index at `path` (its metadata, usually
+/// the first field, so this reads little); `None` when it does not say.
+pub fn tool(path: &Path) -> anyhow::Result<Option<String>> {
+    let file = std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut input = CodedInputStream::new(&mut reader);
+    while let Some(tag) = input
+        .read_raw_tag_or_eof()
+        .context("invalid SCIP protobuf")?
+    {
+        if tag == (1 << 3 | 2) {
+            let meta: types::Metadata = input.read_message().context("invalid SCIP protobuf")?;
+            let name = meta.tool_info.name.clone();
+            return Ok((!name.is_empty()).then_some(name));
+        }
+        skip(&mut input, tag)?;
+    }
+    Ok(None)
 }
 
 /// Calls `f` with each still-encoded `Document` of the index at `path`, in
@@ -530,6 +562,22 @@ mod tests {
     #[test]
     fn invalid_bytes_error() {
         assert!(from_bytes(&[0xff, 0xff, 0xff]).is_err());
+    }
+
+    #[test]
+    fn reads_the_writing_tool() {
+        let file =
+            std::env::temp_dir().join(format!("model-scip-tool-{}.scip", std::process::id()));
+        let mut idx = Index::new();
+        idx.documents.push(Document::new());
+        std::fs::write(&file, idx.write_to_bytes().unwrap()).unwrap();
+        assert_eq!(tool(&file).unwrap(), None);
+        let mut meta = types::Metadata::new();
+        meta.tool_info.mut_or_insert_default().name = "scip-java".into();
+        idx.metadata = protobuf::MessageField::some(meta);
+        std::fs::write(&file, idx.write_to_bytes().unwrap()).unwrap();
+        assert_eq!(tool(&file).unwrap().as_deref(), Some("scip-java"));
+        let _ = std::fs::remove_file(&file);
     }
 
     #[test]

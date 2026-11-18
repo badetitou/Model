@@ -14,7 +14,7 @@ pub struct Indexer {
     pub version: &'static str,
     /// Languages it indexes.
     pub languages: &'static [&'static str],
-    command: fn(&Path) -> Option<Command>,
+    command: fn(&Path, &str) -> Option<Command>,
     hint: fn(&Path) -> Option<String>,
 }
 
@@ -25,15 +25,21 @@ impl std::fmt::Debug for Indexer {
 }
 
 impl Indexer {
-    /// Command writing `index.scip` in `root` (its working directory), or
-    /// `None` when the indexer is not installed.
-    pub fn command(&self, root: &Path) -> Option<Command> {
-        (self.command)(root)
+    /// Command writing the index to `output` (a file name) in `root`, its
+    /// working directory; `None` when the indexer is not installed.
+    pub fn command(&self, root: &Path, output: &str) -> Option<Command> {
+        (self.command)(root, output)
     }
 
     /// Build-tool advice appended to failures.
     pub fn hint(&self, root: &Path) -> Option<String> {
         (self.hint)(root)
+    }
+
+    /// File name of its index when `index.scip` is taken by another
+    /// indexer in the same root.
+    pub fn own_output(&self) -> String {
+        format!("index.{}.scip", self.name)
     }
 
     /// Key of the documents it produces in a cache.
@@ -60,10 +66,10 @@ const GRADLE_FILES: [&str; 4] = [
     "settings.gradle.kts",
 ];
 
-fn java_command(_: &Path) -> Option<Command> {
+fn java_command(_: &Path, output: &str) -> Option<Command> {
     if let Some(p) = find_on_path("scip-java") {
         let mut c = Command::new(p);
-        c.args(["index", "--output", "index.scip"]);
+        c.args(["index", "--output", output]);
         return Some(c);
     }
     let cs = find_on_path("cs").or_else(|| {
@@ -75,7 +81,7 @@ fn java_command(_: &Path) -> Option<Command> {
         .arg(format!(
             "com.sourcegraph:scip-java_2.13:{SCIP_JAVA_VERSION}"
         ))
-        .args(["--", "index", "--output", "index.scip"]);
+        .args(["--", "index", "--output", output]);
     Some(c)
 }
 
@@ -162,12 +168,12 @@ pub fn ts_index_args(root: &Path) -> Vec<String> {
         .collect()
 }
 
-fn ts_command(root: &Path) -> Option<Command> {
+fn ts_command(root: &Path, output: &str) -> Option<Command> {
     let npx = find_on_path("npx")?;
     let mut c = Command::new(npx);
     c.args(["-y"])
         .arg(format!("@sourcegraph/scip-typescript@{SCIP_TS_VERSION}"))
-        .args(["index", "--output", "index.scip"])
+        .args(["index", "--output", output])
         .args(ts_index_args(root));
     let existing = std::env::var("NODE_OPTIONS").ok();
     c.env(
@@ -177,7 +183,7 @@ fn ts_command(root: &Path) -> Option<Command> {
     Some(c)
 }
 
-fn python_command(root: &Path) -> Option<Command> {
+fn python_command(root: &Path, output: &str) -> Option<Command> {
     let name = root
         .canonicalize()
         .ok()
@@ -191,26 +197,19 @@ fn python_command(root: &Path) -> Option<Command> {
             c
         }
     };
-    c.args([
-        "index",
-        ".",
-        "--project-name",
-        &name,
-        "--output",
-        "index.scip",
-    ]);
+    c.args(["index", ".", "--project-name", &name, "--output", output]);
     Some(c)
 }
 
-fn go_command(_: &Path) -> Option<Command> {
+fn go_command(_: &Path, output: &str) -> Option<Command> {
     let mut c = Command::new(find_on_path("scip-go")?);
-    c.args(["--output", "index.scip"]);
+    c.args(["--output", output]);
     Some(c)
 }
 
-fn rust_command(_: &Path) -> Option<Command> {
+fn rust_command(_: &Path, output: &str) -> Option<Command> {
     let mut c = Command::new(find_on_path("rust-analyzer")?);
-    c.args(["scip", ".", "--output", "index.scip"]);
+    c.args(["scip", ".", "--output", output]);
     Some(c)
 }
 

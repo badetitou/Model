@@ -36,6 +36,10 @@ pub(crate) fn hash_paths(dir: &Path, paths: &[String]) -> anyhow::Result<Vec<Str
     if paths.is_empty() {
         return Ok(vec![]);
     }
+    // Absolute: git runs in `dir`, so a relative `dir` would not resolve.
+    let dir = &dir
+        .canonicalize()
+        .with_context(|| format!("resolving {}", dir.display()))?;
     let mut child = Command::new("git")
         .arg("-C")
         .arg(dir)
