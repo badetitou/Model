@@ -210,9 +210,11 @@ mod tests {
     #[test]
     fn success_reports_the_last_line() {
         let mut seen = Vec::new();
+        // Both lines go to stdout: stdout and stderr are read by separate
+        // threads, so their interleaving is not deterministic.
         let r = run(
             Path::new("."),
-            sh("echo one; echo '\u{1b}[1mtwo\u{1b}[0m' >&2"),
+            sh("echo one; echo '\u{1b}[1mtwo\u{1b}[0m'"),
             10,
             &mut |p, d| seen.push((p, d)),
             None,
