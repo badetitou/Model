@@ -7,6 +7,10 @@
 //! relations with their kind, provenance and every occurrence site.
 //! Lists are forward-paginated connections (`first`, `after`, `totalCount`).
 //!
+//! `Entity` is an interface with one concrete object per entity kind
+//! (`Class`, `Method`, ...); navigation fields return the interface, and
+//! `Query` has one list field per kind so clients can enumerate them.
+//!
 //! Introspection is enabled by default (GraphiQL needs it). Browser clients on
 //! another origin need CORS: `router_with_origins` adds it for the origins
 //! passed by `--allow-origin`; plain `router` keeps the default same-origin
@@ -21,14 +25,16 @@ use async_graphql::http::GraphiQLSource;
 use async_graphql::{EmptyMutation, EmptySubscription, Schema};
 use async_graphql_axum::GraphQL;
 use axum::Router;
-use axum::http::{HeaderValue, Method};
+use axum::http::{HeaderValue, Method as HttpMethod};
 use axum::response::Html;
 use axum::routing::get;
 use model_core::Model;
 use tower_http::cors::{Any, CorsLayer};
 
 pub use schema::{
-    DEFAULT_PAGE, Entity, EntityKind, MAX_PAGE, Provenance, Query, Range, Relation, Stats,
+    Class, Constant, Constructor, DEFAULT_PAGE, Entity, EntityKind, Enum, Field, File, Function,
+    Interface, MAX_PAGE, Method, Namespace, Property, Provenance, Query, Range, Relation, Stats,
+    Struct, Trait, TypeAlias, Variable,
 };
 
 pub type ModelSchema = Schema<Query, EmptyMutation, EmptySubscription>;
@@ -40,6 +46,9 @@ pub const MAX_DEPTH: usize = 16;
 pub fn schema(model: Arc<Model>) -> ModelSchema {
     Schema::build(Query { model }, EmptyMutation, EmptySubscription)
         .limit_depth(MAX_DEPTH)
+        // The interface is reachable from Query, but registering it explicitly
+        // guarantees every possible type appears in introspection.
+        .register_output_type::<Entity>()
         .finish()
 }
 
@@ -65,7 +74,7 @@ pub fn router_with_origins(schema: ModelSchema, origins: &[String]) -> anyhow::R
         return Ok(router(schema));
     }
     let mut cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST])
+        .allow_methods([HttpMethod::GET, HttpMethod::POST])
         .allow_headers(Any);
     cors = if origins.iter().any(|o| o == "*") {
         cors.allow_origin(Any)

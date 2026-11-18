@@ -229,6 +229,138 @@ async fn pages_are_capped() {
     );
 }
 
+#[tokio::test]
+async fn typename_reflects_the_entity_kind() {
+    let s = schema(model());
+    let d = run(
+        &s,
+        r#"{
+          class: entity(key: "model java . . app/A#") { __typename kind name }
+          method: entity(key: "model java . . app/A#run().") { __typename kind name }
+          file: file(path: "src/A.java") { __typename kind name }
+          viaNodes: entities(kind: CLASS) { nodes { __typename name } }
+        }"#,
+    )
+    .await;
+    assert_eq!(d["class"]["__typename"], "Class");
+    assert_eq!(d["method"]["__typename"], "Method");
+    assert_eq!(d["file"]["__typename"], "File");
+    assert_eq!(
+        d["viaNodes"]["nodes"],
+        serde_json::json!([
+            {"__typename": "Class", "name": "A"},
+            {"__typename": "Class", "name": "Inner"},
+            {"__typename": "Class", "name": "Base"},
+            {"__typename": "Class", "name": "Runnable"}
+        ])
+    );
+}
+
+#[tokio::test]
+async fn per_kind_root_fields_expose_the_concrete_types() {
+    let s = schema(model());
+    let d = run(
+        &s,
+        r#"{
+          namespaces { totalCount nodes { __typename name } }
+          files { totalCount nodes { __typename name } }
+          classes { totalCount nodes { __typename name } }
+          methods { totalCount nodes { __typename name } }
+          interfaces { totalCount nodes { __typename name external } }
+          traits { totalCount }
+          constructors { totalCount }
+          functions { totalCount }
+          fields { totalCount }
+          properties { totalCount }
+          constants { totalCount }
+          variables { totalCount }
+        }"#,
+    )
+    .await;
+    assert_eq!(
+        d["namespaces"]["nodes"],
+        serde_json::json!([{"__typename": "Namespace", "name": "app"}])
+    );
+    assert_eq!(d["files"]["totalCount"], 2);
+    assert_eq!(d["files"]["nodes"][0]["__typename"], "File");
+    assert_eq!(d["classes"]["totalCount"], 4);
+    assert_eq!(d["classes"]["nodes"][0]["__typename"], "Class");
+    assert_eq!(d["methods"]["totalCount"], 2);
+    assert_eq!(d["methods"]["nodes"][0]["__typename"], "Method");
+    for empty in [
+        "interfaces",
+        "traits",
+        "constructors",
+        "functions",
+        "fields",
+        "properties",
+        "constants",
+        "variables",
+    ] {
+        assert_eq!(d[empty]["totalCount"], 0, "{empty}");
+    }
+}
+
+#[tokio::test]
+async fn concrete_fragments_select_kind_specific_fields() {
+    let s = schema(model());
+    let d = run(
+        &s,
+        r#"{ entities(first: 100) { nodes {
+            __typename
+            ... on Class { className: name children(kind: METHOD) { totalCount } }
+            ... on Method { methodName: name }
+        } } }"#,
+    )
+    .await;
+    let nodes = d["entities"]["nodes"].as_array().unwrap();
+    let class = nodes
+        .iter()
+        .find(|n| n["__typename"] == "Class" && n["className"] == "A")
+        .unwrap();
+    assert_eq!(class["children"]["totalCount"], 2);
+    let method = nodes.iter().find(|n| n["__typename"] == "Method").unwrap();
+    assert_eq!(method["methodName"], "run");
+    assert!(method.get("className").is_none());
+}
+
+#[tokio::test]
+async fn entity_introspection_lists_every_kind_as_a_possible_type() {
+    let s = schema(model());
+    let d = run(
+        &s,
+        r#"{ __type(name: "Entity") { kind possibleTypes { name } } }"#,
+    )
+    .await;
+    assert_eq!(d["__type"]["kind"], "INTERFACE");
+    let names: Vec<&str> = d["__type"]["possibleTypes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names.len(), 15, "{names:?}");
+    for expected in [
+        "Namespace",
+        "File",
+        "Class",
+        "Interface",
+        "Trait",
+        "Enum",
+        "Struct",
+        "TypeAlias",
+        "Method",
+        "Constructor",
+        "Function",
+        "Field",
+        "Property",
+        "Constant",
+        "Variable",
+    ] {
+        assert!(names.contains(&expected), "missing {expected}: {names:?}");
+    }
+}
+
 /// `schema.graphql` documents the API; regenerate with `UPDATE_SCHEMA=1`.
 #[test]
 fn schema_file_is_up_to_date() {

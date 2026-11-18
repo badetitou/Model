@@ -308,9 +308,23 @@ relations and sites, binary-search key lookup. Run
 }
 ```
 
+`Entity` is a GraphQL **interface**: every `EntityKind` has its own concrete
+object (`Class`, `Method`, `Interface`, …), so `__typename` returns the real
+kind and clients can use fragments. Navigation fields (`parent`, `children`,
+`from`, `to`, …) still return the interface, so queries using only the common
+fields keep working. Each kind also has a root field (`classes`, `methods`,
+`interfaces`, …) to enumerate its instances:
+
+```graphql
+{ classes { nodes { __typename name
+    ... on Class { methods: children(kind: METHOD) { totalCount } }
+} } }
+```
+
 Every list is a forward connection (`first`, `after`, `totalCount`), relation
 kinds are strings so plugins can introduce their own, and the model is
-immutable while served.
+immutable while served. `__typename` on an entity used to be `Entity`; it is
+now the concrete type name — clients matching on it must be updated.
 
 ## Development
 

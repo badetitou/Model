@@ -400,19 +400,27 @@ type Query {
   entities(kind, language, name, nameContains, external, filePrefix, roots,
            first, after): EntityConnection!
   relations(kind: String, provenance: Provenance, first, after): RelationConnection!
+  classes methods interfaces namespaces files ... (first, after): <Kind>Connection!
 }
-type Entity {
+interface Entity {
   id key kind name language external file range nameRange props: JSON
   parent ancestors
   children(kind, first, after): EntityConnection!
   outgoing(kind: String, provenance, first, after): RelationConnection!
   incoming(kind: String, provenance, first, after): RelationConnection!
 }
+type Class implements Entity { ... }  # + Method, Interface, Namespace, ...
 type Relation { id kind from to provenance siteCount sites(first, after): RangeConnection! }
 ```
 
+- `Entity` is an interface with one concrete object per `EntityKind` (15 in
+  all). Navigation fields return the interface; each kind also has a root
+  field (`classes`, `methods`, `interfaces`, …) returning a typed connection,
+  so introspection-based clients see the kinds as distinct concepts.
 - Resolvers hold an `Arc<Model>` and an id and map onto §6; nothing is
   copied. Relation kinds are strings (`calls`, ..., or custom like `http`).
+  Breaking change: `__typename` on an entity is now `Class`, `Method`, …,
+  not `Entity`.
 - Every list is a forward connection (`first` default 50, at most 1000;
   `after` cursor; `totalCount`). Query depth is limited to 16.
 - Read-only: the model is immutable while served. Introspection is enabled;

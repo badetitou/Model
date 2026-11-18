@@ -1,16 +1,21 @@
 //! GraphQL types over a [`Model`]. Objects hold an `Arc<Model>` and an id:
 //! resolvers map onto the model's navigation API, nothing is copied.
+//!
+//! `Entity` is a GraphQL interface: each [`model_core::EntityKind`] has its own
+//! concrete object (`Class`, `Method`, ...). Navigation fields return the
+//! interface, so queries written against the common fields keep working, while
+//! `__typename` and concrete fragments see the real kind.
 
 use std::sync::Arc;
 
 use async_graphql::connection::{Connection, Edge};
-use async_graphql::{Enum, Error, Json, Object, Result, SimpleObject};
+use async_graphql::{Error, Json, Object, Result, SimpleObject};
 use model_core::{EntityId, EntityRef, Model, Props, RelationId, RelationKind, RelationRef};
 
 pub const DEFAULT_PAGE: usize = 50;
 pub const MAX_PAGE: usize = 1000;
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
 #[graphql(remote = "model_core::EntityKind")]
 pub enum EntityKind {
     Namespace,
@@ -30,7 +35,7 @@ pub enum EntityKind {
     Variable,
 }
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
 #[graphql(remote = "model_core::Provenance")]
 pub enum Provenance {
     /// Syntax only (tree-sitter); names may be unresolved.
@@ -125,34 +130,23 @@ fn relation_filter(
     }
 }
 
-/// An entity of the model: namespace, file, type, callable or variable.
+/// The state shared by every concrete entity object. Not a GraphQL type: each
+/// `EntityKind` gets its own `#[Object]` wrapper so clients see distinct types.
 #[derive(Clone)]
-pub struct Entity {
+pub(crate) struct EntityBase {
     pub(crate) model: Arc<Model>,
     pub(crate) id: EntityId,
 }
 
-impl Entity {
-    pub(crate) fn of(model: &Arc<Model>, e: EntityRef<'_>) -> Entity {
-        Entity {
-            model: model.clone(),
-            id: e.id(),
-        }
-    }
-
+impl EntityBase {
     fn r(&self) -> Result<EntityRef<'_>> {
         self.model.entity(self.id).ok_or_else(missing)
     }
-}
 
-#[Object]
-impl Entity {
-    /// Position in this model; stable only while the model is served.
     async fn id(&self) -> u32 {
         self.id.index() as u32
     }
 
-    /// Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
     async fn key(&self) -> Result<&str> {
         Ok(self.r()?.key())
     }
@@ -165,18 +159,16 @@ impl Entity {
         Ok(self.r()?.name())
     }
 
-    async fn language(&self) -> Result<Option<&str>> {
-        Ok(self.r()?.language().map(|l| l.as_str()))
+    async fn language(&self) -> Result<Option<String>> {
+        Ok(self.r()?.language().map(|l| l.as_str().to_string()))
     }
 
-    /// Referenced, not defined in the analysed sources (libraries).
     async fn external(&self) -> Result<bool> {
         Ok(self.r()?.external())
     }
 
-    /// Path relative to the analysed root.
-    async fn file(&self) -> Result<Option<&str>> {
-        Ok(self.r()?.file())
+    async fn file(&self) -> Result<Option<String>> {
+        Ok(self.r()?.file().map(str::to_string))
     }
 
     async fn range(&self) -> Result<Option<Range>> {
@@ -187,21 +179,19 @@ impl Entity {
         Ok(self.r()?.name_range().map(Into::into))
     }
 
-    /// Language-specific facts (annotations, decorators...).
     async fn props(&self) -> Result<Json<Props>> {
         Ok(Json(self.r()?.props().clone()))
     }
 
     async fn parent(&self) -> Result<Option<Entity>> {
-        Ok(self.r()?.parent().map(|p| Entity::of(&self.model, p)))
+        Ok(self.r()?.parent().map(|p| entity_of(&self.model, p)))
     }
 
-    /// Enclosing entities, innermost first.
     async fn ancestors(&self) -> Result<Vec<Entity>> {
         Ok(self
             .r()?
             .ancestors()
-            .map(|p| Entity::of(&self.model, p))
+            .map(|p| entity_of(&self.model, p))
             .collect())
     }
 
@@ -216,12 +206,10 @@ impl Entity {
             .r()?
             .children()
             .filter(|c| kind.is_none_or(|k| c.kind() == k))
-            .map(|c| Entity::of(&self.model, c));
+            .map(|c| entity_of(&self.model, c));
         page(items, first, after)
     }
 
-    /// Relations from this entity. `kind`: `calls`, `references`,
-    /// `inherits`, `implements`, `imports`, or a custom kind.
     async fn outgoing(
         &self,
         kind: Option<String>,
@@ -238,7 +226,6 @@ impl Entity {
         page(items, first, after)
     }
 
-    /// Relations to this entity.
     async fn incoming(
         &self,
         kind: Option<String>,
@@ -253,6 +240,241 @@ impl Entity {
             .filter(|r| keep(r))
             .map(|r| Relation::of(&self.model, r));
         page(items, first, after)
+    }
+}
+
+/// Generate one GraphQL object per `EntityKind`. All resolvers are identical
+/// and forward to [`EntityBase`]; only the GraphQL type name differs. The
+/// field signatures must match the `Entity` interface below exactly.
+macro_rules! entity_objects {
+    ($(($name:ident, $desc:literal)),* $(,)?) => {
+        $(
+            #[doc = $desc]
+            #[derive(Clone)]
+            pub struct $name(EntityBase);
+
+            #[Object]
+            impl $name {
+                /// Position in this model; stable only while the model is served.
+                async fn id(&self) -> u32 {
+                    self.0.id().await
+                }
+
+                /// Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
+                async fn key(&self) -> Result<&str> {
+                    self.0.key().await
+                }
+
+                async fn kind(&self) -> Result<EntityKind> {
+                    self.0.kind().await
+                }
+
+                async fn name(&self) -> Result<&str> {
+                    self.0.name().await
+                }
+
+                async fn language(&self) -> Result<Option<String>> {
+                    self.0.language().await
+                }
+
+                /// Referenced, not defined in the analysed sources (libraries).
+                async fn external(&self) -> Result<bool> {
+                    self.0.external().await
+                }
+
+                /// Path relative to the analysed root.
+                async fn file(&self) -> Result<Option<String>> {
+                    self.0.file().await
+                }
+
+                async fn range(&self) -> Result<Option<Range>> {
+                    self.0.range().await
+                }
+
+                async fn name_range(&self) -> Result<Option<Range>> {
+                    self.0.name_range().await
+                }
+
+                /// Language-specific facts (annotations, decorators...).
+                async fn props(&self) -> Result<Json<Props>> {
+                    self.0.props().await
+                }
+
+                async fn parent(&self) -> Result<Option<Entity>> {
+                    self.0.parent().await
+                }
+
+                /// Enclosing entities, innermost first.
+                async fn ancestors(&self) -> Result<Vec<Entity>> {
+                    self.0.ancestors().await
+                }
+
+                async fn children(
+                    &self,
+                    kind: Option<EntityKind>,
+                    first: Option<i32>,
+                    after: Option<String>,
+                ) -> Result<Page<Entity>> {
+                    self.0.children(kind, first, after).await
+                }
+
+                /// Relations from this entity. `kind`: `calls`, `references`,
+                /// `inherits`, `implements`, `imports`, or a custom kind.
+                async fn outgoing(
+                    &self,
+                    kind: Option<String>,
+                    provenance: Option<Provenance>,
+                    first: Option<i32>,
+                    after: Option<String>,
+                ) -> Result<Page<Relation>> {
+                    self.0.outgoing(kind, provenance, first, after).await
+                }
+
+                /// Relations to this entity.
+                async fn incoming(
+                    &self,
+                    kind: Option<String>,
+                    provenance: Option<Provenance>,
+                    first: Option<i32>,
+                    after: Option<String>,
+                ) -> Result<Page<Relation>> {
+                    self.0.incoming(kind, provenance, first, after).await
+                }
+            }
+        )*
+    };
+}
+
+entity_objects! {
+    (Namespace, "A namespace, package or module."),
+    (File, "A source file."),
+    (Class, "A class declaration."),
+    (Interface, "An interface declaration."),
+    (Trait, "A trait or mixin declaration."),
+    (Enum, "An enumeration declaration."),
+    (Struct, "A struct or record declaration."),
+    (TypeAlias, "A type alias."),
+    (Method, "A method inside a type."),
+    (Constructor, "A constructor."),
+    (Function, "A free function."),
+    (Field, "A field inside a type."),
+    (Property, "A property inside a type."),
+    (Constant, "A constant."),
+    (Variable, "A local or global variable."),
+}
+
+/// The common interface implemented by every entity kind. Navigation fields
+/// return `Entity` so existing queries keep working; `__typename` reveals the
+/// concrete kind. The interface is registered explicitly in `lib.rs` so all
+/// possible types are present in introspection.
+// Clippy mistakes repeated `arg(name = ..., ty = ...)` meta items across
+// `field(...)` entries for duplicated attributes; darling reads them fine.
+#[allow(clippy::duplicated_attributes)]
+#[derive(async_graphql::Interface)]
+#[graphql(
+    field(
+        name = "id",
+        ty = "u32",
+        desc = "Position in this model; stable only while the model is served."
+    ),
+    field(
+        name = "key",
+        ty = "String",
+        desc = "Stable across builds: the SCIP symbol, or a SCIP-like frontend key."
+    ),
+    field(name = "kind", ty = "EntityKind"),
+    field(name = "name", ty = "String"),
+    field(name = "language", ty = "Option<String>"),
+    field(
+        name = "external",
+        ty = "bool",
+        desc = "Referenced, not defined in the analysed sources (libraries)."
+    ),
+    field(
+        name = "file",
+        ty = "Option<String>",
+        desc = "Path relative to the analysed root."
+    ),
+    field(name = "range", ty = "Option<Range>"),
+    field(name = "name_range", ty = "Option<Range>"),
+    field(
+        name = "props",
+        ty = "Json<Props>",
+        desc = "Language-specific facts (annotations, decorators...)."
+    ),
+    field(name = "parent", ty = "Option<Entity>"),
+    field(
+        name = "ancestors",
+        ty = "Vec<Entity>",
+        desc = "Enclosing entities, innermost first."
+    ),
+    field(
+        name = "children",
+        ty = "Page<Entity>",
+        arg(name = "kind", ty = "Option<EntityKind>"),
+        arg(name = "first", ty = "Option<i32>"),
+        arg(name = "after", ty = "Option<String>")
+    ),
+    field(
+        name = "outgoing",
+        ty = "Page<Relation>",
+        arg(name = "kind", ty = "Option<String>"),
+        arg(name = "provenance", ty = "Option<Provenance>"),
+        arg(name = "first", ty = "Option<i32>"),
+        arg(name = "after", ty = "Option<String>"),
+        desc = "Relations from this entity."
+    ),
+    field(
+        name = "incoming",
+        ty = "Page<Relation>",
+        arg(name = "kind", ty = "Option<String>"),
+        arg(name = "provenance", ty = "Option<Provenance>"),
+        arg(name = "first", ty = "Option<i32>"),
+        arg(name = "after", ty = "Option<String>"),
+        desc = "Relations to this entity."
+    )
+)]
+pub enum Entity {
+    Namespace(Namespace),
+    File(File),
+    Class(Class),
+    Interface(Interface),
+    Trait(Trait),
+    Enum(Enum),
+    Struct(Struct),
+    TypeAlias(TypeAlias),
+    Method(Method),
+    Constructor(Constructor),
+    Function(Function),
+    Field(Field),
+    Property(Property),
+    Constant(Constant),
+    Variable(Variable),
+}
+
+/// Pick the concrete GraphQL object matching the model kind.
+fn entity_of(model: &Arc<Model>, e: EntityRef<'_>) -> Entity {
+    let base = EntityBase {
+        model: model.clone(),
+        id: e.id(),
+    };
+    use model_core::EntityKind as K;
+    match e.kind() {
+        K::Namespace => Entity::Namespace(Namespace(base)),
+        K::File => Entity::File(File(base)),
+        K::Class => Entity::Class(Class(base)),
+        K::Interface => Entity::Interface(Interface(base)),
+        K::Trait => Entity::Trait(Trait(base)),
+        K::Enum => Entity::Enum(Enum(base)),
+        K::Struct => Entity::Struct(Struct(base)),
+        K::TypeAlias => Entity::TypeAlias(TypeAlias(base)),
+        K::Method => Entity::Method(Method(base)),
+        K::Constructor => Entity::Constructor(Constructor(base)),
+        K::Function => Entity::Function(Function(base)),
+        K::Field => Entity::Field(Field(base)),
+        K::Property => Entity::Property(Property(base)),
+        K::Constant => Entity::Constant(Constant(base)),
+        K::Variable => Entity::Variable(Variable(base)),
     }
 }
 
@@ -290,11 +512,11 @@ impl Relation {
     }
 
     async fn from(&self) -> Result<Entity> {
-        Ok(Entity::of(&self.model, self.r()?.from()))
+        Ok(entity_of(&self.model, self.r()?.from()))
     }
 
     async fn to(&self) -> Result<Entity> {
-        Ok(Entity::of(&self.model, self.r()?.to()))
+        Ok(entity_of(&self.model, self.r()?.to()))
     }
 
     async fn provenance(&self) -> Result<Provenance> {
@@ -328,6 +550,28 @@ pub struct Query {
     pub(crate) model: Arc<Model>,
 }
 
+impl Query {
+    /// Generic list query for a kind: shared by the per-kind root fields.
+    fn list_of<T>(
+        &self,
+        kind: model_core::EntityKind,
+        wrap: fn(EntityBase) -> T,
+        first: Option<i32>,
+        after: Option<String>,
+    ) -> Result<Page<T>>
+    where
+        T: async_graphql::OutputType,
+    {
+        let items = self.model.of_kind(kind).map(|e| {
+            wrap(EntityBase {
+                model: self.model.clone(),
+                id: e.id(),
+            })
+        });
+        page(items, first, after)
+    }
+}
+
 #[Object]
 impl Query {
     /// Languages present.
@@ -352,7 +596,7 @@ impl Query {
             (None, Some(i)) => self.model.entity(EntityId::from_index(i)),
             _ => return Err(Error::new("give exactly one of `key` and `id`")),
         };
-        Ok(e.map(|e| Entity::of(&self.model, e)))
+        Ok(e.map(|e| entity_of(&self.model, e)))
     }
 
     /// The `File` entity of a path relative to the analysed root.
@@ -360,7 +604,7 @@ impl Query {
         self.model
             .of_kind(model_core::EntityKind::File)
             .find(|e| e.file() == Some(path.as_str()))
-            .map(|e| Entity::of(&self.model, e))
+            .map(|e| entity_of(&self.model, e))
     }
 
     /// Entities matching every given filter, in model order.
@@ -405,7 +649,7 @@ impl Query {
                     .is_none_or(|p| e.file().is_some_and(|f| f.starts_with(p)))
             })
             .filter(|e| roots.is_none_or(|r| e.parent().is_none() == r))
-            .map(|e| Entity::of(&self.model, e));
+            .map(|e| entity_of(&self.model, e));
         page(items, first, after)
     }
 
@@ -424,5 +668,105 @@ impl Query {
             .filter(|r| keep(r))
             .map(|r| Relation::of(&self.model, r));
         page(items, first, after)
+    }
+
+    /// All namespaces, packages and modules.
+    async fn namespaces(
+        &self,
+        first: Option<i32>,
+        after: Option<String>,
+    ) -> Result<Page<Namespace>> {
+        self.list_of(model_core::EntityKind::Namespace, Namespace, first, after)
+    }
+
+    /// All source files.
+    async fn files(&self, first: Option<i32>, after: Option<String>) -> Result<Page<File>> {
+        self.list_of(model_core::EntityKind::File, File, first, after)
+    }
+
+    /// All classes.
+    async fn classes(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Class>> {
+        self.list_of(model_core::EntityKind::Class, Class, first, after)
+    }
+
+    /// All interfaces.
+    async fn interfaces(
+        &self,
+        first: Option<i32>,
+        after: Option<String>,
+    ) -> Result<Page<Interface>> {
+        self.list_of(model_core::EntityKind::Interface, Interface, first, after)
+    }
+
+    /// All traits and mixins.
+    async fn traits(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Trait>> {
+        self.list_of(model_core::EntityKind::Trait, Trait, first, after)
+    }
+
+    /// All enumerations.
+    async fn enums(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Enum>> {
+        self.list_of(model_core::EntityKind::Enum, Enum, first, after)
+    }
+
+    /// All structs and records.
+    async fn structs(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Struct>> {
+        self.list_of(model_core::EntityKind::Struct, Struct, first, after)
+    }
+
+    /// All type aliases.
+    async fn type_aliases(
+        &self,
+        first: Option<i32>,
+        after: Option<String>,
+    ) -> Result<Page<TypeAlias>> {
+        self.list_of(model_core::EntityKind::TypeAlias, TypeAlias, first, after)
+    }
+
+    /// All methods.
+    async fn methods(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Method>> {
+        self.list_of(model_core::EntityKind::Method, Method, first, after)
+    }
+
+    /// All constructors.
+    async fn constructors(
+        &self,
+        first: Option<i32>,
+        after: Option<String>,
+    ) -> Result<Page<Constructor>> {
+        self.list_of(
+            model_core::EntityKind::Constructor,
+            Constructor,
+            first,
+            after,
+        )
+    }
+
+    /// All free functions.
+    async fn functions(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Function>> {
+        self.list_of(model_core::EntityKind::Function, Function, first, after)
+    }
+
+    /// All fields.
+    async fn fields(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Field>> {
+        self.list_of(model_core::EntityKind::Field, Field, first, after)
+    }
+
+    /// All properties.
+    async fn properties(
+        &self,
+        first: Option<i32>,
+        after: Option<String>,
+    ) -> Result<Page<Property>> {
+        self.list_of(model_core::EntityKind::Property, Property, first, after)
+    }
+
+    /// All constants.
+    async fn constants(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Constant>> {
+        self.list_of(model_core::EntityKind::Constant, Constant, first, after)
+    }
+
+    /// All local and global variables.
+    async fn variables(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Variable>> {
+        self.list_of(model_core::EntityKind::Variable, Variable, first, after)
     }
 }

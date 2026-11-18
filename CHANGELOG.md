@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Breaking — `model-graphql`
+
+- `Entity` is now a GraphQL interface with one concrete object per
+  `EntityKind`: `Namespace`, `File`, `Class`, `Interface`, `Trait`, `Enum`,
+  `Struct`, `TypeAlias`, `Method`, `Constructor`, `Function`, `Field`,
+  `Property`, `Constant`, `Variable`. Navigation fields keep returning
+  `Entity`, so queries using only common fields still work, but `__typename`
+  now returns the concrete name instead of `Entity`, and fragments can target
+  a kind. The concrete types are also exported from the crate.
+- `Query` gains one list field per kind (`classes`, `methods`, `interfaces`,
+  …), each returning a typed connection, so introspection-driven clients see
+  the kinds as distinct concepts. `entities(kind:)` and `entity(key/id:)`
+  remain available and return the interface.
+
+### Added
+
 - `model-graphql`: `--allow-origin <origin|*>` (repeatable, comma-separated)
   enables CORS for browser clients such as Fluid. Without it the server keeps
   sending no CORS header. `router_with_origins` exposes it as a library API;
