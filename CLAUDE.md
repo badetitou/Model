@@ -43,6 +43,11 @@ Structure (`../Structure`), its first client.
   for indexed languages) → link (`Lift`, or `Create` without grammar).
   `examples/build.rs`: defaults to `--reindex never`; never run indexers or
   builds on fixtures (the user does).
+- `crates/model-graphql` — `schema.rs` (async-graphql objects holding
+  `Arc<Model>` + id; forward connections via `page`), `lib.rs` (`schema`,
+  `router`: GraphiQL `/`, API `/graphql`), `main.rs` (bin: build or load
+  JSON, serve; `--no-cache` on fixtures). `schema.graphql` is checked by a
+  test: regenerate with `UPDATE_SCHEMA=1 cargo test -p model-graphql`.
 - `crates/model-detect` — `detect(root)`: languages, file counts, project
   roots; `languages.rs` is the data table (`LanguageSpec`).
 

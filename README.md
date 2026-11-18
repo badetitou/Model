@@ -20,7 +20,7 @@ Design: [`docs/design.md`](docs/design.md).
 | `model` | usable | `model::build(root, …)`: detect → index → extract → link, every language at once |
 | `model-index` | usable | runs SCIP indexers (staleness, timeout, hints), caches documents per file content |
 | `model-treesitter` | usable | query-driven extraction (Java, TypeScript, Python); [captures](crates/model-treesitter/README.md) |
-| `model-graphql` | planned | GraphQL plugin |
+| `model-graphql` | usable | serves a model over GraphQL (GraphiQL included); [schema](crates/model-graphql/schema.graphql) |
 
 ## Use
 
@@ -47,6 +47,9 @@ The individual crates are re-exported (`model::core`, `model::detect`,
 `model::index`, `model::scip`, `model::link`, `model::treesitter`) for
 finer control, e.g. a model from an index alone:
 `model::link::from_scip(&model::scip::load(path)?, None)`.
+
+Serve it over GraphQL: `cargo run --release -p model-graphql -- <root>`,
+then open GraphiQL on http://127.0.0.1:8000/.
 
 Try it: `cargo run --release -p model --example build -- <root>` (add
 `--reindex if-stale` to run indexers, `--json model.json` to export).

@@ -1,0 +1,24 @@
+[package]
+name = "model-graphql"
+description = "Serves a model over GraphQL"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "model-graphql"
+path = "src/main.rs"
+
+[dependencies]
+model.workspace = true
+model-core.workspace = true
+anyhow.workspace = true
+async-graphql.workspace = true
+async-graphql-axum.workspace = true
+axum.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+model-treesitter.workspace = true

@@ -8,6 +8,7 @@ members = [
     "crates/model-treesitter",
     "crates/model-index",
     "crates/model",
+    "crates/model-graphql",
 ]
 
 [workspace.package]
@@ -23,6 +24,7 @@ model-detect = { path = "crates/model-detect" }
 model-link = { path = "crates/model-link" }
 model-treesitter = { path = "crates/model-treesitter" }
 model-index = { path = "crates/model-index" }
+model = { path = "crates/model" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
@@ -31,6 +33,10 @@ scip = "0.5"
 protobuf = "3"
 rayon = "1"
 tree-sitter = "0.27"
+async-graphql = "7.2"
+async-graphql-axum = "7.2"
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
 tree-sitter-java = "0.23.5"
 tree-sitter-typescript = "0.23.2"
 tree-sitter-python = "0.25"

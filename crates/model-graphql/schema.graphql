@@ -1,0 +1,294 @@
+type Entity {
+	"""
+	Position in this model; stable only while the model is served.
+	"""
+	id: Int!
+	"""
+	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
+	"""
+	key: String!
+	kind: EntityKind!
+	name: String!
+	language: String
+	"""
+	Referenced, not defined in the analysed sources (libraries).
+	"""
+	external: Boolean!
+	"""
+	Path relative to the analysed root.
+	"""
+	file: String
+	range: Range
+	nameRange: Range
+	"""
+	Language-specific facts (annotations, decorators...).
+	"""
+	props: JSON!
+	parent: Entity
+	"""
+	Enclosing entities, innermost first.
+	"""
+	ancestors: [Entity!]!
+	children(kind: EntityKind, first: Int, after: String): EntityConnection!
+	"""
+	Relations from this entity. `kind`: `calls`, `references`,
+	`inherits`, `implements`, `imports`, or a custom kind.
+	"""
+	outgoing(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations to this entity.
+	"""
+	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+}
+
+type EntityConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EntityEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Entity!]!
+	"""
+	Items matching the query, over all pages.
+	"""
+	totalCount: Int!
+}
+
+"""
+An edge in a connection.
+"""
+type EntityEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Entity!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+enum EntityKind {
+	NAMESPACE
+	FILE
+	CLASS
+	INTERFACE
+	TRAIT
+	ENUM
+	STRUCT
+	TYPE_ALIAS
+	METHOD
+	CONSTRUCTOR
+	FUNCTION
+	FIELD
+	PROPERTY
+	CONSTANT
+	VARIABLE
+}
+
+"""
+A scalar that can represent any JSON value.
+"""
+scalar JSON
+
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
+}
+
+enum Provenance {
+	"""
+	Syntax only (tree-sitter); names may be unresolved.
+	"""
+	TREE_SITTER
+	"""
+	Resolved by a SCIP indexer.
+	"""
+	SCIP
+	"""
+	A language-specific frontend.
+	"""
+	FRONTEND
+	"""
+	Computed by an analysis.
+	"""
+	DERIVED
+}
+
+type Query {
+	"""
+	Languages present.
+	"""
+	languages: [String!]!
+	stats: Stats!
+	"""
+	An entity by `key` (stable) or `id` (this model only).
+	"""
+	entity(key: String, id: Int): Entity
+	"""
+	The `File` entity of a path relative to the analysed root.
+	"""
+	file(path: String!): Entity
+	"""
+	Entities matching every given filter, in model order.
+	"""
+	entities(		kind: EntityKind,		language: String,
+		"""
+		Exact simple name.
+		"""
+		name: String,
+		"""
+		Case-insensitive part of the simple name.
+		"""
+		nameContains: String,		external: Boolean,
+		"""
+		Path prefix, relative to the analysed root.
+		"""
+		filePrefix: String,
+		"""
+		Only entities without parent.
+		"""
+		roots: Boolean,		first: Int,		after: String
+	): EntityConnection!
+	"""
+	Relations matching every given filter, sorted by source entity.
+	"""
+	relations(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+}
+
+"""
+0-based, end exclusive.
+"""
+type Range {
+	startLine: Int!
+	startCol: Int!
+	endLine: Int!
+	endCol: Int!
+}
+
+type RangeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [RangeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Range!]!
+	"""
+	Items matching the query, over all pages.
+	"""
+	totalCount: Int!
+}
+
+"""
+An edge in a connection.
+"""
+type RangeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Range!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type Relation {
+	id: Int!
+	"""
+	`calls`, `references`, `inherits`, `implements`, `imports`, or custom.
+	"""
+	kind: String!
+	from: Entity!
+	to: Entity!
+	provenance: Provenance!
+	"""
+	Number of occurrences: the weight of the dependency.
+	"""
+	siteCount: Int!
+	"""
+	Occurrences, in the file of `from`.
+	"""
+	sites(first: Int, after: String): RangeConnection!
+}
+
+type RelationConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [RelationEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Relation!]!
+	"""
+	Items matching the query, over all pages.
+	"""
+	totalCount: Int!
+}
+
+"""
+An edge in a connection.
+"""
+type RelationEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Relation!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type Stats {
+	entities: Int!
+	relations: Int!
+	sites: Int!
+	heapBytes: Int!
+}
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: Query
+}

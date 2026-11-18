@@ -3,7 +3,8 @@
 Status: draft. Done: `model-core` (metamodel, keys, compact storage),
 `model-detect`, `model-scip` (loader), `model-link` (SCIP fusion and
 SCIP-only models), `model-treesitter` (Java, TypeScript, Python),
-`model-index` (indexer runs, document cache) and the `model` facade.
+`model-index` (indexer runs, document cache), the `model` facade and
+`model-graphql`.
 
 ## 1. Goal
 
@@ -51,7 +52,7 @@ model-core         metamodel + builder + navigation API      (serde only)
                    detect → index → extract → link
         ^
   model-cli        `model detect|build|query <path>`             ⏳
-  model-graphql    GraphQL plugin (part 2)                      ⏳
+  model-graphql    GraphQL plugin (part 2)                      ✅
 ```
 
 Dependencies only point up to `model-core`. Grammar crates live behind Cargo
@@ -361,41 +362,62 @@ cycles (Tarjan), unused entities, quotient graph by an arbitrary
 entity → group function. Structure keeps its domain-specific ones:
 `layer × domain` classification, matrix, git impact.
 
-## 8. Plugins — GraphQL (part 2)
+## 8. Plugins — GraphQL (part 2) ✅
 
-`model-graphql` (async-graphql + axum) serves a built `Model` (in memory, or
-loaded from `model.json`):
+`model-graphql` (async-graphql 7 + axum 0.8) serves a model, built by
+`model::build` or loaded from an exported `model.json`:
+
+```sh
+cargo run --release -p model-graphql -- <root | model.json> [--port 8000]
+# GraphiQL on http://127.0.0.1:8000/, API on /graphql
+```
+
+The full schema is [`crates/model-graphql/schema.graphql`](../crates/model-graphql/schema.graphql)
+(a test keeps it in sync). In short:
 
 ```graphql
 type Query {
   languages: [String!]!
-  entity(key: String!): Entity
-  entities(kind: EntityKind, language: String, name: String,
-           first: Int, after: String): EntityConnection!
+  stats: Stats!
+  entity(key: String, id: Int): Entity
+  file(path: String!): Entity
+  entities(kind, language, name, nameContains, external, filePrefix, roots,
+           first, after): EntityConnection!
+  relations(kind: String, provenance: Provenance, first, after): RelationConnection!
 }
-
 type Entity {
-  key: String!            kind: EntityKind!     name: String!
-  language: String        external: Boolean!
-  file: String            range: Range          nameRange: Range
-  parent: Entity          children(kind: EntityKind): [Entity!]!
-  ancestors: [Entity!]!
-  outgoing(kind: String): [Relation!]!
-  incoming(kind: String): [Relation!]!
-  props: JSON
+  id key kind name language external file range nameRange props: JSON
+  parent ancestors
+  children(kind, first, after): EntityConnection!
+  outgoing(kind: String, provenance, first, after): RelationConnection!
+  incoming(kind: String, provenance, first, after): RelationConnection!
 }
-
-type Relation { kind: String!  from: Entity!  to: Entity!
-                provenance: Provenance!
-                siteCount: Int!
-                sites(first: Int, after: String): RangeConnection! }  # in from.file
-
-type Range { startLine: Int!  startCol: Int!  endLine: Int!  endCol: Int! }
+type Relation { id kind from to provenance siteCount sites(first, after): RangeConnection! }
 ```
 
-Resolvers map 1:1 onto §6, which is why the navigation API is the contract
-to stabilise first. Later: `analysis(name, args)` fields, subscriptions for
-incremental rebuilds.
+- Resolvers hold an `Arc<Model>` and an id and map onto §6; nothing is
+  copied. Relation kinds are strings (`calls`, ..., or custom like `http`).
+- Every list is a forward connection (`first` default 50, at most 1000;
+  `after` cursor; `totalCount`). Query depth is limited to 16.
+- Read-only: the model is immutable while served.
+
+Example, "who calls the methods of AccountService" (jpetstore):
+
+```graphql
+{ entities(name: "AccountService", kind: CLASS) { nodes {
+    methods: children(kind: METHOD) { nodes {
+      name
+      callers: incoming(kind: "calls") { nodes { siteCount from { name parent { name } } } }
+} } } } }
+```
+
+On vscode (450k entities, 2.1M relations, 4.2M sites, served from 197 MiB),
+queries answer in 1–8 ms: a `nameContains` search over every entity, all
+`calls` relations counted, or a class with its 157 methods and their caller
+counts (4 ms).
+
+Later: `analysis(name, args)` fields once `model-analysis` exists,
+subscriptions for incremental rebuilds.
 
 ## 9. Migration of Structure
 
@@ -417,7 +439,7 @@ Each step is one PR, Structure's tests and goldens staying green:
    converts `Model` to its IR, then classify/matrix/impact move to `Model`
    directly and `structure-ir`'s `Graph` is removed. Language detection in
    Structure uses `model-detect` (gaining multi-language roots).
-6. **model-cli**, **model-analysis**, **model-graphql**.
+6. **model-graphql** ✅; **model-cli**, **model-analysis** to do.
 
 ## 10. Open questions
 
