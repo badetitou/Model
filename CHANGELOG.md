@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `model-lang-pharo`: direct Pharo/Tonel frontend. Parses `Class`, `Trait` and
+  `Extension` files into `model pharo . . ` entities, emits `Inherits` and
+  `References`, and resolves message sends into `Calls` with
+  `Provenance::Frontend` and their source sites. Files, classes, methods,
+  resolved/unresolved sends and emitted calls are reported as `PharoStats`.
+- `model::build` runs the Pharo frontend for detected Pharo projects and
+  exposes its report as `Build.pharo`; the crate is re-exported as
+  `model::lang_pharo`. No Structure change is needed.
+
 ## 0.2.0
 
 ### Breaking — `model-graphql`

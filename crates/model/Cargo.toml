@@ -1,6 +1,6 @@
 [package]
 name = "model"
-description = "Builds a language-neutral model of a codebase: detection, SCIP indexing, tree-sitter extraction, linking"
+description = "Builds a language-neutral model of a codebase: detection, SCIP indexing, tree-sitter extraction, direct frontends, linking"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,6 +13,7 @@ model-core.workspace = true
 model-analysis.workspace = true
 model-detect.workspace = true
 model-index.workspace = true
+model-lang-pharo.workspace = true
 model-link.workspace = true
 model-scip.workspace = true
 model-treesitter.workspace = true

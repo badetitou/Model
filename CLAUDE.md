@@ -34,6 +34,10 @@ Structure (`../Structure`), its first client.
   `java`, `typescript`, `python`); `queries/*.scm`. Captures documented in its
   README. `tests/fixtures.rs` needs `MODEL_FIXTURES` (absolute path, e.g.
   Structure's `fixtures/`), skipped otherwise; `examples/build_model.rs`.
+- `crates/model-lang-pharo` — direct Tonel frontend (`extract` on disk,
+  `extract_sources` in memory): STON headers → classes/traits/methods,
+  heritage and references, hand-resolved sends → `Calls` with
+  `Provenance::Frontend`; `PharoStats` reported through `model::build`.
 - `crates/model-index` — `ensure_index` (reuse / staleness / run, only the
   index's own tool), `process::run` (indexer process), `indexers.rs`
   registry (command per output file, hints), `cache.rs` (`DocumentCache`,
@@ -60,5 +64,5 @@ Structure (`../Structure`), its first client.
 5. Keep `EntityRow`/`RelRow`/`Range` sizes (test `rows_stay_compact`);
    re-run `examples/memory` after storage changes.
 6. Language-specific knowledge goes in data (language table, query files) or
-   enrichers, never in `model-core`.
+   frontends/enrichers (`model-lang-*`), never in `model-core`.
 7. Commit only when asked.

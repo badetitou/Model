@@ -3,8 +3,9 @@
 Status: draft. Done: `model-core` (metamodel, keys, compact storage),
 `model-detect`, `model-scip` (loader), `model-link` (SCIP fusion and
 SCIP-only models), `model-treesitter` (Java, TypeScript, Python),
-`model-index` (indexer runs, document cache), `model-analysis` (generic
-analyses), the `model` facade and `model-graphql`.
+`model-index` (indexer runs, document cache), `model-lang-pharo` (direct Tonel
+frontend), `model-analysis` (generic analyses), the `model` facade and
+`model-graphql`.
 
 ## 1. Goal
 
@@ -45,6 +46,7 @@ model-core         metamodel + builder + navigation API      (serde only)
   ├── model-scip        SCIP loading                             ✅
   ├── model-index       indexer runs, staleness, document cache  ✅
   ├── model-link        SCIP → builder (fusion, SCIP-only)       ✅
+  ├── model-lang-pharo  hand-written Tonel reader + send linker  ✅
   ├── model-lang-*      optional per-language enrichers          ⏳
   └── model-analysis    Analysis trait + generic analyses        ✅
         ^
@@ -179,7 +181,8 @@ sites today; the linker will record them.
 ```
 detect ──► for each detected language / project root:
              index (SCIP, optional, cached) ─┐
-             extract (tree-sitter)  ─────────┴─► link ──► ModelBuilder ──► Model
+             extract (tree-sitter)  ─────────┤
+             frontend (no grammar)  ─────────┴─► link ──► ModelBuilder ──► Model
 ```
 
 1. **Detect** (`model-detect`, done). One scan honouring `.gitignore`
@@ -210,6 +213,9 @@ detect ──► for each detected language / project root:
    - Indexes written in a sub-project have their paths prefixed
      (`backend/` + `src/A.java`).
 3. **Extract** (`model-treesitter`, done). Generic tree-sitter extractor (§5).
+3b. **Frontend** (`model-lang-pharo`, done). A language with neither grammar
+    nor indexer is read directly into the same builder. Tonel keys use
+    `model pharo . . `; resolved sends use `Provenance::Frontend`.
 4. **Link** (`model-link`, done). Port of Structure's `link.rs` onto the
    builder:
    - SCIP definitions are matched to existing entities by identifier line
@@ -243,6 +249,7 @@ Degraded modes are first class:
 | grammar + indexer | full model (`Scip` relations) |
 | grammar only | entities + syntactic relations (`TreeSitter`, names resolved best-effort) |
 | indexer only | `model_link::from_scip`: entities from definitions + resolved relations, no syntactic props |
+| frontend only (Pharo) | entities, containment and hand-resolved relations, `Provenance::Frontend` |
 
 Indexer-only, measured with
 `cargo run --release -p model-link --example scip_model -- <index.scip>`:
@@ -285,21 +292,22 @@ Implemented in `model-treesitter`; captures, rules and measurements are in
   With an index, extraction skips them (`relations: false`) and
   `model-link` (`Lift`) resolves them exactly. Definitions, extents and
   props still come from tree-sitter.
-- **Enrichers** (`model-lang-*`, not started) are the escape hatch for facts
-  a query cannot express (Java/TS HTTP endpoints, GWT RPC, Pharo send
-  resolution). They receive the tree and the builder and only add
-  props/relations.
+- **Frontends** (`model-lang-*`) are the escape hatch for facts a query cannot
+  express. `model-lang-pharo` implements one: with no usable grammar or SCIP
+  indexer it parses Tonel directly and adds entities, props and
+  `Frontend`-provenance relations to the shared builder. The same mechanism is
+  open to Java/TS HTTP endpoints and GWT RPC enrichers.
 
 So a new language needs a grammar crate, a query file (often just its
 `tags.scm`) and a row in `grammars.rs`; optionally a SCIP indexer row in
-`model-detect`.
+`model-detect`, or a direct frontend when neither exists.
 
 | Language | Grammar | Query | SCIP indexer | Status |
 |---|---|---|---|---|
 | Java | tree-sitter-java | `java.scm` | scip-java | ✅ |
 | TypeScript/TSX | tree-sitter-typescript | `typescript.scm` | scip-typescript | ✅ |
 | Python | tree-sitter-python | its `tags.scm` | scip-python | ✅ baseline |
-| Pharo (Tonel) | tree-sitter-tonel-smalltalk (see below) | to write | none — `Frontend` enricher | ⏳ |
+| Pharo (Tonel) | — (direct reader) | — | — | ✅ frontend |
 | Go, Rust, C/C++, C#, Ruby, PHP | official grammars | `tags.scm` | scip-go, rust-analyzer, scip-clang, scip-dotnet, scip-ruby, scip-php | ⏳ a row each |
 
 Tree-sitter extents are what fix SCIP-only attribution: on
@@ -309,23 +317,30 @@ top-level config 4%).
 
 ### Pharo / Tonel
 
-[`tree-sitter-tonel-smalltalk`](https://github.com/mumez/tree-sitter-tonel-smalltalk)
-(MIT) parses Tonel `.st` files: STON class/trait/extension definitions and
-method bodies. It replaces Structure's hand-written Tonel reader for
-extraction. Notes:
+`model-lang-pharo` ports Structure's hand-written Tonel reader and send linker
+rather than adding a grammar:
 
-- Its Rust binding is the pre-0.23 style (`tree-sitter = "~0.26.8"`, not on
-  crates.io), which conflicts with our `tree-sitter 0.27`. Options: open an
-  upstream PR moving it to `tree-sitter-language` (`LanguageFn`, version
-  independent), or vendor its generated `src/parser.c` in
-  `model-lang-pharo` with a `build.rs`. Upstream PR preferred.
-- No `tags.scm` upstream: write `model.scm` (class/trait/extension
-  definitions, `#superclass`, `#traits`, `#category`, method definitions with
-  class side, message sends as `@reference.call`).
-- No SCIP indexer for Pharo: the send resolution of Structure's
-  `lang-pharo/sends.rs` (self/super, class receivers, unique selectors)
-  becomes the Pharo enricher, producing `Calls` with
-  `Provenance::Frontend`.
+- [`tree-sitter-tonel-smalltalk`](https://github.com/mumez/tree-sitter-tonel-smalltalk)
+  has a pre-0.23 Rust binding (`tree-sitter = "~0.26.8"`, not on crates.io),
+  which conflicts with our `tree-sitter 0.27`. An upstream move to
+  `tree-sitter-language` would make the grammar route viable; for now the
+  direct reader needs no extra dependency.
+- `Class`/`Trait` headers become `Class`/`Interface` entities keyed
+  `model pharo . . Name#`; `Extension` headers contribute methods only.
+  Selectors become methods keyed `Name#selector().`, with the `class`
+  disambiguator for the class side. `pharo.package`, `pharo.owner` and
+  `pharo.classSide` props keep the Tonel metadata the key does not carry.
+- `#superclass` produces `Inherits`; capitalised names in method bodies produce
+  `References` to project types or external types (kernel globals ignored).
+  Class variables and pools are scoped names, never entities.
+- Sends are resolved precision-first: `self`/`super` walk project superclasses
+  on the same side, a capitalised receiver resolves to the class side of that
+  class, and any other receiver only when its selector has exactly one
+  implementor and is not a kernel selector. Resolved sends become `Calls` with
+  `Provenance::Frontend` and keep their source site; recursion and duplicate
+  pairs are dropped, every send still counts in `PharoStats`.
+- Both disk (`extract`) and in-memory (`extract_sources`) entry points feed the
+  same builder and are covered by the same tests.
 
 ## 6. Navigation API
 
@@ -460,8 +475,8 @@ Each step is one PR, Structure's tests and goldens staying green:
    (1.000 jpetstore, 0.989 angular-realworld, Structure requires 0.8). Still
    to port from `structure-lang-java`/`-ts`: HTTP endpoints/calls and GWT RPC
    (enrichers), and a side-by-side comparison of entities.
-4. **Pharo** — tonel grammar binding, `model.scm`, sends enricher; compare with
-   `structure-lang-pharo`.
+4. **Pharo** ✅ — direct Tonel reader and send linker ported from
+   `structure-lang-pharo`; no grammar binding needed.
 5. **Structure switches** — depends on Model by git tag; a thin adapter
    converts `Model` to its IR, then classify/matrix/impact move to `Model`
    directly and `structure-ir`'s `Graph` is removed. Language detection in

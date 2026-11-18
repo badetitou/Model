@@ -5,7 +5,9 @@
 //!    up-to-date `index.scip` or cached documents (`model-index`);
 //! 3. **extract** entities with tree-sitter (`model-treesitter`): relations
 //!    too for languages without an index;
-//! 4. **link** each index (`model-link`): onto tree-sitter entities, or
+//! 4. **extract** language-specific facts (`model-lang-pharo`) for languages
+//!    without a grammar, such as Pharo/Tonel;
+//! 5. **link** each index (`model-link`): onto tree-sitter entities, or
 //!    alone for languages without a grammar.
 //!
 //! The crates are re-exported for direct use.
@@ -19,6 +21,7 @@ pub use model_analysis as analysis;
 pub use model_core as core;
 pub use model_detect as detect;
 pub use model_index as index;
+pub use model_lang_pharo as lang_pharo;
 pub use model_link as link;
 pub use model_scip as scip;
 pub use model_treesitter as treesitter;
@@ -96,6 +99,8 @@ pub struct Build {
     /// Languages extracted with tree-sitter: with relations left to SCIP,
     /// and with relations resolved by name.
     pub extracted: Vec<(Vec<String>, bool, ExtractStats)>,
+    /// Pharo/Tonel facts extracted directly (no SCIP indexer or grammar).
+    pub pharo: Option<lang_pharo::PharoStats>,
     pub indexes: Vec<IndexReport>,
     pub warnings: Vec<String>,
 }
@@ -305,6 +310,18 @@ pub fn build(
         extracted.push((langs, !with_index, st));
     }
 
+    // Pharo has neither a grammar nor an indexer: its frontend feeds the same
+    // builder directly, before SCIP linking freezes the entity set.
+    let pharo = if detection
+        .languages
+        .iter()
+        .any(|l| l.language.as_str() == "pharo")
+    {
+        Some(lang_pharo::extract(&mut b, root, &mut warnings)?)
+    } else {
+        None
+    };
+
     step("linking", 80, None);
     let mut reports = Vec::new();
     for (job, idx, origin) in indexes {
@@ -334,6 +351,7 @@ pub fn build(
         model,
         detection,
         extracted,
+        pharo,
         indexes: reports,
         warnings,
     })

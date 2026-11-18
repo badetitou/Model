@@ -268,6 +268,46 @@ fn language_filter_and_missing_root() {
 }
 
 #[test]
+fn pharo_is_extracted_without_a_grammar_or_indexer() {
+    let d = tree(
+        "pharo",
+        &[
+            ("src/.properties", "{ #format : #tonel }"),
+            ("src/package.st", "Package { #name : 'App' }"),
+            (
+                "src/App/A.class.st",
+                "Class { #name : #A, #superclass : #Object, #package : 'App' }\nA >> go [ ^ self stop ]\nA >> stop [ ^ 1 ]\n",
+            ),
+        ],
+    );
+    let opts = BuildOptions {
+        scip: false,
+        ..offline()
+    };
+    let b = build(&d, &opts, &|_| {}).unwrap();
+    assert!(b.warnings.is_empty(), "{:?}", b.warnings);
+    assert!(b.indexes.is_empty());
+    assert!(b.extracted.is_empty(), "Pharo has no tree-sitter grammar");
+    let stats = b.pharo.expect("Pharo frontend did not run");
+    assert_eq!(stats.files, 1);
+    assert_eq!(stats.classes, 1);
+    assert_eq!(stats.methods, 2);
+    assert_eq!(stats.sends_resolved, 1);
+    assert_eq!(stats.calls, 1);
+
+    let m = &b.model;
+    let go = m.by_key("model pharo . . A#go().").unwrap();
+    assert_eq!(go.file(), Some("src/App/A.class.st"));
+    let targets: Vec<_> = go.targets(&R::Calls).map(|e| e.name()).collect();
+    assert_eq!(targets, ["stop"]);
+    assert!(
+        m.relations()
+            .all(|r| r.provenance() == Provenance::Frontend)
+    );
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[test]
 fn facade_exposes_generic_analyses() {
     let d = tree("analysis", &[("A.java", A_JAVA)]);
     let opts = BuildOptions {

@@ -14,15 +14,17 @@ that every analysis and plugin can share — whatever the language.
 
 <p align="center">
   <a href="https://github.com/badetitou/Model/actions/workflows/ci.yml"><img src="https://github.com/badetitou/Model/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="crates"><img src="https://img.shields.io/badge/crates-9-6EE7B7?style=flat-square" alt="9 crates"></a>
+  <a href="crates"><img src="https://img.shields.io/badge/crates-10-6EE7B7?style=flat-square" alt="10 crates"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.100%2B-A78BFA?style=flat-square&logo=rust&logoColor=white" alt="Rust 1.100+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B1020?style=flat-square" alt="MIT license"></a>
 </p>
 
-Model builds **one model per codebase, not one per language**. Java, TypeScript
-and Python sources land in the same graph of entities and relations, and so will
-every future language: detection, indexing and extraction are data-driven, so a
-new language is a grammar, a query file and a row in a table.
+Model builds **one model per codebase, not one per language**. Java, TypeScript,
+Python and Pharo sources land in the same graph of entities and relations, and
+so will every future language: detection, indexing and extraction are
+data-driven. A language usually is a grammar, a query file and a row in a table;
+when neither grammar nor indexer exists, a direct frontend fills the same
+builder.
 
 ```
 Namespace ⊃ Class ⊃ Method
@@ -67,6 +69,7 @@ flowchart LR
   D["detect<br/>languages · roots"]
   I["index<br/>scip-java · scip-typescript · …"]
   E["extract<br/>tree-sitter + queries"]
+  F["frontend<br/>Pharo/Tonel reader"]
   L["link<br/>SCIP symbols onto entities"]
   M[("Model")]
   A["analyses"]
@@ -74,6 +77,7 @@ flowchart LR
 
   D --> I --> L
   D --> E --> L
+  D --> F --> L
   L --> M
   M --> A
   M --> G
@@ -85,12 +89,16 @@ flowchart LR
    policies, timeouts, progress and a per-document cache.
 3. **Extract** — tree-sitter queries produce entities, extents, containment and
    language-specific props. Relations are resolved by name when no index exists.
+3b. **Frontend** — languages without a grammar are read directly; Pharo/Tonel
+   classes, methods and hand-resolved message sends feed the same builder with
+   `Provenance::Frontend`.
 4. **Link** — SCIP definitions are matched to syntax entities (rekeyed to the
    SCIP symbol); references become `calls`, `references` and `imports` with every
    site, `Provenance::Scip`.
 
 Failures are warnings, never dead ends: no indexer → syntactic relations; no
-grammar → SCIP-only model; neither → other languages still get modelled.
+grammar → SCIP-only model; neither → a direct frontend may still model the
+language (Pharo), otherwise the other languages are modelled.
 
 ## Quick start
 
@@ -253,6 +261,7 @@ go into `props`, and plugins can add relations under their own name.
 | [`model-link`](crates/model-link) | SCIP → model: fusion onto syntactic entities, or SCIP-only models |
 | [`model-treesitter`](crates/model-treesitter) | query-driven extraction; [captures](crates/model-treesitter/README.md) |
 | [`model-index`](crates/model-index) | runs SCIP indexers, staleness, document cache |
+| [`model-lang-pharo`](crates/model-lang-pharo) | direct Tonel frontend: classes, methods, references, resolved sends |
 | [`model-analysis`](crates/model-analysis) | `Analysis` trait: metrics, degrees, cycles, unused, quotient, impact, derived relations |
 | [`model`](crates/model) | facade: detect → index → extract → link; `model::analysis` re-export |
 | [`model-graphql`](crates/model-graphql) | GraphQL server with GraphiQL; [schema](crates/model-graphql/schema.graphql) |
@@ -268,11 +277,12 @@ grammars it needs — WASM builds included.
 | Java | tree-sitter-java | `java.scm` | scip-java | ✅ |
 | TypeScript / TSX | tree-sitter-typescript | `typescript.scm` | scip-typescript | ✅ |
 | Python | tree-sitter-python | its `tags.scm` | scip-python | ✅ baseline |
-| Pharo (Tonel) | tree-sitter-tonel-smalltalk | to write | — (frontend enricher) | ⏳ |
+| Pharo (Tonel) | — (direct reader) | — | — | ✅ frontend |
 | Go, Rust, C/C++, C#, Ruby, PHP | official grammars | `tags.scm` | scip-go, rust-analyzer, scip-clang, scip-dotnet, scip-ruby, scip-php | ⏳ a row each |
 
 Adding a language means a grammar crate, a query file — often its own
-`tags.scm` — and a row in `model-treesitter`'s grammar registry.
+`tags.scm` — and a row in `model-treesitter`'s grammar registry, or a small
+`model-lang-*` frontend when the language has no usable grammar or indexer.
 
 ## Numbers
 
@@ -349,10 +359,11 @@ The demo GIF is recorded from [`docs/demo.tape`](docs/demo.tape) with
 ## Roadmap
 
 `model-analysis` is available as a generic socle (metrics, fan-in/fan-out,
-cycles, unused entities, quotient, propagation, derived relations). Next: a
-`model-cli` (`model detect|build|query <path>`), GraphQL analysis fields, then
-Pharo support, a persisted binary format for very large models, and incremental
-rebuilds of changed files. See [`docs/design.md`](docs/design.md).
+cycles, unused entities, quotient, propagation, derived relations) and Pharo is
+modelled by a direct frontend. Next: a `model-cli`
+(`model detect|build|query <path>`), GraphQL analysis fields, a persisted binary
+format for very large models, and incremental rebuilds of changed files. See
+[`docs/design.md`](docs/design.md).
 
 ## License
 

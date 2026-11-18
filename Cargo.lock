@@ -860,6 +860,7 @@ dependencies = [
  "model-core",
  "model-detect",
  "model-index",
+ "model-lang-pharo",
  "model-link",
  "model-scip",
  "model-treesitter",
@@ -920,6 +921,15 @@ dependencies = [
  "model-scip",
  "protobuf",
  "scip",
+]
+
+[[package]]
+name = "model-lang-pharo"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "ignore",
+ "model-core",
 ]
 
 [[package]]

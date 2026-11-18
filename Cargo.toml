@@ -7,6 +7,7 @@ members = [
     "crates/model-link",
     "crates/model-treesitter",
     "crates/model-index",
+    "crates/model-lang-pharo",
     "crates/model",
     "crates/model-analysis",
     "crates/model-graphql",
@@ -28,6 +29,7 @@ model-detect = { path = "crates/model-detect" }
 model-link = { path = "crates/model-link" }
 model-treesitter = { path = "crates/model-treesitter" }
 model-index = { path = "crates/model-index" }
+model-lang-pharo = { path = "crates/model-lang-pharo" }
 model = { path = "crates/model" }
 model-analysis = { path = "crates/model-analysis" }
 serde = { version = "1", features = ["derive"] }

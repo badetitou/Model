@@ -85,6 +85,12 @@ fn main() -> anyhow::Result<()> {
             }
         );
     }
+    if let Some(p) = &b.pharo {
+        println!(
+            "pharo frontend ({} files, {} classes, {} methods): {} sends resolved, {} unresolved, {} calls",
+            p.files, p.classes, p.methods, p.sends_resolved, p.sends_unresolved, p.calls
+        );
+    }
     for r in &b.indexes {
         let total = r.link.mapped + r.link.lifted + r.link.unmapped;
         println!(
