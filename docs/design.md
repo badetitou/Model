@@ -2,7 +2,8 @@
 
 Status: draft. Done: `model-core` (metamodel, keys, compact storage),
 `model-detect`, `model-scip` (loader), `model-link` (SCIP fusion and
-SCIP-only models), `model-treesitter` (Java, TypeScript, Python).
+SCIP-only models), `model-treesitter` (Java, TypeScript, Python),
+`model-index` (indexer runs, document cache) and the `model` facade.
 
 ## 1. Goal
 
@@ -40,12 +41,14 @@ model-core         metamodel + builder + navigation API      (serde only)
   ^
   ├── model-detect      language detection, project roots        ✅
   ├── model-treesitter  generic extractor driven by queries      ✅
-  ├── model-scip        SCIP loading ✅, indexer runner, cache ⏳
+  ├── model-scip        SCIP loading                             ✅
+  ├── model-index       indexer runs, staleness, document cache  ✅
   ├── model-link        SCIP → builder (fusion, SCIP-only)       ✅
   ├── model-lang-*      optional per-language enrichers          ⏳
   └── model-analysis    Analysis trait + generic analyses        ⏳
         ^
-  model (facade)  `Model::build(path, &Options)` : detect → index → extract → link
+  model (facade)   `model::build(root, &BuildOptions, progress)`  ✅
+                   detect → index → extract → link
         ^
   model-cli        `model detect|build|query <path>`             ⏳
   model-graphql    GraphQL plugin (part 2)                      ⏳
@@ -185,12 +188,26 @@ detect ──► for each detected language / project root:
    count and project roots, so monorepos (Java backend + TS frontend) are
    handled without configuration. The language table is data
    (`LanguageSpec`): adding a language is adding a row.
-2. **Index**. For each language with a SCIP indexer and a project root, run
-   it (`scip-java`, `scip-typescript`, `scip-python`, `scip-go`,
-   `rust-analyzer scip`, `scip-clang`, `scip-dotnet`, `scip-ruby`...), with
-   timeout, progress and the per-document cache already in Structure
-   (`pipeline/indexer.rs`, `scip_cache.rs`). Missing indexer = warning, not an
-   error.
+2. **Index** (`model-index`, done). For each detected language with an
+   indexer, one run per outermost project root (directory holding a build
+   marker; no marker, no run): `scip-java` and `scip-typescript` (versions
+   pinned as in Structure), `scip-python`, `scip-go`, `rust-analyzer` (from
+   `PATH`). Ported from Structure: process runner (progress, timeout, output
+   tail, Maven/Gradle hints), staleness (`Reindex::Never|IfMissing|IfStale|Always`),
+   tsconfig discovery and Node heap. Failures and missing indexers are
+   warnings: the language falls back to tree-sitter relations.
+   - An index records the tool that wrote it; it is only used, or
+     overwritten, by that indexer. Two indexers in one root write
+     `index.<indexer>.scip` (vscode has a scip-typescript `index.scip` at a
+     root that also holds Java and Go files).
+   - Document cache: after a run, each document is stored under
+     `<git-common-dir>/<app>/scip-docs/<indexer@version>/`, keyed by the
+     file's blob and path; a clean checkout of another commit composes its
+     index from it without running the indexer (`from_cache`). On
+     jpetstore, a fresh worktree is rebuilt from the cache (45 of 46 files)
+     into the same model in 47 ms.
+   - Indexes written in a sub-project have their paths prefixed
+     (`backend/` + `src/A.java`).
 3. **Extract** (`model-treesitter`, done). Generic tree-sitter extractor (§5).
 4. **Link** (`model-link`, done). Port of Structure's `link.rs` onto the
    builder:
@@ -385,9 +402,10 @@ incremental rebuilds.
 Each step is one PR, Structure's tests and goldens staying green:
 
 1. **Model v0.1** — `model-core`, `model-detect` ✅; CI and tag to do.
-2. **model-scip + model-link** — loader and linker ported ✅; the indexer
-   runner and per-document cache (`pipeline/indexer.rs`, `scip_cache.rs`) are
-   still to move (2b).
+2. **model-scip + model-link** — loader and linker ported ✅.
+   2b. **model-index + `model` facade** ✅ — indexer runner, staleness and
+   document cache ported from Structure's `pipeline/`; `model::build` runs
+   the whole pipeline over every detected language.
 3. **model-treesitter** — query-driven extractor ✅ (Java, TS, Python);
    linked with SCIP, it meets Structure's mapping-ratio test on its fixtures
    (1.000 jpetstore, 0.989 angular-realworld, Structure requires 0.8). Still

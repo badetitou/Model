@@ -17,6 +17,8 @@ Design: [`docs/design.md`](docs/design.md).
 | `model-detect` | usable | languages of a tree, file counts, project roots |
 | `model-scip` | usable | reads `index.scip` (parallel, bounded memory) |
 | `model-link` | usable | SCIP → model: fusion onto syntactic entities, or SCIP-only models |
+| `model` | usable | `model::build(root, …)`: detect → index → extract → link, every language at once |
+| `model-index` | usable | runs SCIP indexers (staleness, timeout, hints), caches documents per file content |
 | `model-treesitter` | usable | query-driven extraction (Java, TypeScript, Python); [captures](crates/model-treesitter/README.md) |
 | `model-graphql` | planned | GraphQL plugin |
 
@@ -24,30 +26,30 @@ Design: [`docs/design.md`](docs/design.md).
 
 ```toml
 [dependencies]
-model-core = { git = "https://github.com/badetitou/Model" }
-model-detect = { git = "https://github.com/badetitou/Model" }
+model = { git = "https://github.com/badetitou/Model" }
 ```
 
 ```rust
-// Tree-sitter entities, then SCIP linked onto them.
-let mut builder = model_core::ModelBuilder::new();
-let opts = model_treesitter::ExtractOptions { relations: false, ..Default::default() };
-model_treesitter::extract(&mut builder, root, &opts)?;
-let index = model_scip::load(&root.join("index.scip"))?;
-model_link::link(&mut builder, &index, &Default::default());
-let model = builder.build();
-
-// A model from a SCIP index alone.
-let index = model_scip::load("index.scip".as_ref())?;
-let (builder, stats) = model_link::from_scip(&index, None);
-let model = builder.build();
-
-// Languages of a tree.
-let detection = model_detect::detect(std::path::Path::new("."))?;
-for l in &detection.languages {
-    println!("{} — {} files, roots {:?}", l.spec.name, l.files, l.project_roots);
+let build = model::build(root, &model::BuildOptions::default(), &|p| {
+    eprintln!("[{:>3}%] {}", p.pct, p.step)
+})?;
+for w in &build.warnings {
+    eprintln!("warning: {w}");
+}
+let model = build.model;
+let svc = model.by_key("semanticdb maven … com/acme/AccountService#").unwrap();
+for r in svc.outgoing() {
+    println!("{:?} {} ({} sites)", r.kind(), r.to().key(), r.sites().len());
 }
 ```
+
+The individual crates are re-exported (`model::core`, `model::detect`,
+`model::index`, `model::scip`, `model::link`, `model::treesitter`) for
+finer control, e.g. a model from an index alone:
+`model::link::from_scip(&model::scip::load(path)?, None)`.
+
+Try it: `cargo run --release -p model --example build -- <root>` (add
+`--reindex if-stale` to run indexers, `--json model.json` to export).
 
 ## Development
 

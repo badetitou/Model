@@ -34,6 +34,15 @@ Structure (`../Structure`), its first client.
   `java`, `typescript`, `python`); `queries/*.scm`. Captures documented in its
   README. `tests/fixtures.rs` needs `MODEL_FIXTURES` (absolute path, e.g.
   Structure's `fixtures/`), skipped otherwise; `examples/build_model.rs`.
+- `crates/model-index` — `ensure_index` (reuse / staleness / run, only the
+  index's own tool), `process::run` (indexer process), `indexers.rs`
+  registry (command per output file, hints), `cache.rs` (`DocumentCache`,
+  git-blob keyed), `git.rs`. Port of Structure's `pipeline/{indexer,process,progress,scip_cache}`.
+- `crates/model` — facade `build(root, opts, progress)`: detect → one index
+  job per indexer and outermost marker root → tree-sitter (relations off
+  for indexed languages) → link (`Lift`, or `Create` without grammar).
+  `examples/build.rs`: defaults to `--reindex never`; never run indexers or
+  builds on fixtures (the user does).
 - `crates/model-detect` — `detect(root)`: languages, file counts, project
   roots; `languages.rs` is the data table (`LanguageSpec`).
 

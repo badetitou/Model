@@ -1,0 +1,21 @@
+[package]
+name = "model"
+description = "Builds a language-neutral model of a codebase: detection, SCIP indexing, tree-sitter extraction, linking"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+model-core.workspace = true
+model-detect.workspace = true
+model-index.workspace = true
+model-link.workspace = true
+model-scip.workspace = true
+model-treesitter.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+protobuf.workspace = true
+scip.workspace = true
