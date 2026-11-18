@@ -27,6 +27,8 @@ pub struct ModelBuilder {
     relation_ids: HashMap<RelRow, u32>,
     /// `(relation, site)`, in insertion order.
     sites: Vec<(u32, Range)>,
+    /// Some keys were replaced: their old strings are dropped on build.
+    rekeyed: bool,
 }
 
 impl ModelBuilder {
@@ -62,6 +64,57 @@ impl ModelBuilder {
         self.strings
             .get(key)
             .and_then(|k| self.by_key.get(&k).copied())
+    }
+
+    /// Ids of every entity, in creation order.
+    pub fn ids(&self) -> impl ExactSizeIterator<Item = EntityId> + use<> {
+        (0..self.entities.len() as u32).map(EntityId)
+    }
+
+    /// Gives `id` the key `key` (e.g. its SCIP symbol, found after a
+    /// syntactic frontend created it). Fails with the entity already
+    /// holding `key`, if another one does.
+    pub fn rekey(&mut self, id: EntityId, key: &str) -> Result<(), EntityId> {
+        let new = self.strings.intern(key);
+        match self.by_key.get(&new) {
+            Some(&other) if other == id => return Ok(()),
+            Some(&other) => return Err(other),
+            None => {}
+        }
+        let row = &mut self.entities[id.index()];
+        self.by_key.remove(&row.key);
+        row.key = new;
+        self.by_key.insert(new, id);
+        self.rekeyed = true;
+        Ok(())
+    }
+
+    pub fn name(&self, id: EntityId) -> &str {
+        self.strings.str(self.entities[id.index()].name)
+    }
+
+    pub fn parent(&self, id: EntityId) -> Option<EntityId> {
+        let p = self.entities[id.index()].parent;
+        (p != NONE).then_some(EntityId(p))
+    }
+
+    pub fn file(&self, id: EntityId) -> Option<&str> {
+        let f = self.entities[id.index()].file;
+        (f != NONE).then(|| self.strings.str(StrId(f)))
+    }
+
+    pub fn range(&self, id: EntityId) -> Option<Range> {
+        let r = &self.entities[id.index()];
+        (r.file != NONE).then_some(r.range)
+    }
+
+    pub fn name_range(&self, id: EntityId) -> Option<Range> {
+        let r = &self.entities[id.index()];
+        (r.file != NONE && r.flags & EntityRow::HAS_NAME_RANGE != 0).then_some(r.name_range)
+    }
+
+    pub fn external(&self, id: EntityId) -> bool {
+        self.entities[id.index()].flags & EntityRow::EXTERNAL != 0
     }
 
     pub fn key(&self, id: EntityId) -> &str {
@@ -188,11 +241,27 @@ impl ModelBuilder {
             .filter(|(_, p)| !p.is_empty())
             .collect();
         props.sort_unstable_by_key(|(id, _)| *id);
+        let mut entities = self.entities;
+        let strings = if self.rekeyed {
+            // Re-intern only the strings still in use.
+            let old = self.strings;
+            let mut fresh = Interner::default();
+            for e in &mut entities {
+                e.key = fresh.intern(old.str(e.key));
+                e.name = fresh.intern(old.str(e.name));
+                if e.file != NONE {
+                    e.file = fresh.intern(old.str(StrId(e.file))).0;
+                }
+            }
+            fresh.into_table()
+        } else {
+            self.strings.into_table()
+        };
         Model::from_rows(
-            self.strings.into_table(),
+            strings,
             self.languages,
             self.kinds,
-            self.entities,
+            entities,
             props,
             self.relations,
             self.sites,

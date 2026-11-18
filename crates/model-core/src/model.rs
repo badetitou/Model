@@ -536,6 +536,24 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn rekey_moves_the_key_and_drops_the_old_string() {
+        let mut b = ModelBuilder::new();
+        let a = b.entity("model java . . A#", EntityKind::Class, "A");
+        let c = b.entity("semanticdb maven m 1 C#", EntityKind::Class, "C");
+        assert_eq!(b.rekey(a, "semanticdb maven m 1 A#"), Ok(()));
+        assert_eq!(b.rekey(a, "semanticdb maven m 1 A#"), Ok(()));
+        assert_eq!(b.rekey(a, "semanticdb maven m 1 C#"), Err(c));
+        assert_eq!(b.get("model java . . A#"), None);
+        assert_eq!(b.get("semanticdb maven m 1 A#"), Some(a));
+        let m = b.build();
+        assert_eq!(
+            m.by_key("semanticdb maven m 1 A#").map(|e| e.name()),
+            Some("A")
+        );
+        assert_eq!(m.memory().strings, 4, "A, C, and their SCIP keys");
+    }
+
+    #[test]
     fn builder_is_get_or_create_by_key() {
         let mut b = ModelBuilder::new();
         let x = b.entity("k", EntityKind::Class, "X");
