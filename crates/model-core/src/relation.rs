@@ -40,4 +40,56 @@ impl RelationId {
     pub fn index(self) -> usize {
         self.0 as usize
     }
+
+    /// See [`crate::EntityId::from_index`].
+    pub fn from_index(index: u32) -> RelationId {
+        RelationId(index)
+    }
+}
+
+impl RelationKind {
+    /// Serialised name: `calls`, `references`..., or the custom name.
+    pub fn as_str(&self) -> &str {
+        match self {
+            RelationKind::Calls => "calls",
+            RelationKind::References => "references",
+            RelationKind::Inherits => "inherits",
+            RelationKind::Implements => "implements",
+            RelationKind::Imports => "imports",
+            RelationKind::Other(s) => s,
+        }
+    }
+
+    /// Inverse of [`Self::as_str`].
+    pub fn from_name(name: &str) -> RelationKind {
+        match name {
+            "calls" => RelationKind::Calls,
+            "references" => RelationKind::References,
+            "inherits" => RelationKind::Inherits,
+            "implements" => RelationKind::Implements,
+            "imports" => RelationKind::Imports,
+            other => RelationKind::Other(other.to_string()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RelationKind;
+
+    #[test]
+    fn names_round_trip_as_in_json() {
+        for k in [
+            RelationKind::Calls,
+            RelationKind::References,
+            RelationKind::Inherits,
+            RelationKind::Implements,
+            RelationKind::Imports,
+            RelationKind::Other("http".into()),
+        ] {
+            assert_eq!(RelationKind::from_name(k.as_str()), k);
+            let json = serde_json::to_string(&k).unwrap();
+            assert_eq!(json, format!("\"{}\"", k.as_str()));
+        }
+    }
 }

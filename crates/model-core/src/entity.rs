@@ -9,6 +9,12 @@ impl EntityId {
     pub fn index(self) -> usize {
         self.0 as usize
     }
+
+    /// Id of the entity at `index` (e.g. read back from a client); lookups
+    /// return `None` when it is out of the model's range.
+    pub fn from_index(index: u32) -> EntityId {
+        EntityId(index)
+    }
 }
 
 /// Open language identifier (`java`, `typescript`, `python`, `pharo`...):
