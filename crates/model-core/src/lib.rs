@@ -7,6 +7,7 @@
 
 mod builder;
 mod entity;
+mod key;
 mod model;
 mod relation;
 mod source;
@@ -14,6 +15,7 @@ mod value;
 
 pub use builder::ModelBuilder;
 pub use entity::{Entity, EntityId, EntityKind, LanguageId};
+pub use key::{Descriptor, KeyError, Package, SCHEME, SymbolKey};
 pub use model::Model;
 pub use relation::{Provenance, Relation, RelationKind};
 pub use source::{Range, SourceAnchor};
