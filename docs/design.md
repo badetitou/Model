@@ -1,6 +1,6 @@
 # Model — design
 
-Status: draft (skeleton: `model-core`, `model-detect`).
+Status: draft (`model-core`: metamodel, keys, compact storage; `model-detect`).
 
 ## 1. Goal
 
@@ -58,9 +58,9 @@ particular).
 
 ```
 Model
- ├── entities: [Entity]
- │     id        EntityId (index, local to the model)
- │     key       stable unique key — SCIP symbol, else frontend qualified name
+ ├── entities
+ │     id        EntityId (dense index, local to the model)
+ │     key       stable unique key, SCIP-like (§3.1)
  │     kind      Namespace | File | Class | Interface | Trait | Enum | Struct
  │               | TypeAlias | Method | Constructor | Function
  │               | Field | Property | Constant | Variable
@@ -68,13 +68,13 @@ Model
  │     parent    containment (Namespace ⊃ Type ⊃ Method ...)
  │     language  open id: "java", "python", "pharo"...
  │     external  referenced, not defined in the sources (libraries)
- │     source    { file, range, name_range }
+ │     file, range, name_range
  │     props     open map: "java.annotations", "visibility", "http.endpoints"...
- └── relations: [Relation]
+ └── relations   one per distinct (from, kind, to, provenance)
        kind        Calls | References | Inherits | Implements | Imports | Other(String)
        from, to    EntityId
        provenance  TreeSitter | Scip | Frontend | Derived
-       source      occurrence site (optional)
+       sites       every occurrence range, in `from`'s file
 ```
 
 Design choices:
@@ -89,17 +89,84 @@ Design choices:
   speed. The builder is get-or-create by key, which is how tree-sitter and
   SCIP facts about the same symbol land on one entity.
 - **`provenance` on relations** lets an analysis decide whether to trust a
-  syntactic guess (`TreeSitter`) or only resolved facts (`Scip`).
-- **Occurrences are kept** (one relation per site, with `source`);
-  aggregation (dependency weight, matrix cells) is an analysis concern.
-- Serialised as JSON `{ entities, relations }`; indexes (by key, children,
-  incoming, outgoing) are rebuilt on load.
+  syntactic guess (`TreeSitter`) or only resolved facts (`Scip`). The same
+  pair asserted by tree-sitter and by SCIP gives two relations.
+- **Every occurrence is kept**, as a site of its relation. A site is
+  attributed to its innermost enclosing entity, so its file is the file of
+  `from` and is not stored. Aggregation (dependency weight, matrix cells) is
+  an analysis concern: `sites().len()` is the weight.
+
+### 3.1 Keys
+
+Keys follow the [SCIP symbol grammar](https://github.com/sourcegraph/scip/blob/main/scip.proto)
+(`model-core::SymbolKey`: build, parse, print):
+
+```
+<scheme> <manager> <package> <version> <descriptors>
+semanticdb maven maven/org.acme/app 1.0 com/acme/A#run().     ← from scip-java
+model      java  .                  .   com/acme/A#run().     ← from tree-sitter only
+local 42                                                      ← file-local
+```
+
+- Entities resolved by an indexer keep the SCIP symbol as is.
+- Frontends without an indexer use the scheme `model`, the language as
+  manager and empty (`.`) package and version; descriptors are built with the
+  same rules (`Descriptor::for_kind`: `ns/`, `Type#`, `method().`, `term.`).
+- `SymbolKey::same_descriptors` compares keys ignoring scheme and package:
+  how the linker meets a syntactic entity and its SCIP symbol, and how a
+  model built without an indexer stays comparable to one built with it.
+- Files are `Namespace` descriptors holding the escaped path
+  (`` model java . . `src/A.java`/ ``).
+- Overloads: `Method.disambiguator` (SCIP's `(+1)`); tree-sitter frontends
+  derive it from the arity when needed.
+
+### 3.2 In-memory storage
+
+Keeping every occurrence makes sites the bulk of a model (millions on a
+large Java codebase), so the frozen `Model` is laid out for them:
+
+| Data | Layout | Cost |
+|---|---|---|
+| strings (keys, names, files) | interned once, one buffer + offsets | bytes + 8 / distinct string |
+| entities | fixed rows, sentinel-encoded options | 52 B |
+| props | sparse, sorted `(id, props)` | only where present |
+| key lookup | ids sorted by key, binary search | 4 B / entity |
+| children | CSR by parent | 8 B / entity |
+| relations | deduplicated, sorted by `(from, kind, to, provenance)`; outgoing = one slice (CSR) | 12 B + 4 B incoming index + 4 B site offset |
+| sites | bare `Range`, grouped by relation (CSR), sorted, deduplicated | 16 B |
+
+Navigation goes through copyable views (`EntityRef`, `RelationRef`) that
+borrow the model; nothing is allocated on read. `ModelBuilder` stays simple
+(hash maps for dedup) and `build()` sorts and packs once.
+
+Measured with `cargo run --release -p model-core --example memory`
+(220k entities, 5M call sites, worst case: every site its own relation):
+**~200 MiB, 42 B/site all included**, build + freeze in ~1.4 s.
+`Model::memory()` reports the figures for real models. JSON of the same
+model: 460 MiB, a binary format is on the roadmap (§10).
+
+Further savings if needed: delta-encode sites within a relation (lines are
+close), `u16` columns, memory-mapped binary format.
+
+### 3.3 JSON
+
+```json
+{ "entities": [{ "id": 2, "key": "model java . . com/acme/A#run().",
+                 "kind": "method", "name": "run", "parent": 1,
+                 "language": "java", "file": "src/A.java",
+                 "range": [3,2,9,3], "name_range": [3,14,3,17] }],
+  "relations": [{ "kind": "calls", "from": 2, "to": 7,
+                  "provenance": "scip", "sites": [[5,4,5,10],[6,4,6,10]] }] }
+```
+
+Loading goes through the builder: unknown or duplicate ids are errors.
 
 Mapping from Structure's IR: `Symbol` → `Entity` (`SymbolKind` maps 1:1;
 `annotations`, `supertypes`, `http`, `http_calls`, `rpc_calls` → `props`),
 `Symbol.package` → parent `Namespace`, `Edge` → `Relation`
 (`Extends` → `Inherits`, `Uses` → `References`, `Http`/`Rpc` → `Other`),
-`ext:<Name>` targets → `external` entities.
+`ext:<Name>` targets → `external` entities. Structure's edges carry no
+sites today; the linker will record them.
 
 ## 4. Pipeline
 
@@ -199,14 +266,17 @@ extraction. Notes:
 
 ## 6. Navigation API
 
-`Model` exposes: `entities()`, `relations()`, `entity(id)`, `by_key(key)`,
-`of_kind(kind)`, `roots()`, `parent(id)`, `ancestors(id)`, `children(id)`,
-`outgoing(id)`, `incoming(id)`, `targets(id, kind)`. All lookups return
-`Option`/iterators, never panic, even on hand-edited JSON.
+`Model`: `entity(id)`, `by_key(key)`, `entities()`, `of_kind(kind)`,
+`roots()`, `relations()`, `languages()`, `memory()`.
+`EntityRef`: `key`, `kind`, `name`, `language`, `external`, `file`, `range`,
+`name_range`, `props`, `parent`, `ancestors`, `children`, `outgoing`,
+`incoming`, `targets(kind)`.
+`RelationRef`: `kind`, `from`, `to`, `provenance`, `sites`.
+Lookups return `Option`/iterators and never panic.
 
 Next additions, driven by the first analyses: `descendants`, filtered
 iterators by language/file, a `ModelView` (sub-model restricted to a scope:
-package, files changed in a diff).
+package, files changed in a diff), site → entity lookup by file and position.
 
 ## 7. Analyses (MDE)
 
@@ -244,7 +314,8 @@ type Query {
 
 type Entity {
   key: String!            kind: EntityKind!     name: String!
-  language: String        external: Boolean!    source: SourceAnchor
+  language: String        external: Boolean!
+  file: String            range: Range          nameRange: Range
   parent: Entity          children(kind: EntityKind): [Entity!]!
   ancestors: [Entity!]!
   outgoing(kind: String): [Relation!]!
@@ -253,7 +324,11 @@ type Entity {
 }
 
 type Relation { kind: String!  from: Entity!  to: Entity!
-                provenance: Provenance!  source: SourceAnchor }
+                provenance: Provenance!
+                siteCount: Int!
+                sites(first: Int, after: String): RangeConnection! }  # in from.file
+
+type Range { startLine: Int!  startCol: Int!  endLine: Int!  endCol: Int! }
 ```
 
 Resolvers map 1:1 onto §6, which is why the navigation API is the contract
@@ -280,13 +355,13 @@ Each step is one PR, Structure's tests and goldens staying green:
 
 ## 10. Open questions
 
-- Entity keys for tree-sitter-only languages: a per-language qualified name
-  scheme, or SCIP-like descriptors (`<lang> . <namespace>/<Type>#<method>().`)
-  so keys look the same with or without an indexer? Leaning SCIP-like.
-- Keep every reference occurrence, or deduplicate per `(from, to, kind)` with
-  a count? Occurrences are needed for "where is it used" in GraphQL; memory
-  on large Java projects to be measured.
-- Persisted format beyond JSON (bincode, SQLite) for big models and the
-  GraphQL server.
+- Persisted binary format (bincode-like columns, or memory-mapped) for big
+  models and the GraphQL server; JSON is 2.3× the in-memory size.
+- Incremental rebuild: replace the entities and sites of changed files
+  without rebuilding the whole model (the builder would need removal, or a
+  per-file layering).
 - WASM: which crates must stay WASM-compatible (Structure's browser
   extension parses without SCIP).
+
+Decided: SCIP-like keys (§3.1); every occurrence kept, compact storage
+(§3.2).

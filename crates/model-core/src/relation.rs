@@ -1,10 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::entity::EntityId;
-use crate::source::SourceAnchor;
-
-/// Kind of a [`Relation`]. Containment is not a relation: it is
-/// [`crate::Entity::parent`].
+/// Kind of a relation. Containment is not a relation: it is the entity's
+/// parent.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RelationKind {
@@ -22,7 +19,7 @@ pub enum RelationKind {
 
 /// Who asserted a fact: lets analyses weigh syntactic guesses against
 /// compiler-grade SCIP data.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Provenance {
     /// Syntax only (tree-sitter); names may be unresolved.
@@ -35,13 +32,12 @@ pub enum Provenance {
     Derived,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Relation {
-    pub kind: RelationKind,
-    pub from: EntityId,
-    pub to: EntityId,
-    pub provenance: Provenance,
-    /// Occurrence site (call expression, type reference...).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<SourceAnchor>,
+/// Index of a relation in its [`crate::Model`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct RelationId(pub(crate) u32);
+
+impl RelationId {
+    pub fn index(self) -> usize {
+        self.0 as usize
+    }
 }

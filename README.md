@@ -13,7 +13,7 @@ Design: [`docs/design.md`](docs/design.md).
 
 | Crate | Status | Role |
 |---|---|---|
-| `model-core` | skeleton | metamodel (`Entity`, `Relation`), `ModelBuilder`, navigation API |
+| `model-core` | usable | metamodel, SCIP-like keys, `ModelBuilder`, compact `Model` keeping every occurrence, JSON |
 | `model-detect` | skeleton | languages of a tree, file counts, project roots |
 | `model-treesitter`, `model-scip`, `model-link` | planned | extraction and fusion |
 | `model-graphql` | planned | GraphQL plugin |

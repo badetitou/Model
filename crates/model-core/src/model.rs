@@ -1,229 +1,627 @@
-use std::collections::HashMap;
+use crate::entity::{EntityId, EntityKind, LanguageId};
+use crate::relation::{Provenance, RelationId, RelationKind};
+use crate::source::Range;
+use crate::strings::{StrId, StrTable};
+use crate::value::Props;
 
-use serde::{Deserialize, Serialize};
+/// Absent `u32` reference (parent, file).
+pub(crate) const NONE: u32 = u32::MAX;
+pub(crate) const NO_LANGUAGE: u16 = u16::MAX;
 
-use crate::entity::{Entity, EntityId, EntityKind};
-use crate::relation::{Relation, RelationKind};
+static NO_PROPS: Props = Props::new();
 
-/// Frozen model with navigation indexes. Serialises as
-/// `{ "entities": [...], "relations": [...] }`; indexes are rebuilt on load.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(from = "ModelData")]
-pub struct Model {
-    entities: Vec<Entity>,
-    relations: Vec<Relation>,
-    #[serde(skip)]
-    index: Index,
+/// 52 bytes per entity; strings live in the model's [`StrTable`].
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct EntityRow {
+    pub(crate) key: StrId,
+    pub(crate) name: StrId,
+    pub(crate) file: u32,
+    pub(crate) parent: u32,
+    pub(crate) range: Range,
+    pub(crate) name_range: Range,
+    pub(crate) kind: EntityKind,
+    pub(crate) language: u16,
+    pub(crate) flags: u8,
 }
 
-#[derive(Deserialize)]
-struct ModelData {
-    entities: Vec<Entity>,
-    relations: Vec<Relation>,
-}
+impl EntityRow {
+    pub(crate) const EXTERNAL: u8 = 1;
+    pub(crate) const HAS_NAME_RANGE: u8 = 2;
 
-impl From<ModelData> for Model {
-    fn from(d: ModelData) -> Self {
-        Model::from_parts(d.entities, d.relations)
+    pub(crate) fn set_flag(&mut self, flag: u8, on: bool) {
+        if on {
+            self.flags |= flag;
+        } else {
+            self.flags &= !flag;
+        }
     }
 }
 
-#[derive(Debug, Clone, Default)]
-struct Index {
-    by_key: HashMap<String, EntityId>,
-    children: Vec<Vec<EntityId>>,
-    /// Relation indices by source / target entity.
-    outgoing: Vec<Vec<usize>>,
-    incoming: Vec<Vec<usize>>,
+/// 12 bytes per distinct `(from, kind, to, provenance)`; the field order is
+/// the sort order of [`Model::relations`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(crate) struct RelRow {
+    pub(crate) from: EntityId,
+    pub(crate) kind: u16,
+    pub(crate) to: EntityId,
+    pub(crate) provenance: Provenance,
+}
+
+/// Frozen, compact model.
+///
+/// Layout, chosen to keep every occurrence affordable:
+/// - strings (keys, names, files) interned once in a single buffer;
+/// - fixed-size entity rows, sparse props;
+/// - relations deduplicated and sorted by source, so the outgoing relations
+///   of an entity are one slice (CSR); incoming ones are an index array;
+/// - occurrence sites stored as bare 16-byte ranges, grouped by relation
+///   (CSR); their file is the file of the relation's source entity.
+#[derive(Clone)]
+pub struct Model {
+    strings: StrTable,
+    languages: Vec<LanguageId>,
+    kinds: Vec<RelationKind>,
+    entities: Vec<EntityRow>,
+    /// Sorted by id.
+    props: Vec<(EntityId, Props)>,
+    /// Entity ids sorted by key.
+    by_key: Vec<EntityId>,
+    /// `children[child_offsets[e]..child_offsets[e + 1]]`.
+    child_offsets: Vec<u32>,
+    children: Vec<EntityId>,
+    relations: Vec<RelRow>,
+    /// `relations[out_offsets[e]..out_offsets[e + 1]]` leave entity `e`.
+    out_offsets: Vec<u32>,
+    /// `incoming[in_offsets[e]..in_offsets[e + 1]]` are relation indices.
+    in_offsets: Vec<u32>,
+    incoming: Vec<u32>,
+    /// `sites[site_offsets[r]..site_offsets[r + 1]]` of relation `r`.
+    site_offsets: Vec<u32>,
+    sites: Vec<Range>,
+}
+
+/// Prefix sums of `keys` counted into `n` buckets: `offsets[k]..offsets[k+1]`.
+fn offsets(n: usize, keys: impl Iterator<Item = usize>) -> Vec<u32> {
+    let mut off = vec![0u32; n + 1];
+    for k in keys {
+        off[k + 1] += 1;
+    }
+    for i in 0..n {
+        off[i + 1] += off[i];
+    }
+    off
+}
+
+fn slice<'a, T>(data: &'a [T], offsets: &[u32], i: usize) -> &'a [T] {
+    match (offsets.get(i), offsets.get(i + 1)) {
+        (Some(&a), Some(&b)) => &data[a as usize..b as usize],
+        _ => &[],
+    }
+}
+
+/// Approximate heap usage, to watch the cost of keeping every occurrence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MemoryStats {
+    pub entities: usize,
+    pub relations: usize,
+    pub sites: usize,
+    pub strings: usize,
+    /// Excluding props.
+    pub heap_bytes: usize,
 }
 
 impl Model {
-    /// Relations or parents pointing outside `entities` are dropped from
-    /// the indexes (they stay in the data), so navigation never panics.
-    pub(crate) fn from_parts(entities: Vec<Entity>, relations: Vec<Relation>) -> Self {
+    pub(crate) fn from_rows(
+        strings: StrTable,
+        languages: Vec<LanguageId>,
+        kinds: Vec<RelationKind>,
+        entities: Vec<EntityRow>,
+        props: Vec<(EntityId, Props)>,
+        relations: Vec<RelRow>,
+        sites: Vec<(u32, Range)>,
+    ) -> Model {
         let n = entities.len();
-        let mut index = Index {
-            by_key: HashMap::with_capacity(n),
-            children: vec![Vec::new(); n],
-            outgoing: vec![Vec::new(); n],
-            incoming: vec![Vec::new(); n],
-        };
-        for e in &entities {
-            index.by_key.insert(e.key.clone(), e.id);
-            if let Some(p) = e.parent
-                && p.index() < n
-            {
-                index.children[p.index()].push(e.id);
-            }
+
+        let mut order: Vec<u32> = (0..relations.len() as u32).collect();
+        order.sort_unstable_by_key(|&i| relations[i as usize]);
+        let mut new_of = vec![0u32; order.len()];
+        for (new, &old) in order.iter().enumerate() {
+            new_of[old as usize] = new as u32;
         }
-        for (i, r) in relations.iter().enumerate() {
-            if r.from.index() < n && r.to.index() < n {
-                index.outgoing[r.from.index()].push(i);
-                index.incoming[r.to.index()].push(i);
-            }
+        let relations: Vec<RelRow> = order.iter().map(|&i| relations[i as usize]).collect();
+
+        let mut sites = sites;
+        for s in &mut sites {
+            s.0 = new_of[s.0 as usize];
         }
+        sites.sort_unstable();
+        sites.dedup();
+        let site_offsets = offsets(relations.len(), sites.iter().map(|s| s.0 as usize));
+        let mut sites: Vec<Range> = sites.into_iter().map(|s| s.1).collect();
+        // The in-place collect keeps the builder's growth slack.
+        sites.shrink_to_fit();
+
+        let out_offsets = offsets(n, relations.iter().map(|r| r.from.index()));
+        let mut incoming: Vec<u32> = (0..relations.len() as u32).collect();
+        incoming.sort_by_key(|&i| relations[i as usize].to);
+        let in_offsets = offsets(n, relations.iter().map(|r| r.to.index()));
+
+        let mut children: Vec<(u32, EntityId)> = entities
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| (e.parent as usize) < n)
+            .map(|(i, e)| (e.parent, EntityId(i as u32)))
+            .collect();
+        children.sort_unstable();
+        let child_offsets = offsets(n, children.iter().map(|c| c.0 as usize));
+        let mut children: Vec<EntityId> = children.into_iter().map(|c| c.1).collect();
+        children.shrink_to_fit();
+
+        let mut by_key: Vec<EntityId> = (0..n as u32).map(EntityId).collect();
+        by_key.sort_unstable_by(|a, b| {
+            strings
+                .get(entities[a.index()].key)
+                .cmp(strings.get(entities[b.index()].key))
+        });
+        let mut entities = entities;
+        entities.shrink_to_fit();
+        let mut languages = languages;
+        languages.shrink_to_fit();
+
         Model {
+            strings,
+            languages,
+            kinds,
             entities,
+            props,
+            by_key,
+            child_offsets,
+            children,
             relations,
-            index,
+            out_offsets,
+            in_offsets,
+            incoming,
+            site_offsets,
+            sites,
         }
     }
 
-    pub fn entities(&self) -> &[Entity] {
-        &self.entities
+    pub fn entity_count(&self) -> usize {
+        self.entities.len()
     }
 
-    pub fn relations(&self) -> &[Relation] {
-        &self.relations
+    pub fn relation_count(&self) -> usize {
+        self.relations.len()
     }
 
-    pub fn entity(&self, id: EntityId) -> Option<&Entity> {
-        self.entities.get(id.index())
+    pub fn site_count(&self) -> usize {
+        self.sites.len()
     }
 
-    pub fn by_key(&self, key: &str) -> Option<&Entity> {
-        self.index.by_key.get(key).and_then(|&id| self.entity(id))
+    pub fn entity(&self, id: EntityId) -> Option<EntityRef<'_>> {
+        (id.index() < self.entities.len()).then_some(EntityRef { model: self, id })
     }
 
-    pub fn of_kind(&self, kind: EntityKind) -> impl Iterator<Item = &Entity> {
-        self.entities.iter().filter(move |e| e.kind == kind)
+    pub fn by_key(&self, key: &str) -> Option<EntityRef<'_>> {
+        let i = self
+            .by_key
+            .binary_search_by(|id| self.strings.get(self.entities[id.index()].key).cmp(key))
+            .ok()?;
+        self.entity(self.by_key[i])
     }
 
-    pub fn roots(&self) -> impl Iterator<Item = &Entity> {
-        self.entities.iter().filter(|e| e.parent.is_none())
+    pub fn entities(&self) -> impl ExactSizeIterator<Item = EntityRef<'_>> {
+        (0..self.entities.len() as u32).map(|i| EntityRef {
+            model: self,
+            id: EntityId(i),
+        })
     }
 
-    pub fn children(&self, id: EntityId) -> impl Iterator<Item = &Entity> {
-        self.index
-            .children
-            .get(id.index())
-            .into_iter()
-            .flatten()
-            .filter_map(|&c| self.entity(c))
+    pub fn of_kind(&self, kind: EntityKind) -> impl Iterator<Item = EntityRef<'_>> {
+        self.entities().filter(move |e| e.kind() == kind)
     }
 
-    pub fn parent(&self, id: EntityId) -> Option<&Entity> {
-        self.entity(id)?.parent.and_then(|p| self.entity(p))
+    pub fn roots(&self) -> impl Iterator<Item = EntityRef<'_>> {
+        self.entities().filter(|e| e.parent().is_none())
+    }
+
+    pub fn relation(&self, id: RelationId) -> Option<RelationRef<'_>> {
+        (id.index() < self.relations.len()).then_some(RelationRef { model: self, id })
+    }
+
+    pub fn relations(&self) -> impl ExactSizeIterator<Item = RelationRef<'_>> {
+        (0..self.relations.len() as u32).map(|i| RelationRef {
+            model: self,
+            id: RelationId(i),
+        })
+    }
+
+    /// Languages present, in first-seen order.
+    pub fn languages(&self) -> &[LanguageId] {
+        &self.languages
+    }
+
+    pub fn memory(&self) -> MemoryStats {
+        fn v<T>(x: &Vec<T>) -> usize {
+            x.capacity() * size_of::<T>()
+        }
+        MemoryStats {
+            entities: self.entities.len(),
+            relations: self.relations.len(),
+            sites: self.sites.len(),
+            strings: self.strings.len(),
+            heap_bytes: self.strings.heap_bytes()
+                + v(&self.entities)
+                + v(&self.props)
+                + v(&self.by_key)
+                + v(&self.child_offsets)
+                + v(&self.children)
+                + v(&self.relations)
+                + v(&self.out_offsets)
+                + v(&self.in_offsets)
+                + v(&self.incoming)
+                + v(&self.site_offsets)
+                + v(&self.sites),
+        }
+    }
+
+    fn kind_id(&self, kind: &RelationKind) -> Option<u16> {
+        self.kinds.iter().position(|k| k == kind).map(|k| k as u16)
+    }
+}
+
+impl std::fmt::Debug for Model {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Model")
+            .field("entities", &self.entities.len())
+            .field("relations", &self.relations.len())
+            .field("sites", &self.sites.len())
+            .finish()
+    }
+}
+
+/// An entity of a [`Model`]; cheap to copy.
+#[derive(Clone, Copy)]
+pub struct EntityRef<'m> {
+    model: &'m Model,
+    id: EntityId,
+}
+
+impl<'m> EntityRef<'m> {
+    fn row(self) -> &'m EntityRow {
+        &self.model.entities[self.id.index()]
+    }
+
+    pub fn id(self) -> EntityId {
+        self.id
+    }
+
+    /// Unique and stable across runs; see [`crate::SymbolKey`].
+    pub fn key(self) -> &'m str {
+        self.model.strings.get(self.row().key)
+    }
+
+    pub fn kind(self) -> EntityKind {
+        self.row().kind
+    }
+
+    /// Simple name.
+    pub fn name(self) -> &'m str {
+        self.model.strings.get(self.row().name)
+    }
+
+    pub fn language(self) -> Option<&'m LanguageId> {
+        self.model.languages.get(self.row().language as usize)
+    }
+
+    /// Referenced but not defined in the analysed sources (library, JDK...).
+    pub fn external(self) -> bool {
+        self.row().flags & EntityRow::EXTERNAL != 0
+    }
+
+    /// Path relative to the analysed root, '/' separators.
+    pub fn file(self) -> Option<&'m str> {
+        let f = self.row().file;
+        (f != NONE).then(|| self.model.strings.get(StrId(f)))
+    }
+
+    /// Full extent, when the entity has a source.
+    pub fn range(self) -> Option<Range> {
+        (self.row().file != NONE).then_some(self.row().range)
+    }
+
+    /// Identifier only; used to match SCIP definition occurrences.
+    pub fn name_range(self) -> Option<Range> {
+        let r = self.row();
+        (r.file != NONE && r.flags & EntityRow::HAS_NAME_RANGE != 0).then_some(r.name_range)
+    }
+
+    pub fn props(self) -> &'m Props {
+        let props = &self.model.props;
+        props
+            .binary_search_by_key(&self.id, |(id, _)| *id)
+            .map_or(&NO_PROPS, |i| &props[i].1)
+    }
+
+    pub fn parent(self) -> Option<EntityRef<'m>> {
+        self.model.entity(EntityId(self.row().parent))
     }
 
     /// Enclosing entities, innermost first. Bounded to survive cycles.
-    pub fn ancestors(&self, id: EntityId) -> impl Iterator<Item = &Entity> {
-        let mut cur = self.parent(id);
-        let mut left = self.entities.len();
+    pub fn ancestors(self) -> impl Iterator<Item = EntityRef<'m>> {
+        let mut cur = self.parent();
+        let mut left = self.model.entities.len();
         std::iter::from_fn(move || {
-            if left == 0 {
-                return None;
-            }
-            left -= 1;
+            left = left.checked_sub(1)?;
             let e = cur?;
-            cur = self.parent(e.id);
+            cur = e.parent();
             Some(e)
         })
     }
 
-    pub fn outgoing(&self, id: EntityId) -> impl Iterator<Item = &Relation> {
-        self.relations_at(&self.index.outgoing, id)
+    pub fn children(self) -> impl ExactSizeIterator<Item = EntityRef<'m>> {
+        let m = self.model;
+        slice(&m.children, &m.child_offsets, self.id.index())
+            .iter()
+            .map(move |&id| EntityRef { model: m, id })
     }
 
-    pub fn incoming(&self, id: EntityId) -> impl Iterator<Item = &Relation> {
-        self.relations_at(&self.index.incoming, id)
+    /// Sorted by kind, then target.
+    pub fn outgoing(self) -> impl ExactSizeIterator<Item = RelationRef<'m>> {
+        let m = self.model;
+        let (a, b) = match (
+            m.out_offsets.get(self.id.index()),
+            m.out_offsets.get(self.id.index() + 1),
+        ) {
+            (Some(&a), Some(&b)) => (a, b),
+            _ => (0, 0),
+        };
+        (a..b).map(move |i| RelationRef {
+            model: m,
+            id: RelationId(i),
+        })
     }
 
-    /// Targets of `id`'s outgoing relations of `kind`.
-    pub fn targets<'a>(
-        &'a self,
-        id: EntityId,
-        kind: &'a RelationKind,
-    ) -> impl Iterator<Item = &'a Entity> + 'a {
-        self.outgoing(id)
-            .filter(move |r| &r.kind == kind)
-            .filter_map(|r| self.entity(r.to))
+    pub fn incoming(self) -> impl ExactSizeIterator<Item = RelationRef<'m>> {
+        let m = self.model;
+        slice(&m.incoming, &m.in_offsets, self.id.index())
+            .iter()
+            .map(move |&i| RelationRef {
+                model: m,
+                id: RelationId(i),
+            })
     }
 
-    fn relations_at<'a>(
-        &'a self,
-        by: &'a [Vec<usize>],
-        id: EntityId,
-    ) -> impl Iterator<Item = &'a Relation> + 'a {
-        by.get(id.index())
-            .into_iter()
-            .flatten()
-            .filter_map(|&i| self.relations.get(i))
+    /// Targets of the outgoing relations of `kind`, any provenance.
+    pub fn targets(self, kind: &RelationKind) -> impl Iterator<Item = EntityRef<'m>> {
+        let k = self.model.kind_id(kind);
+        self.outgoing()
+            .filter(move |r| Some(r.row().kind) == k)
+            .map(|r| r.to())
+    }
+}
+
+impl PartialEq for EntityRef<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.model, other.model) && self.id == other.id
+    }
+}
+
+impl std::fmt::Debug for EntityRef<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?} {}", self.kind(), self.key())
+    }
+}
+
+/// A relation of a [`Model`] with all its occurrence sites; cheap to copy.
+#[derive(Clone, Copy)]
+pub struct RelationRef<'m> {
+    model: &'m Model,
+    id: RelationId,
+}
+
+impl<'m> RelationRef<'m> {
+    fn row(self) -> &'m RelRow {
+        &self.model.relations[self.id.index()]
+    }
+
+    pub fn id(self) -> RelationId {
+        self.id
+    }
+
+    pub fn kind(self) -> &'m RelationKind {
+        &self.model.kinds[self.row().kind as usize]
+    }
+
+    pub fn from(self) -> EntityRef<'m> {
+        EntityRef {
+            model: self.model,
+            id: self.row().from,
+        }
+    }
+
+    pub fn to(self) -> EntityRef<'m> {
+        EntityRef {
+            model: self.model,
+            id: self.row().to,
+        }
+    }
+
+    pub fn provenance(self) -> Provenance {
+        self.row().provenance
+    }
+
+    /// Occurrence sites, sorted, in the file of [`Self::from`].
+    pub fn sites(self) -> &'m [Range] {
+        slice(&self.model.sites, &self.model.site_offsets, self.id.index())
+    }
+}
+
+impl PartialEq for RelationRef<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.model, other.model) && self.id == other.id
+    }
+}
+
+impl std::fmt::Debug for RelationRef<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} -{:?}-> {} ({:?}, {} sites)",
+            self.from().key(),
+            self.kind(),
+            self.to().key(),
+            self.provenance(),
+            self.sites().len()
+        )
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::{EntityKind, ModelBuilder, Provenance, RelationKind};
+pub(crate) mod tests {
+    use super::*;
+    use crate::ModelBuilder;
 
-    fn sample() -> crate::Model {
+    fn r(line: u32) -> Range {
+        Range::new(line, 4, line, 10)
+    }
+
+    pub(crate) fn sample() -> Model {
+        let java = LanguageId::new("java");
         let mut b = ModelBuilder::new();
-        let pkg = b.entity("com.acme", EntityKind::Namespace, "acme");
-        let a = b.entity("com.acme/A#", EntityKind::Class, "A");
-        let m = b.entity("com.acme/A#run().", EntityKind::Method, "run");
-        let list = b.entity("java/util/List#", EntityKind::Interface, "List");
-        b.entity_mut(a).parent = Some(pkg);
-        b.entity_mut(m).parent = Some(a);
-        b.entity_mut(list).external = true;
-        b.relate(RelationKind::References, m, list, Provenance::Scip, None);
+        let pkg = b.entity("model java . . com/acme/", EntityKind::Namespace, "acme");
+        let a = b.entity("model java . . com/acme/A#", EntityKind::Class, "A");
+        let run = b.entity(
+            "model java . . com/acme/A#run().",
+            EntityKind::Method,
+            "run",
+        );
+        let list = b.entity(
+            "semanticdb maven jdk 17 java/util/List#",
+            EntityKind::Interface,
+            "List",
+        );
+        for e in [pkg, a, run] {
+            b.set_language(e, &java);
+        }
+        b.set_parent(a, Some(pkg));
+        b.set_parent(run, Some(a));
+        b.set_source(
+            a,
+            "src/A.java",
+            Range::new(2, 0, 20, 1),
+            Some(Range::new(2, 13, 2, 14)),
+        );
+        b.set_source(run, "src/A.java", Range::new(3, 2, 9, 3), None);
+        b.set_external(list, true);
+        b.set_prop(a, "java.annotations", vec!["Service"]);
+        b.occurrence(&RelationKind::References, run, list, Provenance::Scip, r(5));
+        b.occurrence(&RelationKind::References, run, list, Provenance::Scip, r(4));
+        b.occurrence(&RelationKind::References, run, list, Provenance::Scip, r(5));
+        b.occurrence(&RelationKind::Calls, run, run, Provenance::TreeSitter, r(7));
         b.relate(
-            RelationKind::Other("http".into()),
-            m,
+            &RelationKind::Other("http".into()),
+            run,
             a,
             Provenance::Derived,
-            None,
         );
         b.build()
     }
 
     #[test]
-    fn entity_is_get_or_create_by_key() {
+    fn rows_stay_compact() {
+        assert_eq!(size_of::<EntityRow>(), 52);
+        assert_eq!(size_of::<RelRow>(), 12);
+        assert_eq!(size_of::<Range>(), 16);
+    }
+
+    #[test]
+    fn builder_is_get_or_create_by_key() {
         let mut b = ModelBuilder::new();
         let x = b.entity("k", EntityKind::Class, "X");
         let y = b.entity("k", EntityKind::Method, "Y");
         assert_eq!(x, y);
         assert_eq!(b.entity_count(), 1);
-        assert_eq!(b.entity_mut(x).kind, EntityKind::Class);
+        assert_eq!(b.kind(x), EntityKind::Class);
+        assert_eq!(b.get("k"), Some(x));
+        assert_eq!(b.get("nope"), None);
     }
 
     #[test]
-    fn navigates_containment_and_relations() {
+    fn entity_accessors() {
         let m = sample();
-        let run = m.by_key("com.acme/A#run().").unwrap().id;
-        let names: Vec<_> = m.ancestors(run).map(|e| e.name.as_str()).collect();
-        assert_eq!(names, ["A", "acme"]);
+        let a = m.by_key("model java . . com/acme/A#").unwrap();
+        assert_eq!(a.name(), "A");
+        assert_eq!(a.file(), Some("src/A.java"));
+        assert_eq!(a.name_range(), Some(Range::new(2, 13, 2, 14)));
+        assert_eq!(a.language().map(|l| l.as_str()), Some("java"));
+        assert!(a.props().contains_key("java.annotations"));
+        let run = m.by_key("model java . . com/acme/A#run().").unwrap();
+        assert_eq!(run.name_range(), None);
+        assert!(run.props().is_empty());
+        let list = m.by_key("semanticdb maven jdk 17 java/util/List#").unwrap();
+        assert!(list.external());
+        assert_eq!(list.file(), None);
+        assert_eq!(list.language(), None);
+        assert!(m.by_key("model java . . com/").is_none());
+    }
+
+    #[test]
+    fn navigates_containment() {
+        let m = sample();
+        let run = m.by_key("model java . . com/acme/A#run().").unwrap();
+        let up: Vec<_> = run.ancestors().map(|e| e.name()).collect();
+        assert_eq!(up, ["A", "acme"]);
         assert_eq!(m.roots().count(), 2);
-        let a = m.by_key("com.acme/A#").unwrap().id;
-        assert_eq!(m.children(a).count(), 1);
-        let refs: Vec<_> = m
-            .targets(run, &RelationKind::References)
-            .map(|e| e.name.as_str())
-            .collect();
-        assert_eq!(refs, ["List"]);
-        assert_eq!(m.incoming(a).count(), 1);
+        let a = run.parent().unwrap();
+        assert_eq!(a.children().collect::<Vec<_>>(), [run]);
     }
 
     #[test]
-    fn json_round_trip_rebuilds_indexes() {
+    fn keeps_every_distinct_site_on_one_relation() {
         let m = sample();
-        let json = serde_json::to_string(&m).unwrap();
-        assert!(json.contains(r#""kind":"http""#), "{json}");
-        assert!(json.contains(r#""kind":"references""#), "{json}");
-        let back: crate::Model = serde_json::from_str(&json).unwrap();
-        assert_eq!(back.entities(), m.entities());
-        assert_eq!(back.relations(), m.relations());
-        let run = back.by_key("com.acme/A#run().").unwrap().id;
-        assert_eq!(back.outgoing(run).count(), 2);
-        assert_eq!(back.relations()[1].kind, RelationKind::Other("http".into()));
+        assert_eq!(m.relation_count(), 3);
+        assert_eq!(m.site_count(), 3, "duplicate site dropped");
+        let run = m.by_key("model java . . com/acme/A#run().").unwrap();
+        let refs: Vec<_> = run
+            .outgoing()
+            .filter(|r| r.kind() == &RelationKind::References)
+            .collect();
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].sites(), [r(4), r(5)]);
+        assert_eq!(refs[0].from().file(), Some("src/A.java"));
+        let targets: Vec<_> = run
+            .targets(&RelationKind::References)
+            .map(|e| e.name())
+            .collect();
+        assert_eq!(targets, ["List"]);
+        assert_eq!(run.targets(&RelationKind::Inherits).count(), 0);
+        let calls = run
+            .outgoing()
+            .find(|r| r.kind() == &RelationKind::Calls)
+            .unwrap();
+        assert_eq!(calls.provenance(), Provenance::TreeSitter);
+        let a = run.parent().unwrap();
+        let into_a: Vec<_> = a.incoming().map(|r| r.kind().clone()).collect();
+        assert_eq!(into_a, [RelationKind::Other("http".into())]);
+        assert_eq!(run.incoming().count(), 1);
     }
 
     #[test]
-    fn dangling_ids_do_not_panic() {
-        let json = r#"{"entities":[{"id":0,"key":"a","kind":"class","name":"a","parent":7}],
-                       "relations":[{"kind":"calls","from":0,"to":9,"provenance":"scip"}]}"#;
-        let m: crate::Model = serde_json::from_str(json).unwrap();
-        let a = m.by_key("a").unwrap().id;
-        assert!(m.parent(a).is_none());
-        assert_eq!(m.outgoing(a).count(), 0);
+    fn same_pair_different_provenance_are_distinct() {
+        let mut b = ModelBuilder::new();
+        let x = b.entity("x", EntityKind::Function, "x");
+        let y = b.entity("y", EntityKind::Function, "y");
+        b.relate(&RelationKind::Calls, x, y, Provenance::TreeSitter);
+        b.relate(&RelationKind::Calls, x, y, Provenance::Scip);
+        b.relate(&RelationKind::Calls, x, y, Provenance::Scip);
+        assert_eq!(b.build().relation_count(), 2);
+    }
+
+    #[test]
+    fn reports_memory() {
+        let s = sample().memory();
+        assert_eq!((s.entities, s.relations, s.sites), (4, 3, 3));
+        assert!(s.heap_bytes >= 4 * 52 + 3 * 12 + 3 * 16);
     }
 }
