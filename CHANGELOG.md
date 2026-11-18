@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 ### Breaking — `model-graphql`
 
@@ -22,6 +22,7 @@
   enables CORS for browser clients such as Fluid. Without it the server keeps
   sending no CORS header. `router_with_origins` exposes it as a library API;
   introspection stays enabled.
+- Documentation and clients now point at tag `v0.2.0`.
 
 ## 0.1.2
 

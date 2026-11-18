@@ -34,7 +34,7 @@ Standalone repository `badetitou/Model`, a Cargo workspace (edition 2024).
 Clients depend on it via Cargo git dependencies:
 
 ```toml
-model-core = { git = "https://github.com/badetitou/Model", tag = "v0.1.2" }
+model-core = { git = "https://github.com/badetitou/Model", tag = "v0.2.0" }
 ```
 
 ```

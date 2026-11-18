@@ -157,7 +157,7 @@ any origin. Without it, no CORS header is sent.
 
 ```toml
 [dependencies]
-model = { git = "https://github.com/badetitou/Model", tag = "v0.1.2" }
+model = { git = "https://github.com/badetitou/Model", tag = "v0.2.0" }
 ```
 
 ```rust
