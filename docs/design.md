@@ -1,6 +1,8 @@
 # Model — design
 
-Status: draft (`model-core`: metamodel, keys, compact storage; `model-detect`).
+Status: draft. Done: `model-core` (metamodel, keys, compact storage),
+`model-detect`, `model-scip` (loader), `model-link` (SCIP fusion and
+SCIP-only models).
 
 ## 1. Goal
 
@@ -36,10 +38,10 @@ model-core = { git = "https://github.com/badetitou/Model", tag = "v0.1.0" }
 ```
 model-core         metamodel + builder + navigation API      (serde only)
   ^
-  ├── model-detect      language detection, project roots        ✅ skeleton
+  ├── model-detect      language detection, project roots        ✅
   ├── model-treesitter  generic extractor driven by queries      ⏳
-  ├── model-scip        SCIP loading, indexer runner, cache      ⏳
-  ├── model-link        tree-sitter ⨝ SCIP fusion                ⏳
+  ├── model-scip        SCIP loading ✅, indexer runner, cache ⏳
+  ├── model-link        SCIP → builder (fusion, SCIP-only)       ✅
   ├── model-lang-*      optional per-language enrichers          ⏳
   └── model-analysis    Analysis trait + generic analyses        ⏳
         ^
@@ -190,11 +192,29 @@ detect ──► for each detected language / project root:
    (`pipeline/indexer.rs`, `scip_cache.rs`). Missing indexer = warning, not an
    error.
 3. **Extract**. Generic tree-sitter extractor (§5).
-4. **Link**. Generalisation of Structure's `link.rs`: SCIP definition
-   occurrences are matched to tree-sitter entities by `(file, name_range)`,
-   the entity takes the SCIP symbol as `key`, and reference occurrences become
-   `Calls` / `References` relations from the innermost enclosing entity;
-   SCIP `relationships` (`is_implementation`) become `Implements`/`Inherits`.
+4. **Link** (`model-link`, done). Port of Structure's `link.rs` onto the
+   builder:
+   - SCIP definitions are matched to existing entities by identifier line
+     and name (or by extent, for scip-java's annotation-line definitions);
+     matched entities take the SCIP symbol as key (`ModelBuilder::rekey`).
+   - Unmatched definitions follow `Unmapped`: `Lift` attributes them to their
+     nearest matched ancestor (Structure's behaviour); `Create` makes
+     entities from them (kind from SCIP `kind` or the descriptor, extent from
+     `enclosing_range`, parent from `enclosing_symbol` or the descriptor
+     chain, created as `Namespace`s when missing) plus one `File` entity per
+     document.
+   - References become `Calls` (callable target), `References`, or `Imports`
+     (SCIP import role), from their innermost enclosing entity, **every site
+     kept**, `Provenance::Scip`. Symbols defined outside the index become
+     `external` entities with their ancestor chain (`java/util/List#` under
+     `java/util/` under `java/`); references to project symbols without
+     entity are dropped and counted.
+   - `is_implementation` relationships become `Implements`, or `Inherits`
+     when a type "implements" a class or struct (SCIP does not tell
+     `extends` apart).
+   - Not done here: propagating calls to interface methods onto their
+     implementations (Structure does it while linking); it is a `Derived`
+     analysis.
 5. **Build**. Cross-language relations (HTTP, RPC) are *not* built here: they
    are analyses producing `Derived` relations (§7).
 
@@ -204,7 +224,21 @@ Degraded modes are first class:
 |---|---|
 | grammar + indexer | full model (`Scip` relations) |
 | grammar only | entities + syntactic relations (`TreeSitter`, names resolved best-effort) |
-| indexer only | entities from SCIP `SymbolInformation` (`kind`, `enclosing_symbol`, `enclosing_range`) + resolved relations, no syntactic props |
+| indexer only | `model_link::from_scip`: entities from definitions + resolved relations, no syntactic props |
+
+Indexer-only, measured with
+`cargo run --release -p model-link --example scip_model -- <index.scip>`:
+
+| Fixture | Index | Model | Sites at file level | Time |
+|---|---|---|---|---|
+| jpetstore (scip-java) | 1.1 MB, 8.7k refs | 1k entities, 3.9k relations, 5.7k sites, 0.4 MiB | 6% | 30 ms |
+| angular-realworld (scip-typescript) | 0.8 MB, 5.8k refs | 0.8k entities, 1.9k relations, 3.8k sites, 0.2 MiB | 67% | 10 ms |
+| vscode (scip-typescript) | 1 GB, 7.2M refs | 333k entities, 2.1M relations, 4.5M sites, 178 MiB | 47% | 4.3 s, 1.65 GB peak RSS |
+
+The "file level" column is the limit of SCIP alone: scip-java gives the
+extent of 97% of its definitions, the scip-typescript version used gives it
+for 9–12%, so most TypeScript references can only be attributed to their
+file. Tree-sitter extents (§5) fix that: they are what `Lift` links onto.
 
 ## 5. Generic tree-sitter extraction
 
@@ -339,9 +373,10 @@ incremental rebuilds.
 
 Each step is one PR, Structure's tests and goldens staying green:
 
-1. **Model v0.1** — `model-core`, `model-detect` (this skeleton), CI, tag.
-2. **model-scip + model-link** — move `structure-scip` (loader, indexer
-   runner, document cache, `link`) onto `model-core` types.
+1. **Model v0.1** — `model-core`, `model-detect` ✅; CI and tag to do.
+2. **model-scip + model-link** — loader and linker ported ✅; the indexer
+   runner and per-document cache (`pipeline/indexer.rs`, `scip_cache.rs`) are
+   still to move (2b).
 3. **model-treesitter** — the query-driven extractor; port the Java and TS
    extractors of `structure-lang-java`/`-ts` to `model.scm` + enrichers;
    compare with Structure's output on the fixtures (same entities/edges).

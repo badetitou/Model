@@ -14,8 +14,10 @@ Design: [`docs/design.md`](docs/design.md).
 | Crate | Status | Role |
 |---|---|---|
 | `model-core` | usable | metamodel, SCIP-like keys, `ModelBuilder`, compact `Model` keeping every occurrence, JSON |
-| `model-detect` | skeleton | languages of a tree, file counts, project roots |
-| `model-treesitter`, `model-scip`, `model-link` | planned | extraction and fusion |
+| `model-detect` | usable | languages of a tree, file counts, project roots |
+| `model-scip` | usable | reads `index.scip` (parallel, bounded memory) |
+| `model-link` | usable | SCIP → model: fusion onto syntactic entities, or SCIP-only models |
+| `model-treesitter` | planned | query-driven syntactic extraction |
 | `model-graphql` | planned | GraphQL plugin |
 
 ## Use
@@ -27,6 +29,12 @@ model-detect = { git = "https://github.com/badetitou/Model" }
 ```
 
 ```rust
+// A model from a SCIP index alone.
+let index = model_scip::load("index.scip".as_ref())?;
+let (builder, stats) = model_link::from_scip(&index, None);
+let model = builder.build();
+
+// Languages of a tree.
 let detection = model_detect::detect(std::path::Path::new("."))?;
 for l in &detection.languages {
     println!("{} — {} files, roots {:?}", l.spec.name, l.files, l.project_roots);

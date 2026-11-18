@@ -18,6 +18,16 @@ Structure (`../Structure`), its first client.
   strings, fixed rows, CSR relations/sites; views `EntityRef`/`RelationRef`),
   `serial` (JSON, loaded through the builder), `strings` (interner).
   `examples/memory.rs` measures the storage cost (design §3.2).
+- `crates/model-scip` — `load(index.scip)` → `ScipIndex` (interned symbols,
+  per-document definitions with enclosing range / references with import
+  role, symbol infos with `EntityKind`); raw-document helpers for caching.
+  Port of Structure's `structure-scip::scip`.
+- `crates/model-link` — `link(builder, index, opts)`: match definitions to
+  entities (rekey to SCIP symbol), `Unmapped::Lift|Create`, references →
+  `Calls`/`References`/`Imports` with sites, externals with ancestors,
+  `Implements`/`Inherits`; `from_scip` = SCIP-only model. `symbols.rs`:
+  per-symbol facts computed once. `examples/scip_model.rs` runs on a real
+  index (Structure's `fixtures/*/index.scip`).
 - `crates/model-detect` — `detect(root)`: languages, file counts, project
   roots; `languages.rs` is the data table (`LanguageSpec`).
 

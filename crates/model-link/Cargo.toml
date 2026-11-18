@@ -1,0 +1,17 @@
+[package]
+name = "model-link"
+description = "Builds or enriches a model from a SCIP index"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+model-core.workspace = true
+model-detect.workspace = true
+model-scip.workspace = true
+rayon.workspace = true
+
+[dev-dependencies]
+anyhow.workspace = true
+serde_json.workspace = true

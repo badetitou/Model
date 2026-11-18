@@ -3,6 +3,8 @@ resolver = "3"
 members = [
     "crates/model-core",
     "crates/model-detect",
+    "crates/model-scip",
+    "crates/model-link",
 ]
 
 [workspace.package]
@@ -13,7 +15,12 @@ repository = "https://github.com/badetitou/Model"
 
 [workspace.dependencies]
 model-core = { path = "crates/model-core" }
+model-scip = { path = "crates/model-scip" }
+model-detect = { path = "crates/model-detect" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 ignore = "0.4"
+scip = "0.5"
+protobuf = "3"
+rayon = "1"
