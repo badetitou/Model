@@ -594,3 +594,47 @@ fn invalid_origin_is_rejected() {
     let m = Arc::new(ModelBuilder::new().build());
     assert!(router_with_origins(schema(m), &["not an origin".into()]).is_err());
 }
+
+#[tokio::test]
+async fn accesses_expose_site_flags() {
+    let mut b = ModelBuilder::new();
+    extract_sources(
+        &mut b,
+        &[(
+            "src/C.java",
+            "class C { int n; void f() { n = 1; int m = n; n += m; } }",
+        )],
+        &ExtractOptions::default(),
+    )
+    .unwrap();
+    let s = schema(Arc::new(b.build()));
+    let d = run(
+        &s,
+        r#"{ entity(key: "model java . . C#f().") {
+              outgoing(kind: "accesses") { edges { node {
+                to { name }
+                flaggedSites { edges { node { read write receiver flags } } }
+              } } }
+           } }"#,
+    )
+    .await;
+    let edges = d["entity"]["outgoing"]["edges"].as_array().unwrap();
+    let n = edges
+        .iter()
+        .find(|e| e["node"]["to"]["name"] == "n")
+        .unwrap();
+    let flags: Vec<_> = n["node"]["flaggedSites"]["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["node"]["flags"].clone())
+        .collect();
+    assert_eq!(
+        flags,
+        [
+            serde_json::json!(["write"]),
+            serde_json::json!(["read"]),
+            serde_json::json!(["read", "write"])
+        ]
+    );
+}

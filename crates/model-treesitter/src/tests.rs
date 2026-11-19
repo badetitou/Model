@@ -520,3 +520,74 @@ fn fragment_tag_follows_the_grammar() {
     assert_eq!(ex.tag("A.java").unwrap(), j);
     assert!(ex.tag("notes.txt").is_none());
 }
+
+#[test]
+fn java_declared_types_accesses_throws_overrides() {
+    let (m, st) = model(&[
+        ("p/I.java", "package p;\ninterface I { void run(); }\n"),
+        ("p/E.java", "package p;\nclass E extends Exception {}\n"),
+        (
+            "p/A.java",
+            r#"package p;
+class A implements I {
+    private int count;
+    private E err, other;
+    public void run() throws E {
+        int n = count;
+        this.count = n;
+        count += 1;
+        n++;
+        helper(err);
+        err.toString();
+    }
+    E helper(E e) { E tmp = e; return tmp; }
+}
+"#,
+        ),
+    ]);
+    let key = |s: &str| format!("model java . . p/{s}");
+    assert_eq!(
+        edges(&m, R::DeclaredType),
+        [
+            ("e".into(), key("E#"), 1),
+            ("err".into(), key("E#"), 1),
+            ("helper".into(), key("E#"), 1),
+            ("other".into(), key("E#"), 1),
+            ("tmp".into(), key("E#"), 1),
+        ]
+    );
+    assert_eq!(edges(&m, R::Throws), [("run".into(), key("E#"), 1)]);
+    assert_eq!(
+        edges(&m, R::Overrides),
+        [("run".into(), key("I#run()."), 0)]
+    );
+    // `count`: read (n = count), write (this.count =), read+write (+=).
+    let acc: Vec<_> = m
+        .relations()
+        .filter(|r| r.kind() == &R::Accesses && r.to().name() == "count")
+        .collect();
+    assert_eq!(acc.len(), 1);
+    assert_eq!(acc[0].provenance(), Provenance::TreeSitter);
+    let mut flags: Vec<u8> = acc[0].site_flags().iter().map(|f| f.0).collect();
+    flags.sort();
+    assert_eq!(flags, [1, 2, 3]);
+    // `n`: a local, written by n++ (read+write) and read in `this.count = n`.
+    let n = m
+        .relations()
+        .find(|r| r.kind() == &R::Accesses && r.to().name() == "n")
+        .unwrap();
+    assert_eq!(n.to().kind_name(), "local_variable");
+    assert_eq!(n.sites().len(), 2);
+    // `err` is read as an argument and as a receiver.
+    let err = m
+        .relations()
+        .find(|r| r.kind() == &R::Accesses && r.to().name() == "err")
+        .unwrap();
+    let mut f: Vec<u8> = err.site_flags().iter().map(|f| f.0).collect();
+    f.sort();
+    assert_eq!(f, [1, 5]);
+    assert!(
+        st.accesses >= 8 && st.overrides == 1 && st.throws == 1,
+        "{st:?}"
+    );
+}

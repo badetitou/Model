@@ -1,6 +1,6 @@
 use crate::entity::{EntityId, EntityKind, LanguageId};
 use crate::metamodel::{KindId, KindInfo, Metamodel, TraitMask};
-use crate::relation::{Provenance, RelationId, RelationKind};
+use crate::relation::{Provenance, RelationId, RelationKind, SiteFlags};
 use crate::source::Range;
 use crate::strings::{StrId, StrTable};
 use crate::value::Props;
@@ -56,8 +56,9 @@ pub(crate) struct RelRow {
 /// - fixed-size entity rows, sparse props;
 /// - relations deduplicated and sorted by source, so the outgoing relations
 ///   of an entity are one slice (CSR); incoming ones are an index array;
-/// - occurrence sites stored as bare 16-byte ranges, grouped by relation
-///   (CSR); their file is the file of the relation's source entity.
+/// - occurrence sites stored as 16-byte ranges plus a 1-byte flags column
+///   (17 bytes/site), grouped by relation (CSR); their file is the file of
+///   the relation's source entity.
 #[derive(Clone)]
 pub struct Model {
     strings: StrTable,
@@ -81,6 +82,8 @@ pub struct Model {
     /// `sites[site_offsets[r]..site_offsets[r + 1]]` of relation `r`.
     site_offsets: Vec<u32>,
     sites: Vec<Range>,
+    /// [`SiteFlags`] of `sites`, same indices.
+    site_flags: Vec<SiteFlags>,
 }
 
 /// Prefix sums of `keys` counted into `n` buckets: `offsets[k]..offsets[k+1]`.
@@ -123,7 +126,7 @@ impl Model {
         entities: Vec<EntityRow>,
         props: Vec<(EntityId, Props)>,
         relations: Vec<RelRow>,
-        sites: Vec<(u32, Range)>,
+        sites: Vec<(u32, Range, u8)>,
     ) -> Model {
         let n = entities.len();
 
@@ -140,11 +143,20 @@ impl Model {
             s.0 = new_of[s.0 as usize];
         }
         sites.sort_unstable();
-        sites.dedup();
+        // One site per (relation, range): flags are merged.
+        sites.dedup_by(|b, a| {
+            let same = a.0 == b.0 && a.1 == b.1;
+            if same {
+                a.2 |= b.2;
+            }
+            same
+        });
         let site_offsets = offsets(relations.len(), sites.iter().map(|s| s.0 as usize));
+        let mut site_flags: Vec<SiteFlags> = sites.iter().map(|s| SiteFlags(s.2)).collect();
         let mut sites: Vec<Range> = sites.into_iter().map(|s| s.1).collect();
         // The in-place collect keeps the builder's growth slack.
         sites.shrink_to_fit();
+        site_flags.shrink_to_fit();
 
         let out_offsets = offsets(n, relations.iter().map(|r| r.from.index()));
         let mut incoming: Vec<u32> = (0..relations.len() as u32).collect();
@@ -189,6 +201,7 @@ impl Model {
             incoming,
             site_offsets,
             sites,
+            site_flags,
         }
     }
 
@@ -284,7 +297,8 @@ impl Model {
                 + v(&self.in_offsets)
                 + v(&self.incoming)
                 + v(&self.site_offsets)
-                + v(&self.sites),
+                + v(&self.sites)
+                + v(&self.site_flags),
         }
     }
 
@@ -498,6 +512,15 @@ impl<'m> RelationRef<'m> {
     /// Occurrence sites, sorted, in the file of [`Self::from`].
     pub fn sites(self) -> &'m [Range] {
         slice(&self.model.sites, &self.model.site_offsets, self.id.index())
+    }
+
+    /// Flags of each site of [`Self::sites`], same order.
+    pub fn site_flags(self) -> &'m [SiteFlags] {
+        slice(
+            &self.model.site_flags,
+            &self.model.site_offsets,
+            self.id.index(),
+        )
     }
 }
 

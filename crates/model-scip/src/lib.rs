@@ -62,6 +62,10 @@ pub struct Reference {
     pub range: Range,
     /// Occurrence in an import/use statement.
     pub import: bool,
+    /// `WriteAccess` role: the occurrence assigns the symbol.
+    pub write: bool,
+    /// `ReadAccess` role.
+    pub read: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -91,6 +95,8 @@ pub struct ScipStats {
 
 const ROLE_DEFINITION: i32 = 0x1;
 const ROLE_IMPORT: i32 = 0x2;
+const ROLE_WRITE: i32 = 0x4;
+const ROLE_READ: i32 = 0x8;
 
 impl ScipIndex {
     /// The symbol string of `id`, which must come from this index.
@@ -298,7 +304,8 @@ const BATCH_BYTES: usize = 64 << 20;
 /// local names.
 enum Occ {
     Def(u32, Range, Option<Range>),
-    Ref(u32, Range, bool),
+    /// Symbol, range, import, write, read.
+    Ref(u32, Range, bool, bool, bool),
 }
 
 /// One document decoded on a worker thread, its symbols deduplicated
@@ -327,7 +334,13 @@ fn decode_document(raw: &[u8]) -> anyhow::Result<DecodedDocument> {
         occurrences.push(if o.symbol_roles & ROLE_DEFINITION != 0 {
             Occ::Def(i, range, convert_range(&o.enclosing_range))
         } else {
-            Occ::Ref(i, range, o.symbol_roles & ROLE_IMPORT != 0)
+            Occ::Ref(
+                i,
+                range,
+                o.symbol_roles & ROLE_IMPORT != 0,
+                o.symbol_roles & ROLE_WRITE != 0,
+                o.symbol_roles & ROLE_READ != 0,
+            )
         });
     }
     let mut names = vec![String::new(); local.len()];
@@ -371,10 +384,12 @@ fn decode_batch(batch: &mut Vec<Vec<u8>>, out: &mut ScipIndex) -> anyhow::Result
                     range,
                     enclosing,
                 }),
-                Occ::Ref(i, range, import) => doc.references.push(Reference {
+                Occ::Ref(i, range, import, write, read) => doc.references.push(Reference {
                     symbol: ids[i as usize],
                     range,
                     import,
+                    write,
+                    read,
                 }),
             }
         }

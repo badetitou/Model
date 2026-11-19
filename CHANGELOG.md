@@ -15,6 +15,16 @@
 - `model-graphql`: `OnDemand` and `requirement_of` (selection set to traits),
   `--on-demand [--package <dir> | --diff <base>]`: a query on
   `methods { name }` starts no indexer.
+- Relations: `declared_type`, `accesses`, `throws`, `overrides`
+  (`RelationKind`) and a 1-byte `SiteFlags` column on sites (`READ`, `WRITE`,
+  `RECEIVER`; `ModelBuilder::occurrence_flagged`, `RelationRef::site_flags`,
+  JSON `flags`, GraphQL `Relation.flaggedSites`). `model-scip` exposes the
+  read/write roles of references; `model-link` produces `accesses`,
+  `declared_type` (type definitions) and `overrides` from SCIP;
+  `model-treesitter` produces all four by name for Java (`@typed`,
+  `@reference.declared_type|throws`, `@access.*` captures). Cost: +1 B/site
+  (42.7 B/site, 203 MiB on 5M sites). `model-traits`: `Typed` and `Exceptions`
+  traits, `overrides` / `accesses` carried by Invocation / Access.
 - `model-traits`: new crate, traits as data (Named, WithMembers,
   WithInheritances, Invocation, Access, Modifiers, Annotations: typed props,
   relations, relation kinds carried, containment rules) generated from the

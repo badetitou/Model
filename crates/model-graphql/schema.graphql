@@ -1285,6 +1285,10 @@ type Relation {
 	Occurrences, in the file of `from`.
 	"""
 	sites(first: Int, after: String): RangeConnection!
+	"""
+	Occurrences with their read/write/receiver flags.
+	"""
+	flaggedSites(first: Int, after: String): SiteConnection!
 }
 
 type RelationConnection {
@@ -1314,6 +1318,56 @@ type RelationEdge {
 	The item at the end of the edge
 	"""
 	node: Relation!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+An occurrence with its flags (a relation's `sites` without them).
+"""
+type Site {
+	range: Range!
+	"""
+	`read` / `write` (accesses), `receiver`.
+	"""
+	flags: [String!]!
+	read: Boolean!
+	write: Boolean!
+	"""
+	The target is the receiver (`x` in `x.f()`).
+	"""
+	receiver: Boolean!
+}
+
+type SiteConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [SiteEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Site!]!
+	"""
+	Items matching the query, over all pages.
+	"""
+	totalCount: Int!
+}
+
+"""
+An edge in a connection.
+"""
+type SiteEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Site!
 	"""
 	A cursor for use in pagination
 	"""

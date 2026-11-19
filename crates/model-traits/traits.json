@@ -3,9 +3,11 @@
     { "name": "Named", "fm3": ["TNamedEntity"] },
     { "name": "WithMembers", "fm3": ["TWithMethods", "TWithAttributes", "TWithTypes"] },
     { "name": "WithInheritances", "fm3": ["TWithInheritances"], "carries": ["inherits", "implements"] },
-    { "name": "Invocation", "fm3": ["TWithInvocations", "TInvocable", "TInvocationsReceiver"], "carries": ["calls"] },
-    { "name": "Access", "fm3": ["TWithAccesses"], "carries": ["references"] },
+    { "name": "Invocation", "fm3": ["TWithInvocations", "TInvocable", "TInvocationsReceiver"], "carries": ["calls", "overrides"] },
+    { "name": "Access", "fm3": ["TWithAccesses"], "carries": ["references", "accesses"] },
     { "name": "Modifiers", "fm3": ["THasVisibility", "TCanBeAbstract", "TCanBeFinal", "TCanBeClassSide", "TCanBeSynchronized"] },
-    { "name": "Annotations", "fm3": ["TWithAnnotationInstances", "TWithAnnotationTypes"] }
+    { "name": "Annotations", "fm3": ["TWithAnnotationInstances", "TWithAnnotationTypes"] },
+    { "name": "Typed", "fm3": ["TTypedEntity"], "carries": ["declared_type"] },
+    { "name": "Exceptions", "fm3": ["TWithExceptions"], "carries": ["throws"] }
   ]
 }

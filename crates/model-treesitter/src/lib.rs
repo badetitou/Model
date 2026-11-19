@@ -58,6 +58,12 @@ pub struct ExtractStats {
     /// Calls with no unambiguous target.
     pub unresolved: usize,
     pub external: usize,
+    /// `declared_type` relations (types of fields, parameters, locals, returns).
+    pub declared_types: usize,
+    pub throws: usize,
+    /// Read/write/receiver sites on fields, parameters and locals.
+    pub accesses: usize,
+    pub overrides: usize,
 }
 
 /// Compiled query of each grammar, with its capture roles.

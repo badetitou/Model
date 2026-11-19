@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::entity::{EntityId, EntityKind, LanguageId};
 use crate::metamodel::{KindId, Metamodel, TraitMask};
 use crate::model::{EntityRow, Model, NO_LANGUAGE, NONE, RelRow};
-use crate::relation::{Provenance, RelationKind};
+use crate::relation::{Provenance, RelationKind, SiteFlags};
 use crate::source::Range;
 use crate::strings::{Interner, StrId};
 use crate::value::{Props, Value};
@@ -27,8 +27,8 @@ pub struct ModelBuilder {
     props: HashMap<EntityId, Props>,
     relations: Vec<RelRow>,
     relation_ids: HashMap<RelRow, u32>,
-    /// `(relation, site)`, in insertion order.
-    sites: Vec<(u32, Range)>,
+    /// `(relation, site, flags)`, in insertion order.
+    sites: Vec<(u32, Range, u8)>,
     /// Some keys were replaced: their old strings are dropped on build.
     rekeyed: bool,
 }
@@ -268,8 +268,22 @@ impl ModelBuilder {
         provenance: Provenance,
         site: Range,
     ) {
+        self.occurrence_flagged(kind, from, to, provenance, site, SiteFlags::NONE);
+    }
+
+    /// Like [`Self::occurrence`] with per-site flags (read/write, receiver).
+    /// The same site asserted twice keeps the union of its flags.
+    pub fn occurrence_flagged(
+        &mut self,
+        kind: &RelationKind,
+        from: EntityId,
+        to: EntityId,
+        provenance: Provenance,
+        site: Range,
+        flags: SiteFlags,
+    ) {
         let r = self.relation(kind, from, to, provenance);
-        self.sites.push((r, site));
+        self.sites.push((r, site, flags.0));
     }
 
     fn relation(

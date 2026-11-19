@@ -25,6 +25,9 @@ baseline. Model adds a few captures.
 | `@relation.imports` + `@name` | imported qualified name, from the file |
 | `@reference.call` + `@name` | call by name |
 | `@reference.type` + `@name` | use of a type by name, e.g. `new X()` (tags: `@reference.class`) |
+| `@reference.declared_type` + `@name` (+ `@typed`) | type of the entity named by `@typed` (else the enclosing definition): `declared_type` |
+| `@reference.throws` + `@name` | `throws` clause type of the enclosing method |
+| `@access.read` / `.write` / `.read_write` / `.receiver` + `@name` | use of a variable by name: `accesses` with the matching site flags; resolved to a parameter or local of the enclosing member, else a field of an enclosing type, dropped when unknown |
 | `@prop.<key>` | the captured text is added to the `<key>` list prop of the innermost enclosing definition(s) |
 
 Attached kinds, all of archetype `Variable` and keyed under the innermost
