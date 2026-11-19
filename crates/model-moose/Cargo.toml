@@ -1,0 +1,20 @@
+[package]
+name = "model-moose"
+description = "Imports Moose/Famix JSON models into Model, with a diff report against a Model built from sources"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+readme = "../../README.md"
+keywords = ["moose", "famix", "fm3", "json", "code-model"]
+categories = ["development-tools", "parser-implementations"]
+
+[dependencies]
+model-core.workspace = true
+model-traits.workspace = true
+model-fm3.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

@@ -954,6 +954,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "model-moose"
+version = "0.3.0"
+dependencies = [
+ "model-core",
+ "model-fm3",
+ "model-traits",
+ "serde_json",
+]
+
+[[package]]
 name = "model-scip"
 version = "0.3.0"
 dependencies = [

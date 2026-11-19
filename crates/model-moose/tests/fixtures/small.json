@@ -1,0 +1,19 @@
+[
+{"FM3":"Famix-Java-Entities.Invocation","id":20,"candidates":[{"ref":11}],"sender":{"ref":10},"signature":"helper()"},
+{"FM3":"Famix-Java-Entities.IndexedFileAnchor","id":21,"element":{"ref":20},"endPos":47,"fileName":"/proj/src/p/A.java","startPos":40},
+{"FM3":"Famix-Java-Entities.Package","id":1,"name":"p"},
+{"FM3":"Famix-Java-Entities.Class","id":2,"name":"A","typeContainer":{"ref":1},"visibility":"public"},
+{"FM3":"Famix-Java-Entities.Class","id":3,"name":"B","typeContainer":{"ref":1},"isStub":true,
+ "typeParameters":[{"FM3":"Famix-Java-Entities.TypeParameter","id":4,"name":"T","genericEntity":{"ref":3}}]},
+{"FM3":"Famix-Java-Entities.Method","id":10,"name":"run","parentType":{"ref":2},"signature":"run()
+(multi-line)","visibility":"public","isAbstract":false,"declaredExceptions":[{"ref":3}],
+ "typing":{"FM3":"Famix-Java-Entities.EntityTyping","id":12,"declaredType":{"ref":3}}},
+{"FM3":"Famix-Java-Entities.Method","id":11,"name":"helper","parentType":{"ref":2},"signature":"helper()"},
+{"FM3":"Famix-Java-Entities.Attribute","id":13,"name":"f","parentType":{"ref":2}},
+{"FM3":"Famix-Java-Entities.Access","id":14,"accessor":{"ref":10},"variable":{"ref":13},"isWrite":true},
+{"FM3":"Famix-Java-Entities.Inheritance","id":15,"subclass":{"ref":2},"superclass":{"ref":3}},
+{"FM3":"Famix-Java-Entities.Reference","id":16,"referencer":{"ref":10},"referredEntity":{"ref":999}},
+{"FM3":"Famix-Java-Entities.AnnotationType","id":17,"name":"Deprecated","annotationTypesContainer":{"ref":1}},
+{"FM3":"Famix-Java-Entities.AnnotationInstance","id":18,"annotatedEntity":{"ref":11},"annotationType":{"ref":17}},
+{"FM3":"Famix-Java-Entities.Comment","id":19,"commentedEntity":{"ref":2}}
+]

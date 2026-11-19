@@ -62,6 +62,13 @@ Structure (`../Structure`), its first client.
   `mask_of_fm3_class` feed `Metamodel::define`, then `Model::of_trait` /
   `EntityRef::has_trait` (core only sees opaque `TraitMask` bits). A test
   fails when `generated.rs` is stale.
+- `crates/model-moose` — Moose JSON import (`import_json`/`import_path` →
+  `ImportReport`; tolerant streaming reader `json`, FM3→kind/relation tables
+  in `mapping`; entities keyed `moose:<id>`, props `moose.id`/`moose.fm3`/
+  `moose.<prop>`) and `diff(left, right)` → `DiffReport` by FM3 class,
+  archetype and relation. Depends on core, traits, fm3 only.
+  `examples/import.rs`; `MOOSE_JSON=file cargo test -p model-moose` runs a
+  real export.
 - `crates/model-detect` — `detect(root)`: languages, file counts, project
   roots; `languages.rs` is the data table (`LanguageSpec`).
 
