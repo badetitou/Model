@@ -151,8 +151,20 @@ impl EntityBase {
         Ok(self.r()?.key())
     }
 
+    /// Archetype; see `fineKind` for the finer kind.
     async fn kind(&self) -> Result<EntityKind> {
         Ok(self.r()?.kind().into())
+    }
+
+    /// Fine-grained kind (`record`, `annotation_type`, `enum_constant`...);
+    /// the archetype's name when the frontend does not refine it.
+    async fn fine_kind(&self) -> Result<&str> {
+        Ok(self.r()?.kind_name())
+    }
+
+    /// FM3 class this kind corresponds to, when the metamodel names one.
+    async fn fm3_class(&self) -> Result<Option<&str>> {
+        Ok(self.r()?.kind_info().and_then(|k| k.fm3.as_deref()))
     }
 
     async fn name(&self) -> Result<&str> {
@@ -290,8 +302,17 @@ macro_rules! entity_objects {
                     self.0.key().await
                 }
 
+                /// Archetype; see `fineKind` for the finer kind.
                 async fn kind(&self) -> Result<EntityKind> {
                     self.0.kind().await
+                }
+
+                async fn fine_kind(&self) -> Result<&str> {
+                    self.0.fine_kind().await
+                }
+
+                async fn fm3_class(&self) -> Result<Option<&str>> {
+                    self.0.fm3_class().await
                 }
 
                 async fn name(&self) -> Result<&str> {
@@ -445,6 +466,8 @@ entity_objects! {
         desc = "Stable across builds: the SCIP symbol, or a SCIP-like frontend key."
     ),
     field(name = "kind", ty = "EntityKind"),
+    field(name = "fine_kind", ty = "&str"),
+    field(name = "fm3_class", ty = "Option<&str>"),
     field(name = "name", ty = "String"),
     field(name = "language", ty = "Option<String>"),
     field(

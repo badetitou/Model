@@ -1,4 +1,5 @@
 use crate::entity::{EntityId, EntityKind, LanguageId};
+use crate::metamodel::{KindId, KindInfo, Metamodel};
 use crate::relation::{Provenance, RelationId, RelationKind};
 use crate::source::Range;
 use crate::strings::{StrId, StrTable};
@@ -19,7 +20,8 @@ pub(crate) struct EntityRow {
     pub(crate) parent: u32,
     pub(crate) range: Range,
     pub(crate) name_range: Range,
-    pub(crate) kind: EntityKind,
+    /// Fine kind; the archetype is looked up in the [`Metamodel`].
+    pub(crate) kind: KindId,
     pub(crate) language: u16,
     pub(crate) flags: u8,
 }
@@ -60,6 +62,7 @@ pub(crate) struct RelRow {
 pub struct Model {
     strings: StrTable,
     languages: Vec<LanguageId>,
+    metamodel: Metamodel,
     kinds: Vec<RelationKind>,
     entities: Vec<EntityRow>,
     /// Sorted by id.
@@ -111,9 +114,11 @@ pub struct MemoryStats {
 }
 
 impl Model {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn from_rows(
         strings: StrTable,
         languages: Vec<LanguageId>,
+        metamodel: Metamodel,
         kinds: Vec<RelationKind>,
         entities: Vec<EntityRow>,
         props: Vec<(EntityId, Props)>,
@@ -171,6 +176,7 @@ impl Model {
         Model {
             strings,
             languages,
+            metamodel,
             kinds,
             entities,
             props,
@@ -217,8 +223,19 @@ impl Model {
         })
     }
 
+    /// Entities of an archetype, whatever their fine kind.
     pub fn of_kind(&self, kind: EntityKind) -> impl Iterator<Item = EntityRef<'_>> {
         self.entities().filter(move |e| e.kind() == kind)
+    }
+
+    /// Entities of exactly this fine kind.
+    pub fn of_kind_id(&self, kind: KindId) -> impl Iterator<Item = EntityRef<'_>> {
+        self.entities().filter(move |e| e.kind_id() == kind)
+    }
+
+    /// Kinds of this model: archetype, traits and FM3 class of each.
+    pub fn metamodel(&self) -> &Metamodel {
+        &self.metamodel
     }
 
     pub fn roots(&self) -> impl Iterator<Item = EntityRef<'_>> {
@@ -301,8 +318,24 @@ impl<'m> EntityRef<'m> {
         self.model.strings.get(self.row().key)
     }
 
+    /// Archetype of the entity's fine kind.
     pub fn kind(self) -> EntityKind {
+        self.model.metamodel.archetype(self.row().kind)
+    }
+
+    /// Fine kind (`record`, `enum_constant`...); same as the archetype's
+    /// default kind when the frontend does not refine it.
+    pub fn kind_id(self) -> KindId {
         self.row().kind
+    }
+
+    pub fn kind_info(self) -> Option<&'m KindInfo> {
+        self.model.metamodel.get(self.row().kind)
+    }
+
+    /// Name of the fine kind.
+    pub fn kind_name(self) -> &'m str {
+        self.kind_info().map_or("", |k| k.name.as_str())
     }
 
     /// Simple name.
@@ -480,7 +513,7 @@ impl std::fmt::Debug for RelationRef<'_> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::ModelBuilder;
+    use crate::{ModelBuilder, TraitMask};
 
     fn r(line: u32) -> Range {
         Range::new(line, 4, line, 10)
@@ -531,6 +564,7 @@ pub(crate) mod tests {
     #[test]
     fn rows_stay_compact() {
         assert_eq!(size_of::<EntityRow>(), 52);
+        assert_eq!(size_of::<KindId>(), 1);
         assert_eq!(size_of::<RelRow>(), 12);
         assert_eq!(size_of::<Range>(), 16);
     }
@@ -634,6 +668,49 @@ pub(crate) mod tests {
         b.relate(&RelationKind::Calls, x, y, Provenance::Scip);
         b.relate(&RelationKind::Calls, x, y, Provenance::Scip);
         assert_eq!(b.build().relation_count(), 2);
+    }
+
+    #[test]
+    fn fine_kinds_refine_the_archetype() {
+        let mut b = ModelBuilder::new();
+        let rec = b.define_kind(
+            "record",
+            EntityKind::Class,
+            TraitMask(0b10),
+            Some("Famix-Java-Entities.Record"),
+        );
+        assert_eq!(
+            b.define_kind("record", EntityKind::Enum, TraitMask::EMPTY, None),
+            rec
+        );
+        let r = b.entity_of_kind("r", rec, "R");
+        let c = b.entity("c", EntityKind::Class, "C");
+        assert_eq!(b.kind(r), EntityKind::Class);
+        assert_eq!(b.kind_id(r), rec);
+        assert_eq!(b.kind_id(c), KindId::of(EntityKind::Class));
+        let m = b.build();
+        let r = m.by_key("r").unwrap();
+        assert_eq!(
+            (r.kind(), r.kind_id(), r.kind_name()),
+            (EntityKind::Class, rec, "record")
+        );
+        let info = r.kind_info().unwrap();
+        assert_eq!(info.fm3.as_deref(), Some("Famix-Java-Entities.Record"));
+        assert!(info.traits.contains(TraitMask(0b10)));
+        assert_eq!(m.of_kind(EntityKind::Class).count(), 2);
+        assert_eq!(m.of_kind_id(rec).count(), 1);
+        assert_eq!(m.metamodel().find("record"), Some(rec));
+    }
+
+    #[test]
+    fn full_metamodel_falls_back_to_the_archetype() {
+        let mut mm = Metamodel::default();
+        let mut last = KindId::of(EntityKind::Class);
+        for i in 0..300 {
+            last = mm.define(&format!("k{i}"), EntityKind::Enum, TraitMask::EMPTY, None);
+        }
+        assert_eq!(mm.len(), 256);
+        assert_eq!(last, KindId::of(EntityKind::Enum));
     }
 
     #[test]

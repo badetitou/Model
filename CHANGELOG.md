@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `model-core`: fine-grained kinds. `KindId` (1 byte in the entity row) and a
+  `Metamodel` table (kind -> archetype, `TraitMask`, optional FM3 class name)
+  carried by the `Model`; `EntityKind` stays the archetype. Builder:
+  `define_kind`, `entity_of_kind`, `set_kind_id`, `kind_id`; views:
+  `EntityRef::{kind_id, kind_name, kind_info}`, `Model::{metamodel, of_kind_id}`.
+  JSON gains optional `fine_kind` and a top-level `metamodel`.
+- `model-treesitter`: Java `record`, `annotation_type` and `enum_constant` are
+  distinct kinds (captures `@definition.record|annotation_type|enum_constant`).
+- `model-graphql`: `fineKind` and `fm3Class` fields on every entity.
+
 ## 0.3.0 — 2026-11-18
 
 All ten crates are now published on crates.io; git tags remain available for

@@ -4,8 +4,8 @@
 use std::collections::HashMap;
 
 use model_core::{
-    Descriptor, EntityId, EntityKind, LanguageId, ModelBuilder, Provenance, Range, RelationKind,
-    SymbolKey, Value,
+    Descriptor, EntityId, EntityKind, KindId, LanguageId, ModelBuilder, Provenance, Range,
+    RelationKind, SymbolKey, TraitMask, Value,
 };
 
 use crate::ExtractStats;
@@ -102,7 +102,11 @@ pub(crate) fn apply(
                 }
                 *n += 1;
             }
-            let id = b.entity(&key.to_string(), d.kind, &d.name);
+            let kind = match d.fine {
+                Some(fine) => b.define_kind(fine, d.kind, TraitMask::EMPTY, None),
+                None => KindId::of(d.kind),
+            };
+            let id = b.entity_of_kind(&key.to_string(), kind, &d.name);
             if b.file(id).is_none() {
                 b.set_source(id, &f.path, d.range, Some(d.name_range));
                 b.set_parent(id, Some(parent_id));

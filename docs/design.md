@@ -137,12 +137,20 @@ large Java codebase), so the frozen `Model` is laid out for them:
 | Data | Layout | Cost |
 |---|---|---|
 | strings (keys, names, files) | interned once, one buffer + offsets | bytes + 8 / distinct string |
-| entities | fixed rows, sentinel-encoded options | 52 B |
+| entities | fixed rows, sentinel-encoded options; 1-byte `KindId` into the metamodel | 52 B |
 | props | sparse, sorted `(id, props)` | only where present |
 | key lookup | ids sorted by key, binary search | 4 B / entity |
 | children | CSR by parent | 8 B / entity |
 | relations | deduplicated, sorted by `(from, kind, to, provenance)`; outgoing = one slice (CSR) | 12 B + 4 B incoming index + 4 B site offset |
 | sites | bare `Range`, grouped by relation (CSR), sorted, deduplicated | 16 B |
+
+Kinds are two-level: `EntityKind` (15) is the archetype analyses match on;
+the row stores a 1-byte `KindId` (fine kind: `record`, `annotation_type`,
+`enum_constant`...) and the `Metamodel` table carried by the `Model` maps it
+to archetype, trait mask and optional FM3 class name. Ids `0..15` are the
+archetypes' own default kinds, so frontends that do not refine anything are
+unchanged; the byte keeps `EntityRow` at 52 B (256 kinds per model, then
+definitions fall back to the archetype).
 
 Navigation goes through copyable views (`EntityRef`, `RelationRef`) that
 borrow the model; nothing is allocated on read. `ModelBuilder` stays simple

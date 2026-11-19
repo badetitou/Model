@@ -9,6 +9,7 @@
 mod builder;
 mod entity;
 mod key;
+mod metamodel;
 mod model;
 mod relation;
 mod serial;
@@ -19,6 +20,7 @@ mod value;
 pub use builder::ModelBuilder;
 pub use entity::{EntityId, EntityKind, LanguageId};
 pub use key::{Descriptor, KeyError, Package, SCHEME, SymbolKey};
+pub use metamodel::{KindId, KindInfo, Metamodel, TraitMask};
 pub use model::{EntityRef, MemoryStats, Model, RelationRef};
 pub use relation::{Provenance, RelationId, RelationKind};
 pub use source::Range;

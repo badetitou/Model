@@ -19,7 +19,7 @@ baseline. Model adds a few captures.
 
 | Capture | Meaning |
 |---|---|
-| `@definition.<kind>` + `@name` | an entity; `<kind>`: `class`, `interface`, `trait`/`mixin`, `enum`, `struct`/`union`, `type`/`type_alias`, `method`, `constructor`, `function`/`macro`, `field`, `property`, `constant`, `variable`, `namespace`/`module` |
+| `@definition.<kind>` + `@name` | an entity; `<kind>`: `class`, `interface`, `trait`/`mixin`, `enum`, `struct`/`union`, `type`/`type_alias`, `method`, `constructor`, `function`/`macro`, `field`, `property`, `constant`, `variable`, `namespace`/`module`; fine kinds refining an archetype: `record` (class), `annotation_type` (interface), `enum_constant` (constant) |
 | `@namespace` + `@name` | the file's declared namespace (`package a.b;`) |
 | `@relation.inherits` / `@relation.implements` + `@name` | supertype of the enclosing definition (tags: `@reference.implementation`) |
 | `@relation.imports` + `@name` | imported qualified name, from the file |

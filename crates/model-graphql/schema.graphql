@@ -7,7 +7,12 @@ type Class implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -87,7 +92,12 @@ type Constant implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -163,7 +173,12 @@ type Constructor implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -246,6 +261,8 @@ interface Entity {
 	"""
 	key: String!
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -338,7 +355,12 @@ type Enum implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -418,7 +440,12 @@ type Field implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -494,7 +521,12 @@ type File implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -574,7 +606,12 @@ type Function implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -650,7 +687,12 @@ type Interface implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -735,7 +777,12 @@ type Method implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -811,7 +858,12 @@ type Namespace implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -913,7 +965,12 @@ type Property implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -1279,7 +1336,12 @@ type Struct implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -1359,7 +1421,12 @@ type Trait implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -1439,7 +1506,12 @@ type TypeAlias implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""
@@ -1515,7 +1587,12 @@ type Variable implements Entity {
 	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
 	"""
 	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
 	kind: EntityKind!
+	fineKind: String!
+	fm3Class: String
 	name: String!
 	language: String
 	"""

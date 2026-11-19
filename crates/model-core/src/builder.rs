@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::entity::{EntityId, EntityKind, LanguageId};
+use crate::metamodel::{KindId, Metamodel, TraitMask};
 use crate::model::{EntityRow, Model, NO_LANGUAGE, NONE, RelRow};
 use crate::relation::{Provenance, RelationKind};
 use crate::source::Range;
@@ -17,6 +18,7 @@ use crate::value::{Props, Value};
 pub struct ModelBuilder {
     strings: Interner,
     languages: Vec<LanguageId>,
+    metamodel: Metamodel,
     language_ids: HashMap<LanguageId, u16>,
     kinds: Vec<RelationKind>,
     kind_ids: HashMap<RelationKind, u16>,
@@ -39,6 +41,11 @@ impl ModelBuilder {
     /// Entity with `key`, created with `kind` and `name` if absent. An
     /// existing entity keeps its kind and name.
     pub fn entity(&mut self, key: &str, kind: EntityKind, name: &str) -> EntityId {
+        self.entity_of_kind(key, KindId::of(kind), name)
+    }
+
+    /// Like [`Self::entity`] with a fine kind from [`Self::define_kind`].
+    pub fn entity_of_kind(&mut self, key: &str, kind: KindId, name: &str) -> EntityId {
         let key = self.strings.intern(key);
         if let Some(&id) = self.by_key.get(&key) {
             return id;
@@ -121,12 +128,37 @@ impl ModelBuilder {
         self.strings.str(self.entities[id.index()].key)
     }
 
+    /// Archetype of the entity's fine kind.
     pub fn kind(&self, id: EntityId) -> EntityKind {
+        self.metamodel.archetype(self.entities[id.index()].kind)
+    }
+
+    pub fn kind_id(&self, id: EntityId) -> KindId {
         self.entities[id.index()].kind
     }
 
+    /// Sets the archetype's default (unrefined) kind.
     pub fn set_kind(&mut self, id: EntityId, kind: EntityKind) {
+        self.entities[id.index()].kind = KindId::of(kind);
+    }
+
+    pub fn set_kind_id(&mut self, id: EntityId, kind: KindId) {
         self.entities[id.index()].kind = kind;
+    }
+
+    /// Kind named `name` (get-or-create); see [`Metamodel::define`].
+    pub fn define_kind(
+        &mut self,
+        name: &str,
+        archetype: EntityKind,
+        traits: TraitMask,
+        fm3: Option<&str>,
+    ) -> KindId {
+        self.metamodel.define(name, archetype, traits, fm3)
+    }
+
+    pub fn metamodel(&self) -> &Metamodel {
+        &self.metamodel
     }
 
     pub fn set_parent(&mut self, id: EntityId, parent: Option<EntityId>) {
@@ -260,6 +292,7 @@ impl ModelBuilder {
         Model::from_rows(
             strings,
             self.languages,
+            self.metamodel,
             self.kinds,
             entities,
             props,

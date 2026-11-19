@@ -9,6 +9,8 @@ use crate::grammars::Grammar;
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Def {
     pub kind: EntityKind,
+    /// Fine kind refining `kind` (`record`...); `None` = the archetype's own.
+    pub fine: Option<&'static str>,
     pub name: String,
     pub range: Range,
     pub name_range: Range,
@@ -62,7 +64,7 @@ pub(crate) struct FileFacts {
 pub(crate) enum Role {
     Name,
     Namespace,
-    Def(EntityKind),
+    Def(EntityKind, Option<&'static str>),
     Use(UseKind),
     Prop(String),
     Ignored,
@@ -81,6 +83,9 @@ pub(crate) fn role(capture: &str) -> Role {
     }
     if let Some(kind) = capture.strip_prefix("definition.") {
         let k = match kind {
+            "record" => return Role::Def(K::Class, Some("record")),
+            "annotation_type" => return Role::Def(K::Interface, Some("annotation_type")),
+            "enum_constant" => return Role::Def(K::Constant, Some("enum_constant")),
             "class" => K::Class,
             "interface" => K::Interface,
             "trait" | "mixin" => K::Trait,
@@ -97,7 +102,7 @@ pub(crate) fn role(capture: &str) -> Role {
             "namespace" | "module" => K::Namespace,
             _ => return Role::Ignored,
         };
-        return Role::Def(k);
+        return Role::Def(k, None);
     }
     match capture {
         "relation.inherits" => Role::Use(UseKind::Inherits),
@@ -154,10 +159,11 @@ pub(crate) fn read(
         for c in m.captures() {
             match &roles[c.index as usize] {
                 Role::Namespace => namespace = Some(text(name.unwrap_or(c.node), src)),
-                Role::Def(kind) => {
+                Role::Def(kind, fine) => {
                     let Some(n) = name else { continue };
                     defs.push(Def {
                         kind: *kind,
+                        fine: *fine,
                         name: text(n, src),
                         range: range(c.node),
                         name_range: range(n),
@@ -207,6 +213,7 @@ pub(crate) fn read(
             && defs[i].parent.is_some_and(|p| defs[p].kind.is_type())
         {
             defs[i].kind = EntityKind::Method;
+            defs[i].fine = None;
         }
         stack.push(i);
     }

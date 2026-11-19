@@ -61,6 +61,46 @@ pub enum EntityKind {
 }
 
 impl EntityKind {
+    /// Every archetype, in discriminant order (= [`crate::KindId::of`]).
+    pub const ALL: [EntityKind; 15] = [
+        EntityKind::Namespace,
+        EntityKind::File,
+        EntityKind::Class,
+        EntityKind::Interface,
+        EntityKind::Trait,
+        EntityKind::Enum,
+        EntityKind::Struct,
+        EntityKind::TypeAlias,
+        EntityKind::Method,
+        EntityKind::Constructor,
+        EntityKind::Function,
+        EntityKind::Field,
+        EntityKind::Property,
+        EntityKind::Constant,
+        EntityKind::Variable,
+    ];
+
+    /// The `snake_case` name used in JSON.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            EntityKind::Namespace => "namespace",
+            EntityKind::File => "file",
+            EntityKind::Class => "class",
+            EntityKind::Interface => "interface",
+            EntityKind::Trait => "trait",
+            EntityKind::Enum => "enum",
+            EntityKind::Struct => "struct",
+            EntityKind::TypeAlias => "type_alias",
+            EntityKind::Method => "method",
+            EntityKind::Constructor => "constructor",
+            EntityKind::Function => "function",
+            EntityKind::Field => "field",
+            EntityKind::Property => "property",
+            EntityKind::Constant => "constant",
+            EntityKind::Variable => "variable",
+        }
+    }
+
     pub fn is_type(self) -> bool {
         matches!(
             self,

@@ -8,6 +8,10 @@
 //!                   "provenance": "scip", "sites": [[5,4,5,10]] }] }
 //! ```
 //!
+//! Fine kinds: an entity whose kind refines its archetype adds
+//! `"fine_kind": "record"`, and a top-level `"metamodel"` lists the kinds
+//! beyond the 15 defaults (`{"name","archetype","traits","fm3"}`), in id order.
+//!
 //! Loading goes through [`ModelBuilder`], so unknown ids are errors and
 //! indexes are rebuilt.
 
@@ -19,6 +23,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::ModelBuilder;
 use crate::entity::{EntityId, EntityKind, LanguageId};
+use crate::metamodel::{KindId, KindInfo, TraitMask};
 use crate::model::{EntityRef, Model, RelationRef};
 use crate::relation::{Provenance, RelationKind};
 use crate::source::Range;
@@ -50,11 +55,38 @@ fn no_sites(s: &&[Range]) -> bool {
     s.is_empty()
 }
 
+#[derive(Serialize, Deserialize)]
+struct KindDef {
+    name: String,
+    archetype: EntityKind,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    traits: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fm3: Option<String>,
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
+}
+
+impl From<&KindInfo> for KindDef {
+    fn from(k: &KindInfo) -> Self {
+        KindDef {
+            name: k.name.clone(),
+            archetype: k.archetype,
+            traits: k.traits.0,
+            fm3: k.fm3.clone(),
+        }
+    }
+}
+
 #[derive(Serialize)]
 struct EntityOut<'a> {
     id: EntityId,
     key: &'a str,
     kind: EntityKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fine_kind: Option<&'a str>,
     name: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     parent: Option<EntityId>,
@@ -78,6 +110,7 @@ impl<'a> From<EntityRef<'a>> for EntityOut<'a> {
             id: e.id(),
             key: e.key(),
             kind: e.kind(),
+            fine_kind: (e.kind_id() != KindId::of(e.kind())).then(|| e.kind_name()),
             name: e.name(),
             parent: e.parent().map(|p| p.id()),
             language: e.language(),
@@ -114,7 +147,11 @@ impl<'a> From<RelationRef<'a>> for RelationOut<'a> {
 
 impl Serialize for Model {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        let mut st = s.serialize_struct("Model", 2)?;
+        let custom: Vec<KindDef> = self.metamodel().custom().map(KindDef::from).collect();
+        let mut st = s.serialize_struct("Model", 3)?;
+        if !custom.is_empty() {
+            st.serialize_field("metamodel", &custom)?;
+        }
         st.serialize_field("entities", &Seq(|| self.entities().map(EntityOut::from)))?;
         st.serialize_field(
             "relations",
@@ -126,6 +163,8 @@ impl Serialize for Model {
 
 #[derive(Deserialize)]
 struct ModelIn {
+    #[serde(default)]
+    metamodel: Vec<KindDef>,
     entities: Vec<EntityIn>,
     #[serde(default)]
     relations: Vec<RelationIn>,
@@ -136,6 +175,8 @@ struct EntityIn {
     id: u32,
     key: String,
     kind: EntityKind,
+    #[serde(default)]
+    fine_kind: Option<String>,
     name: String,
     #[serde(default)]
     parent: Option<u32>,
@@ -165,12 +206,25 @@ struct RelationIn {
 
 fn into_model(m: ModelIn) -> Result<Model, String> {
     let mut b = ModelBuilder::new();
+    for k in &m.metamodel {
+        b.define_kind(&k.name, k.archetype, TraitMask(k.traits), k.fm3.as_deref());
+    }
     let mut ids: HashMap<u32, EntityId> = HashMap::with_capacity(m.entities.len());
     for e in &m.entities {
         if b.get(&e.key).is_some() {
             return Err(format!("duplicate entity key {:?}", e.key));
         }
-        let id = b.entity(&e.key, e.kind, &e.name);
+        let kind = match &e.fine_kind {
+            None => KindId::of(e.kind),
+            Some(n) => match b.metamodel().find(n) {
+                Some(k) if b.metamodel().archetype(k) == e.kind => k,
+                Some(_) => {
+                    return Err(format!("entity {}: kind {n:?} is not a {:?}", e.id, e.kind));
+                }
+                None => return Err(format!("entity {}: unknown fine_kind {n:?}", e.id)),
+            },
+        };
+        let id = b.entity_of_kind(&e.key, kind, &e.name);
         if ids.insert(e.id, id).is_some() {
             return Err(format!("duplicate entity id {}", e.id));
         }
@@ -256,6 +310,26 @@ mod tests {
         let back: Model = serde_json::from_str(&json).unwrap();
         assert_eq!(snapshot(&back), snapshot(&m));
         assert_eq!(serde_json::to_string(&back).unwrap(), json);
+    }
+
+    #[test]
+    fn fine_kinds_round_trip() {
+        use crate::{EntityKind, ModelBuilder, TraitMask};
+        let mut b = ModelBuilder::new();
+        let rec = b.define_kind("record", EntityKind::Class, TraitMask(3), Some("F.Record"));
+        b.entity_of_kind("r", rec, "R");
+        b.entity("c", EntityKind::Class, "C");
+        let m = b.build();
+        let json = serde_json::to_string(&m).unwrap();
+        assert!(json.contains(r#""fine_kind":"record""#), "{json}");
+        assert_eq!(json.matches("fine_kind").count(), 1, "{json}");
+        let back: Model = serde_json::from_str(&json).unwrap();
+        assert_eq!(serde_json::to_string(&back).unwrap(), json);
+        assert_eq!(back.by_key("r").unwrap().kind_name(), "record");
+        assert_eq!(back.metamodel(), m.metamodel());
+        let bad =
+            r#"{"entities":[{"id":0,"key":"a","kind":"class","fine_kind":"nope","name":"a"}]}"#;
+        assert!(serde_json::from_str::<Model>(bad).is_err());
     }
 
     #[test]

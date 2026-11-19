@@ -9,15 +9,15 @@
   (#not-match? @relation.imports "^import\\s+static"))
 
 (class_declaration name: (identifier) @name) @definition.class
-(record_declaration name: (identifier) @name) @definition.class
+(record_declaration name: (identifier) @name) @definition.record
 (interface_declaration name: (identifier) @name) @definition.interface
-(annotation_type_declaration name: (identifier) @name) @definition.interface
+(annotation_type_declaration name: (identifier) @name) @definition.annotation_type
 (enum_declaration name: (identifier) @name) @definition.enum
 (method_declaration name: (identifier) @name) @definition.method
 (constructor_declaration name: (identifier) @name) @definition.constructor
 (field_declaration declarator: (variable_declarator name: (identifier) @name)) @definition.field
 (constant_declaration declarator: (variable_declarator name: (identifier) @name)) @definition.constant
-(enum_constant name: (identifier) @name) @definition.constant
+(enum_constant name: (identifier) @name) @definition.enum_constant
 
 (superclass [
   (type_identifier) @name

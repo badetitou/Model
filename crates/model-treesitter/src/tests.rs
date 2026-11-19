@@ -371,3 +371,24 @@ fn deterministic() {
     ];
     assert_eq!(json(&model(&srcs).0), json(&model(&srcs).0));
 }
+
+#[test]
+fn java_fine_kinds() {
+    let src = r#"package p;
+record Point(int x, int y) { }
+@interface Marker { }
+enum Mode { ON, OFF }
+class C { }
+"#;
+    let (m, _) = model(&[("src/p/X.java", src)]);
+    let kinds = |name: &str| {
+        let e = m.entities().find(|e| e.name() == name).unwrap();
+        (e.kind(), e.kind_name().to_string())
+    };
+    assert_eq!(kinds("Point"), (K::Class, "record".into()));
+    assert_eq!(kinds("Marker"), (K::Interface, "annotation_type".into()));
+    assert_eq!(kinds("ON"), (K::Constant, "enum_constant".into()));
+    assert_eq!(kinds("Mode"), (K::Enum, "enum".into()));
+    assert_eq!(kinds("C"), (K::Class, "class".into()));
+    assert_eq!(m.of_kind(K::Class).count(), 2);
+}
