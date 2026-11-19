@@ -7,13 +7,16 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+readme = "../../README.md"
+keywords = ["code-analysis", "static-analysis", "tree-sitter", "scip", "code-model"]
+categories = ["development-tools"]
 
 [[bin]]
 name = "model-graphql"
 path = "src/main.rs"
 
 [dependencies]
-model.workspace = true
+model-factory.workspace = true
 model-core.workspace = true
 anyhow.workspace = true
 async-graphql.workspace = true

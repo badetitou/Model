@@ -42,7 +42,7 @@ Structure (`../Structure`), its first client.
   index's own tool), `process::run` (indexer process), `indexers.rs`
   registry (command per output file, hints), `cache.rs` (`DocumentCache`,
   git-blob keyed), `git.rs`. Port of Structure's `pipeline/{indexer,process,progress,scip_cache}`.
-- `crates/model` — facade `build(root, opts, progress)`: detect → one index
+- `crates/model-factory` (crate `model-factory`) — facade `build(root, opts, progress)`: detect → one index
   job per indexer and outermost marker root → tree-sitter (relations off
   for indexed languages) → link (`Lift`, or `Create` without grammar).
   `examples/build.rs`: defaults to `--reindex never`; never run indexers or
@@ -66,3 +66,21 @@ Structure (`../Structure`), its first client.
 6. Language-specific knowledge goes in data (language table, query files) or
    frontends/enrichers (`model-lang-*`), never in `model-core`.
 7. Commit only when asked.
+
+## Releasing
+
+All ten crates are publishable on crates.io. Keep the workspace version and
+`CHANGELOG.md` in sync; internal path dependencies in `[workspace.dependencies]`
+must carry the same `version`. The facade is `model-factory` because `model` is
+taken on crates.io.
+
+To release: bump those versions, add a `## X.Y.Z — date` section to
+`CHANGELOG.md`, commit, then `git tag -a vX.Y.Z -m vX.Y.Z` and push the tag.
+The `release` job in `.github/workflows/ci.yml` waits for lint/test/features/msrv,
+checks that the tag matches `Cargo.toml`, publishes every crate with
+`scripts/publish.sh` (crate list and order in `scripts/crates.sh`), then creates
+a GitHub Release whose notes come from `scripts/release-notes.sh`.
+
+The repository needs a `CARGO_REGISTRY_TOKEN` secret with publish rights on all
+ten crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
+crates.io versions are immutable.

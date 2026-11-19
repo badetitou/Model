@@ -12,9 +12,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{Context, bail};
-use model::BuildOptions;
-use model::index::Reindex;
 use model_core::Model;
+use model_factory::BuildOptions;
+use model_factory::index::Reindex;
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
@@ -74,7 +74,7 @@ fn main() -> anyhow::Result<()> {
         let f = std::io::BufReader::new(std::fs::File::open(&input)?);
         serde_json::from_reader(f).with_context(|| format!("reading {}", input.display()))?
     } else {
-        let build = model::build(&input, &opts, &|p| {
+        let build = model_factory::build(&input, &opts, &|p| {
             eprintln!(
                 "[{:>3}%] {}{}",
                 p.pct,

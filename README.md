@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" width="120" alt="Model logo" />
+  <img src="https://raw.githubusercontent.com/badetitou/Model/main/assets/logo.svg" width="120" alt="Model logo" />
 </p>
 
 <h1 align="center">Model</h1>
@@ -14,9 +14,10 @@ that every analysis and plugin can share — whatever the language.
 
 <p align="center">
   <a href="https://github.com/badetitou/Model/actions/workflows/ci.yml"><img src="https://github.com/badetitou/Model/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="crates"><img src="https://img.shields.io/badge/crates-10-6EE7B7?style=flat-square" alt="10 crates"></a>
-  <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.100%2B-A78BFA?style=flat-square&logo=rust&logoColor=white" alt="Rust 1.100+"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B1020?style=flat-square" alt="MIT license"></a>
+  <a href="https://crates.io/crates/model-factory"><img src="https://img.shields.io/crates/v/model-factory.svg?style=flat-square" alt="crates.io"></a>
+  <a href="https://github.com/badetitou/Model/tree/main/crates"><img src="https://img.shields.io/badge/crates-10-6EE7B7?style=flat-square" alt="10 crates"></a>
+  <a href="https://github.com/badetitou/Model/blob/main/rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.100%2B-A78BFA?style=flat-square&logo=rust&logoColor=white" alt="Rust 1.100+"></a>
+  <a href="https://github.com/badetitou/Model/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B1020?style=flat-square" alt="MIT license"></a>
 </p>
 
 Model builds **one model per codebase, not one per language**. Java, TypeScript,
@@ -103,7 +104,7 @@ language (Pharo), otherwise the other languages are modelled.
 ## Quick start
 
 <p align="center">
-  <img src="assets/demo.gif" alt="Building the model of a Java project" width="100%">
+  <img src="https://raw.githubusercontent.com/badetitou/Model/main/assets/demo.gif" alt="Building the model of a Java project" width="100%">
 </p>
 
 <p align="center"><sub>
@@ -118,7 +119,7 @@ git clone https://github.com/badetitou/Model && cd Model
 **Build the model of any project** — and see what it holds:
 
 ```sh
-cargo run --release -p model --example build -- ../Structure
+cargo run --release -p model-factory --example build -- ../Structure
 ```
 
 Example output on jpetstore (46 Java files):
@@ -165,11 +166,11 @@ any origin. Without it, no CORS header is sent.
 
 ```toml
 [dependencies]
-model = { git = "https://github.com/badetitou/Model", tag = "v0.2.0" }
+model-factory = "0.3.0"
 ```
 
 ```rust
-let build = model::build(root, &model::BuildOptions::default(), &|p| {
+let build = model_factory::build(root, &model_factory::BuildOptions::default(), &|p| {
     eprintln!("[{:>3}%] {}", p.pct, p.step);
 })?;
 for w in &build.warnings {
@@ -185,15 +186,15 @@ for r in svc.outgoing() {
 }
 ```
 
-Need finer control? Every crate is re-exported (`model::core`, `model::detect`,
-`model::index`, `model::scip`, `model::link`, `model::treesitter`), so you can
+Need finer control? Every crate is re-exported (`model_factory::core`, `model_factory::detect`,
+`model_factory::index`, `model_factory::scip`, `model_factory::link`, `model_factory::treesitter`), so you can
 build a model from an index alone:
 
 ```rust
 use std::path::Path;
 
-let index = model::scip::load(Path::new("index.scip"))?;
-let (mut builder, stats) = model::link::from_scip(&index, None);
+let index = model_factory::scip::load(Path::new("index.scip"))?;
+let (mut builder, stats) = model_factory::link::from_scip(&index, None);
 println!("{} calls, {} imports", stats.calls, stats.imports);
 let model = builder.build();
 ```
@@ -207,7 +208,7 @@ let model = builder.build();
 `targets(kind)`. Lookups return `Option` or iterators; nothing panics.
 
 ```rust
-use model::{EntityKind, Model, RelationKind};
+use model_factory::{EntityKind, Model, RelationKind};
 
 fn print_call_counts(model: &Model, class_name: &str) {
     let Some(class) = model.entities().find(|e| e.name() == class_name) else {
@@ -255,19 +256,19 @@ go into `props`, and plugins can add relations under their own name.
 
 | Crate | Role |
 |---|---|
-| [`model-core`](crates/model-core) | metamodel, SCIP-like keys, `ModelBuilder`, compact `Model`, JSON |
-| [`model-detect`](crates/model-detect) | languages of a tree, file counts, project roots |
-| [`model-scip`](crates/model-scip) | reads `index.scip` (parallel, bounded memory) |
-| [`model-link`](crates/model-link) | SCIP → model: fusion onto syntactic entities, or SCIP-only models |
-| [`model-treesitter`](crates/model-treesitter) | query-driven extraction; [captures](crates/model-treesitter/README.md) |
-| [`model-index`](crates/model-index) | runs SCIP indexers, staleness, document cache |
-| [`model-lang-pharo`](crates/model-lang-pharo) | direct Tonel frontend: classes, methods, references, resolved sends |
-| [`model-analysis`](crates/model-analysis) | `Analysis` trait: metrics, degrees, cycles, unused, quotient, impact, derived relations |
-| [`model`](crates/model) | facade: detect → index → extract → link; `model::analysis` re-export |
-| [`model-graphql`](crates/model-graphql) | GraphQL server with GraphiQL; [schema](crates/model-graphql/schema.graphql) |
+| [`model-core`](https://github.com/badetitou/Model/tree/main/crates/model-core) | metamodel, SCIP-like keys, `ModelBuilder`, compact `Model`, JSON |
+| [`model-detect`](https://github.com/badetitou/Model/tree/main/crates/model-detect) | languages of a tree, file counts, project roots |
+| [`model-scip`](https://github.com/badetitou/Model/tree/main/crates/model-scip) | reads `index.scip` (parallel, bounded memory) |
+| [`model-link`](https://github.com/badetitou/Model/tree/main/crates/model-link) | SCIP → model: fusion onto syntactic entities, or SCIP-only models |
+| [`model-treesitter`](https://github.com/badetitou/Model/tree/main/crates/model-treesitter) | query-driven extraction; [captures](https://github.com/badetitou/Model/blob/main/crates/model-treesitter/README.md) |
+| [`model-index`](https://github.com/badetitou/Model/tree/main/crates/model-index) | runs SCIP indexers, staleness, document cache |
+| [`model-lang-pharo`](https://github.com/badetitou/Model/tree/main/crates/model-lang-pharo) | direct Tonel frontend: classes, methods, references, resolved sends |
+| [`model-analysis`](https://github.com/badetitou/Model/tree/main/crates/model-analysis) | `Analysis` trait: metrics, degrees, cycles, unused, quotient, impact, derived relations |
+| [`model-factory`](https://github.com/badetitou/Model/tree/main/crates/model-factory) | facade: detect → index → extract → link; `model_factory::analysis` re-export |
+| [`model-graphql`](https://github.com/badetitou/Model/tree/main/crates/model-graphql) | GraphQL server with GraphiQL; [schema](https://github.com/badetitou/Model/blob/main/crates/model-graphql/schema.graphql) |
 
-Grammar crates sit behind Cargo features (`lang-java`, `lang-typescript`,
-`lang-python`; `default = ["all-languages"]`), so a client only compiles the
+Grammar crates sit behind Cargo features (`java`, `typescript`, `python`;
+`default = ["java", "typescript", "python"]`), so a client only compiles the
 grammars it needs — WASM builds included.
 
 ## Languages
@@ -286,7 +287,7 @@ Adding a language means a grammar crate, a query file — often its own
 
 ## Numbers
 
-Measured on real projects (see [`docs/design.md`](docs/design.md) for the
+Measured on real projects (see [`docs/design.md`](https://github.com/badetitou/Model/blob/main/docs/design.md) for the
 method):
 
 | Fixture | Model | Time | Notes |
@@ -351,7 +352,7 @@ relation a class detail view can show without hand-written queries:
 
 ## Development
 
-Rust 1.100, pinned by [`rust-toolchain.toml`](rust-toolchain.toml). CI runs the
+Rust 1.100, pinned by [`rust-toolchain.toml`](https://github.com/badetitou/Model/blob/main/rust-toolchain.toml). CI runs the
 commands below on Linux and macOS, checks each grammar feature alone, and
 enforces the MSRV.
 
@@ -365,7 +366,7 @@ Fixture tests need real projects and their SCIP indexes: set `MODEL_FIXTURES`
 to an absolute path (for example Structure's `fixtures/`); they are skipped
 otherwise.
 
-The demo GIF is recorded from [`docs/demo.tape`](docs/demo.tape) with
+The demo GIF is recorded from [`docs/demo.tape`](https://github.com/badetitou/Model/blob/main/docs/demo.tape) with
 [vhs](https://github.com/charmbracelet/vhs): build the example once, then run
 `vhs docs/demo.tape` from the repository root.
 
@@ -376,8 +377,8 @@ cycles, unused entities, quotient, propagation, derived relations) and Pharo is
 modelled by a direct frontend. Next: a `model-cli`
 (`model detect|build|query <path>`), GraphQL analysis fields, a persisted binary
 format for very large models, and incremental rebuilds of changed files. See
-[`docs/design.md`](docs/design.md).
+[`docs/design.md`](https://github.com/badetitou/Model/blob/main/docs/design.md).
 
 ## License
 
-[MIT](LICENSE) © 2026 Benoit Verhaeghe
+[MIT](https://github.com/badetitou/Model/blob/main/LICENSE) © 2026 Benoit Verhaeghe

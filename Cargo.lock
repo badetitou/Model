@@ -852,8 +852,34 @@ dependencies = [
 ]
 
 [[package]]
-name = "model"
-version = "0.2.0"
+name = "model-analysis"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "model-core",
+ "serde",
+]
+
+[[package]]
+name = "model-core"
+version = "0.3.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "model-detect"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "ignore",
+ "model-core",
+]
+
+[[package]]
+name = "model-factory"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "model-analysis",
@@ -870,41 +896,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "model-analysis"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "model-core",
- "serde",
-]
-
-[[package]]
-name = "model-core"
-version = "0.2.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "model-detect"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "ignore",
- "model-core",
-]
-
-[[package]]
 name = "model-graphql"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-graphql",
  "async-graphql-axum",
  "axum",
- "model",
  "model-core",
+ "model-factory",
  "model-lang-pharo",
  "model-treesitter",
  "serde_json",
@@ -914,7 +914,7 @@ dependencies = [
 
 [[package]]
 name = "model-index"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "ignore",
@@ -926,7 +926,7 @@ dependencies = [
 
 [[package]]
 name = "model-lang-pharo"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "ignore",
@@ -935,7 +935,7 @@ dependencies = [
 
 [[package]]
 name = "model-link"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "model-core",
@@ -947,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "model-scip"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "model-core",
@@ -958,7 +958,7 @@ dependencies = [
 
 [[package]]
 name = "model-treesitter"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "ignore",

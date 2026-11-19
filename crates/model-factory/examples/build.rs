@@ -1,4 +1,4 @@
-//! `cargo run --release -p model --example build -- <root> [--reindex never|if-missing|if-stale|always] [--no-scip] [--no-cache] [--from-cache] [--json <file>]`
+//! `cargo run --release -p model-factory --example build -- <root> [--reindex never|if-missing|if-stale|always] [--no-scip] [--no-cache] [--from-cache] [--json <file>]`
 //!
 //! Builds the model of `<root>` and prints what it holds. Defaults to
 //! `--reindex never`: only existing `index.scip` files are used.
@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, bail};
-use model::index::Reindex;
-use model::{BuildOptions, IndexOrigin, Progress};
+use model_factory::index::Reindex;
+use model_factory::{BuildOptions, IndexOrigin, Progress};
 
 /// A project root for messages: `.` for the analysed root itself.
 fn shown(root: &Path) -> String {
@@ -55,7 +55,7 @@ fn main() -> anyhow::Result<()> {
     }
     let root = root.context("usage: build <root> [options]")?;
     let t = Instant::now();
-    let b = model::build(&root, &opts, &|p: Progress| {
+    let b = model_factory::build(&root, &opts, &|p: Progress| {
         eprintln!(
             "[{:>3}%] {}{}",
             p.pct,

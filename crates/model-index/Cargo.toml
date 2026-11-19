@@ -7,6 +7,9 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+readme = "../../README.md"
+keywords = ["code-analysis", "static-analysis", "tree-sitter", "scip", "code-model"]
+categories = ["development-tools"]
 
 [dependencies]
 model-detect.workspace = true

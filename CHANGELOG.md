@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-11-18
+
+All ten crates are now published on crates.io; git tags remain available for
+pinning the whole workspace. The facade is named `model-factory` (`model` is already
+taken on crates.io): in Rust, use `model_factory::build` and `model_factory::…`.
 
 ### Added
 
@@ -12,13 +16,13 @@
   `methods: [Method!]!` relation, so a class's methods can be listed and
   navigated without a hand-written query.
 - `model-lang-pharo`: direct Pharo/Tonel frontend. Parses `Class`, `Trait` and
-  `Extension` files into `model pharo . . ` entities, emits `Inherits` and
+  `Extension` files into `model pharo . . Name#` entities, emits `Inherits` and
   `References`, and resolves message sends into `Calls` with
   `Provenance::Frontend` and their source sites. Files, classes, methods,
   resolved/unresolved sends and emitted calls are reported as `PharoStats`.
-- `model::build` runs the Pharo frontend for detected Pharo projects and
-  exposes its report as `Build.pharo`; the crate is re-exported as
-  `model::lang_pharo`. No Structure change is needed.
+- `model_factory::build` runs the Pharo frontend for detected Pharo projects
+  and exposes its report as `Build.pharo`; the crate is re-exported as
+  `model_factory::lang_pharo`. No Structure change is needed.
 
 ## 0.2.0
 

@@ -4,7 +4,7 @@ Status: draft. Done: `model-core` (metamodel, keys, compact storage),
 `model-detect`, `model-scip` (loader), `model-link` (SCIP fusion and
 SCIP-only models), `model-treesitter` (Java, TypeScript, Python),
 `model-index` (indexer runs, document cache), `model-lang-pharo` (direct Tonel
-frontend), `model-analysis` (generic analyses), the `model` facade and
+frontend), `model-analysis` (generic analyses), the `model-factory` facade and
 `model-graphql`.
 
 ## 1. Goal
@@ -32,10 +32,11 @@ plugin.
 ## 2. Repository and crates
 
 Standalone repository `badetitou/Model`, a Cargo workspace (edition 2024).
-Clients depend on it via Cargo git dependencies:
+Crates are published on crates.io (git tags `v*` remain available for pinning
+the whole workspace):
 
 ```toml
-model-core = { git = "https://github.com/badetitou/Model", tag = "v0.2.0" }
+model-factory = "0.3.0"
 ```
 
 ```
@@ -50,15 +51,15 @@ model-core         metamodel + builder + navigation API      (serde only)
   ├── model-lang-*      optional per-language enrichers          ⏳
   └── model-analysis    Analysis trait + generic analyses        ✅
         ^
-  model (facade)   `model::build(root, &BuildOptions, progress)`  ✅
-                   detect → index → extract → link
+  model-factory       `model_factory::build(root, &BuildOptions, progress)` ✅
+    (facade)       detect → index → extract → link
         ^
   model-cli        `model detect|build|query <path>`             ⏳
   model-graphql    GraphQL plugin (part 2)                      ✅
 ```
 
 Dependencies only point up to `model-core`. Grammar crates live behind Cargo
-features (`lang-java`, `lang-python`, ...; `default = ["all-languages"]`) so a
+features (`java`, `python`, `typescript`; all enabled by default) so a
 client only compiles the grammars it needs (Structure's WASM build in
 particular).
 
@@ -395,7 +396,7 @@ this one.
 ## 8. Plugins — GraphQL (part 2) ✅
 
 `model-graphql` (async-graphql 7 + axum 0.8) serves a model, built by
-`model::build` or loaded from an exported `model.json`:
+`model_factory::build` or loaded from an exported `model.json`:
 
 ```sh
 cargo run --release -p model-graphql -- <root | model.json> [--port 8000] \
@@ -476,8 +477,8 @@ Each step is one PR, Structure's tests and goldens staying green:
 1. **Model v0.1** — `model-core`, `model-detect`, CI and tag `v0.1.1` ✅
    (Rust 1.100, `scip` 0.10).
 2. **model-scip + model-link** — loader and linker ported ✅.
-   2b. **model-index + `model` facade** ✅ — indexer runner, staleness and
-   document cache ported from Structure's `pipeline/`; `model::build` runs
+   2b. **model-index + `model-factory` facade** ✅ — indexer runner, staleness and
+   document cache ported from Structure's `pipeline/`; `model_factory::build` runs
    the whole pipeline over every detected language.
 3. **model-treesitter** — query-driven extractor ✅ (Java, TS, Python);
    linked with SCIP, it meets Structure's mapping-ratio test on its fixtures

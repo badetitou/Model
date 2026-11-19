@@ -8,30 +8,29 @@ members = [
     "crates/model-treesitter",
     "crates/model-index",
     "crates/model-lang-pharo",
-    "crates/model",
+    "crates/model-factory",
     "crates/model-analysis",
     "crates/model-graphql",
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/badetitou/Model"
 rust-version = "1.100"
-# Consumed as a git dependency (`tag = "v…"`), not from crates.io.
-publish = false
+publish = true
 
 [workspace.dependencies]
-model-core = { path = "crates/model-core" }
-model-scip = { path = "crates/model-scip" }
-model-detect = { path = "crates/model-detect" }
-model-link = { path = "crates/model-link" }
-model-treesitter = { path = "crates/model-treesitter" }
-model-index = { path = "crates/model-index" }
-model-lang-pharo = { path = "crates/model-lang-pharo" }
-model = { path = "crates/model" }
-model-analysis = { path = "crates/model-analysis" }
+model-core = { path = "crates/model-core", version = "0.3.0" }
+model-scip = { path = "crates/model-scip", version = "0.3.0" }
+model-detect = { path = "crates/model-detect", version = "0.3.0" }
+model-link = { path = "crates/model-link", version = "0.3.0" }
+model-treesitter = { path = "crates/model-treesitter", version = "0.3.0" }
+model-index = { path = "crates/model-index", version = "0.3.0" }
+model-lang-pharo = { path = "crates/model-lang-pharo", version = "0.3.0" }
+model-factory = { path = "crates/model-factory", version = "0.3.0" }
+model-analysis = { path = "crates/model-analysis", version = "0.3.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
