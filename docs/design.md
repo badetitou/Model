@@ -25,9 +25,12 @@ being a GraphQL server.
 Model is extracted from [Structure](https://github.com/badetitou/Structure),
 which becomes its first client (classification, dependency matrix, git impact).
 
-Non-goals: being a compiler, a full AST store, or a FAMIX/Moose replacement.
-The metamodel is small on purpose; an exporter to FAMIX/MSE is a possible
-plugin.
+Non-goals: being a compiler or a full AST store. Model is not a replacement
+for Moose and its tooling either, but it aims at **Famix-like models**
+(FamixJava level: parameters, locals, type parameters, annotations, typed
+relations), built on demand, with an export to Moose as JSON in a separate
+crate. The core metamodel stays small and language-neutral; Famix knowledge
+lives in data and in that crate. See §10 and [famix.md](famix.md).
 
 ## 2. Repository and crates
 
@@ -152,7 +155,7 @@ Measured with `cargo run --release -p model-core --example memory`
 (220k entities, 5M call sites, worst case: every site its own relation):
 **~200 MiB, 42 B/site all included**, build + freeze in ~1.4 s.
 `Model::memory()` reports the figures for real models. JSON of the same
-model: 460 MiB, a binary format is on the roadmap (§10).
+model: 460 MiB, a binary format is on the roadmap (§11).
 
 Further savings if needed: delta-encode sites within a relation (lines are
 close), `u16` columns, memory-mapped binary format.
@@ -494,7 +497,16 @@ Each step is one PR, Structure's tests and goldens staying green:
 6. **model-graphql** ✅; **model-analysis** ✅ (generic socle); **model-cli**
    to do.
 
-## 10. Open questions
+## 10. Famix-like models (epic #1)
+
+[famix.md](famix.md) holds the analysis: a synthesis of Fame/FM3, the
+conformity matrix FamixJava vs Model (covered / derivable / gap / out of
+scope), the gaps (entities and relations still missing) and the plan of the
+epic: layers L0 structure / L1 resolution / L2 derived, a trait schema
+generated from FM3, per-file fragments, a demand-driven session, and a
+separate `model-moose` crate.
+
+## 11. Open questions
 
 - Persisted binary format (bincode-like columns, or memory-mapped) for big
   models and the GraphQL server; JSON is 2.3× the in-memory size.
