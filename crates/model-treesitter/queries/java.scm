@@ -19,6 +19,27 @@
 (constant_declaration declarator: (variable_declarator name: (identifier) @name)) @definition.constant
 (enum_constant name: (identifier) @name) @definition.enum_constant
 
+; Entities below a member: parameters, locals, type parameters,
+; annotation instances and comments (FamixJava's Parameter, LocalVariable,
+; ParameterType, AnnotationInstance, Comment).
+(formal_parameter name: (identifier) @name) @definition.parameter
+(spread_parameter (variable_declarator name: (identifier) @name)) @definition.parameter
+(catch_formal_parameter name: (identifier) @name) @definition.parameter
+(inferred_parameters (identifier) @name @definition.parameter)
+(lambda_expression parameters: (identifier) @name @definition.parameter)
+
+(local_variable_declaration
+  declarator: (variable_declarator name: (identifier) @name) @definition.local_variable)
+(enhanced_for_statement name: (identifier) @name @definition.local_variable)
+(resource name: (identifier) @name) @definition.local_variable
+
+(type_parameter (type_identifier) @name) @definition.type_parameter
+
+(marker_annotation name: _ @name) @definition.annotation
+(annotation name: _ @name) @definition.annotation
+
+[(line_comment) (block_comment)] @name @definition.comment
+
 (superclass [
   (type_identifier) @name
   (scoped_type_identifier) @name

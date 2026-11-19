@@ -104,6 +104,7 @@ fn java_entities_keys_and_nesting() {
     assert_eq!(
         children,
         [
+            "Service:",
             "repo.",
             "other.",
             "`<init>`().",
@@ -391,4 +392,64 @@ class C { }
     assert_eq!(kinds("Mode"), (K::Enum, "enum".into()));
     assert_eq!(kinds("C"), (K::Class, "class".into()));
     assert_eq!(m.of_kind(K::Class).count(), 2);
+}
+
+#[test]
+fn java_inner_entities() {
+    let src = r#"package p;
+/** Doc. */
+@Entity
+class Box<T extends Number> {
+    <U> void put(@Valid String s, int... rest) {
+        // note
+        int a = 1, b = 2;
+        Runnable r = () -> { int a = 3; };
+        java.util.function.Function<String, String> f = x -> x;
+        for (String e : rest2) { }
+        try { } catch (Exception ex) { }
+    }
+    void put(int s) { }
+}
+"#;
+    let (m, _) = model(&[("src/p/Box.java", src)]);
+    let keys: Vec<(String, String)> = m
+        .entities()
+        .filter(|e| {
+            !matches!(
+                e.kind_name(),
+                "namespace" | "file" | "class" | "method" | "constructor"
+            )
+        })
+        .map(|e| {
+            let k = e.key().to_string();
+            (
+                e.kind_name().to_string(),
+                k.splitn(5, ' ').last().unwrap().to_string(),
+            )
+        })
+        .collect();
+    let has = |kind: &str, key: &str| {
+        assert!(
+            keys.iter().any(|(k, s)| k == kind && s == key),
+            "{kind} {key} missing in {keys:#?}"
+        )
+    };
+    has("type_parameter", "p/Box#[T]");
+    has("type_parameter", "p/Box#put().[U]");
+    has("parameter", "p/Box#put().(s)");
+    has("parameter", "p/Box#put().(rest)");
+    has("parameter", "p/Box#put().(x)");
+    has("parameter", "p/Box#put().(ex)");
+    has("parameter", "p/Box#put(+1).(s)");
+    has("local_variable", "p/Box#put().a.");
+    has("local_variable", "p/Box#put().b.");
+    has("local_variable", "p/Box#put().a+1.");
+    has("local_variable", "p/Box#put().r.");
+    has("local_variable", "p/Box#put().e.");
+    has("annotation", "p/Box#Entity:");
+    has("annotation", "p/Box#put().(s)Valid:");
+    assert_eq!(keys.iter().filter(|(k, _)| k == "comment").count(), 2);
+    let e = m.entities().find(|e| e.name() == "// note").unwrap();
+    assert_eq!(e.parent().unwrap().name(), "put");
+    assert_eq!(e.kind(), K::Variable);
 }

@@ -19,6 +19,10 @@
   JSON gains optional `fine_kind` and a top-level `metamodel`.
 - `model-treesitter`: Java `record`, `annotation_type` and `enum_constant` are
   distinct kinds (captures `@definition.record|annotation_type|enum_constant`).
+- `model-treesitter`: Java parameters, locals, type parameters, annotation
+  instances and comments are entities (fine kinds `parameter`, `local_variable`,
+  `type_parameter`, `annotation`, `comment` of archetype `Variable`; captures
+  `@definition.<kind>`), keyed SCIP-like under their enclosing definition.
 - `model-graphql`: `fineKind` and `fm3Class` fields on every entity.
 - `model-fm3`: new crate reading a Moose FM3 metamodel exported as JSON
   (`FMJSONPrinter`) into typed structs: `Metamodel` with packages, classes,

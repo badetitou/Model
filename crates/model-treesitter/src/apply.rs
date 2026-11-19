@@ -9,7 +9,7 @@ use model_core::{
 };
 
 use crate::ExtractStats;
-use crate::facts::{FileFacts, UseKind};
+use crate::facts::{Desc, FileFacts, UseKind};
 use crate::grammars::Namespaces;
 
 /// What a file contributes to name resolution.
@@ -62,7 +62,7 @@ pub(crate) fn apply(
                 let dir = f.path.rsplit_once('/').map(|(d, _)| d);
                 let dir_id = dir.and_then(|d| namespace_chain(b, &lang, d.split('/'), false));
                 b.set_parent(file, dir_id);
-                (file_key, file, None)
+                (file_key.clone(), file, None)
             }
             Namespaces::Declared { separator } => match &f.namespace {
                 Some(ns) => {
@@ -83,15 +83,29 @@ pub(crate) fn apply(
         let mut ids: Vec<EntityId> = Vec::with_capacity(f.defs.len());
         let mut seen: HashMap<String, u32> = HashMap::new();
         for d in &f.defs {
+            let attached = d.fine.is_some_and(|f| f.desc != Desc::Archetype);
+            // Top-level comments and annotations hang from the file: their
+            // keys are positional or numbered, only unique per file.
             let (parent_key, parent_id) = match d.parent {
                 Some(p) => (&keys[p], ids[p]),
+                None if attached => (&file_key, file),
                 None => (&prefix, top_parent),
             };
             let desc_name = match (d.kind, g.constructor) {
                 (EntityKind::Constructor, Some(c)) => c,
                 _ => d.name.as_str(),
             };
-            let mut key = parent_key.child(Descriptor::for_kind(d.kind, desc_name));
+            let desc = match d.fine.map_or(Desc::Archetype, |f| f.desc) {
+                Desc::Archetype => Descriptor::for_kind(d.kind, desc_name),
+                Desc::Parameter => Descriptor::Parameter(d.name.clone()),
+                Desc::TypeParameter => Descriptor::TypeParameter(d.name.clone()),
+                Desc::Meta => Descriptor::Meta(d.name.clone()),
+                Desc::Site => {
+                    Descriptor::Meta(format!("L{}C{}", d.range.start_line + 1, d.range.start_col))
+                }
+                Desc::Term => Descriptor::Term(d.name.clone()),
+            };
+            let mut key = parent_key.child(desc.clone());
             if d.kind.is_callable() {
                 let n = seen.entry(key.to_string()).or_insert(0);
                 if *n > 0 {
@@ -101,9 +115,23 @@ pub(crate) fn apply(
                     });
                 }
                 *n += 1;
+            } else if attached {
+                // Same-named siblings (`@A @A`, shadowing lambda params,
+                // two locals `i`): numbered in declaration order.
+                let n = seen.entry(key.to_string()).or_insert(0);
+                if *n > 0 {
+                    let name = format!("{}+{n}", desc.name());
+                    key = parent_key.child(match desc {
+                        Descriptor::Parameter(_) => Descriptor::Parameter(name),
+                        Descriptor::TypeParameter(_) => Descriptor::TypeParameter(name),
+                        Descriptor::Meta(_) => Descriptor::Meta(name),
+                        _ => Descriptor::Term(name),
+                    });
+                }
+                *n += 1;
             }
             let kind = match d.fine {
-                Some(fine) => b.define_kind(fine, d.kind, TraitMask::EMPTY, None),
+                Some(fine) => b.define_kind(fine.name, d.kind, TraitMask::EMPTY, None),
                 None => KindId::of(d.kind),
             };
             let id = b.entity_of_kind(&key.to_string(), kind, &d.name);
@@ -111,7 +139,10 @@ pub(crate) fn apply(
                 b.set_source(id, &f.path, d.range, Some(d.name_range));
                 b.set_parent(id, Some(parent_id));
                 stats.definitions += 1;
-                if d.kind.is_type() {
+                if attached {
+                    // Parameters, locals, annotations, comments: not
+                    // resolution targets.
+                } else if d.kind.is_type() {
                     types.entry(d.name.clone()).or_default().push(id);
                 } else if d.kind.is_callable() {
                     callables.entry(d.name.clone()).or_default().push(id);

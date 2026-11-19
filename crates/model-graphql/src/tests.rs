@@ -75,9 +75,9 @@ async fn entity_by_key_with_containment_and_props() {
         serde_json::json!({"kind": "NAMESPACE", "name": "app"})
     );
     assert_eq!(e["ancestors"], serde_json::json!([{"name": "app"}]));
-    assert_eq!(e["children"]["totalCount"], 3);
+    assert_eq!(e["children"]["totalCount"], 4);
     assert_eq!(
-        e["children"]["edges"][2]["node"],
+        e["children"]["edges"][3]["node"],
         serde_json::json!({"kind": "CLASS", "name": "Inner"})
     );
     assert_eq!(e["methods"]["totalCount"], 2);
@@ -295,10 +295,11 @@ async fn per_kind_root_fields_expose_the_concrete_types() {
         "fields",
         "properties",
         "constants",
-        "variables",
     ] {
         assert_eq!(d[empty]["totalCount"], 0, "{empty}");
     }
+    // `@Service` is an annotation entity, of archetype Variable.
+    assert_eq!(d["variables"]["totalCount"], 1);
 }
 
 /// Introspection-driven clients (fluid in particular) only drill into a
