@@ -4,6 +4,13 @@
 
 ### Added
 
+- `model-traits`: new crate, traits as data (Named, WithMembers,
+  WithInheritances, Invocation, Access, Modifiers, Annotations: typed props,
+  relations, relation kinds carried, containment rules) generated from the
+  FamixJava FM3 export (`cargo run -p model-traits --example generate`),
+  plus a per-FM3-class trait table to fill kinds' `TraitMask`.
+- `model-core`: `Model::of_trait` and `EntityRef::has_trait` query a kind's
+  `TraitMask`.
 - `model-core`: fine-grained kinds. `KindId` (1 byte in the entity row) and a
   `Metamodel` table (kind -> archetype, `TraitMask`, optional FM3 class name)
   carried by the `Model`; `EntityKind` stays the archetype. Builder:
@@ -17,6 +24,12 @@
   `type_parameter`, `annotation`, `comment` of archetype `Variable`; captures
   `@definition.<kind>`), keyed SCIP-like under their enclosing definition.
 - `model-graphql`: `fineKind` and `fm3Class` fields on every entity.
+- `model-fm3`: new crate reading a Moose FM3 metamodel exported as JSON
+  (`FMJSONPrinter`) into typed structs: `Metamodel` with packages, classes,
+  traits and properties (type, multivalued, container, derived, opposite),
+  superclass and trait usage, built-in types as `Ref::Builtin`. Nested
+  entities are accepted; dangling references and duplicate ids are errors.
+  Checked with a subset of the FamixJava metamodel export.
 
 ## 0.3.0 — 2026-11-18
 

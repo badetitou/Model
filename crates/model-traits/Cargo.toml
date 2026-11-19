@@ -1,0 +1,19 @@
+[package]
+name = "model-traits"
+description = "Composable trait schema (name, props, relations, containment) generated from the FM3 description of FamixJava"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+readme = "../../README.md"
+keywords = ["fm3", "moose", "famix", "traits", "code-model"]
+categories = ["development-tools"]
+
+[dependencies]
+model-core.workspace = true
+
+[dev-dependencies]
+model-fm3.workspace = true
+serde_json.workspace = true

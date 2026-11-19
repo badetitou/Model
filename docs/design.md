@@ -105,6 +105,20 @@ Design choices:
   `from` and is not stored. Aggregation (dependency weight, matrix cells) is
   an analysis concern: `sites().len()` is the weight.
 
+### Traits (`model-traits`)
+
+A kind's `TraitMask` (a `u64`, opaque to `model-core`) says which composable
+capabilities it has; `Model::of_trait(mask)` / `EntityRef::has_trait(mask)`
+test it. `model-traits` owns the meaning of the bits: traits are data (name,
+typed stored props, relations, `model-core` relation kinds carried,
+containment rules), generated from the FM3 JSON of FamixJava by
+`examples/generate.rs` from a small hand-written `traits.json` (our trait ->
+the FM3 traits it aggregates). The generated table also lists, per FM3 class,
+the traits it inherits, so a frontend defines a kind with
+`mask_of_fm3_class("Famix-Java-Entities.Method")`. Derived metrics are not
+stored props; derived relations are kept (they give containment through
+their container opposite).
+
 ### 3.1 Keys
 
 Keys follow the [SCIP symbol grammar](https://github.com/sourcegraph/scip/blob/main/scip.proto)

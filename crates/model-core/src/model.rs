@@ -1,5 +1,5 @@
 use crate::entity::{EntityId, EntityKind, LanguageId};
-use crate::metamodel::{KindId, KindInfo, Metamodel};
+use crate::metamodel::{KindId, KindInfo, Metamodel, TraitMask};
 use crate::relation::{Provenance, RelationId, RelationKind};
 use crate::source::Range;
 use crate::strings::{StrId, StrTable};
@@ -233,6 +233,12 @@ impl Model {
         self.entities().filter(move |e| e.kind_id() == kind)
     }
 
+    /// Entities whose kind carries every trait of `traits`. Bit meanings are
+    /// defined by the metamodel's author (see the `model-traits` crate).
+    pub fn of_trait(&self, traits: TraitMask) -> impl Iterator<Item = EntityRef<'_>> {
+        self.entities().filter(move |e| e.has_trait(traits))
+    }
+
     /// Kinds of this model: archetype, traits and FM3 class of each.
     pub fn metamodel(&self) -> &Metamodel {
         &self.metamodel
@@ -331,6 +337,11 @@ impl<'m> EntityRef<'m> {
 
     pub fn kind_info(self) -> Option<&'m KindInfo> {
         self.model.metamodel.get(self.row().kind)
+    }
+
+    /// Whether the entity's kind carries every trait of `traits`.
+    pub fn has_trait(self, traits: TraitMask) -> bool {
+        self.kind_info().is_some_and(|k| k.traits.contains(traits))
     }
 
     /// Name of the fine kind.
@@ -699,6 +710,10 @@ pub(crate) mod tests {
         assert!(info.traits.contains(TraitMask(0b10)));
         assert_eq!(m.of_kind(EntityKind::Class).count(), 2);
         assert_eq!(m.of_kind_id(rec).count(), 1);
+        assert!(r.has_trait(TraitMask(0b10)) && !r.has_trait(TraitMask(0b100)));
+        assert!(r.has_trait(TraitMask::EMPTY));
+        assert_eq!(m.of_trait(TraitMask(0b10)).count(), 1);
+        assert_eq!(m.of_trait(TraitMask::EMPTY).count(), 2);
         assert_eq!(m.metamodel().find("record"), Some(rec));
     }
 
