@@ -1,6 +1,7 @@
 # Shared crate list, in dependency order. Sourced by the release scripts.
 CRATES=(
   model-core
+  model-fm3
   model-detect
   model-scip
   model-analysis
