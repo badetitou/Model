@@ -76,6 +76,17 @@ Other captures (`@doc`, `@_x`...) are ignored; text predicates (`#eq?`,
   With a SCIP index, extract with `relations: false` and let `model-link`
   resolve them exactly. Definitions, extents and props still come from here.
 
+## Fragments
+
+`Extractor::fragment(path, bytes)` reads one file into a serialisable
+`Fragment` (definitions with nesting, props, unresolved uses; no ids or
+keys). `FragmentSet::compose(builder, relations)` derives keys, creates the
+entities and resolves uses across files; `insert`/`remove` replace one file's
+fragment before composing again. `load_fragments` reads many files in
+parallel through an optional `FragmentStore` (get/put by path and
+`Extractor::tag`), which `model-factory` backs with a git-blob-keyed cache.
+`extract`/`extract_sources` are `fragment` + `compose`. Design: `docs/design.md` §5.1.
+
 ## Measured, with `model-link` (`examples/build_model.rs`)
 
 | Fixture | Tree-sitter | SCIP definitions mapped (+ lifted) | Total |

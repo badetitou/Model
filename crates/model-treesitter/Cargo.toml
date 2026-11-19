@@ -20,6 +20,7 @@ python = ["dep:tree-sitter-python"]
 [dependencies]
 model-core.workspace = true
 anyhow.workspace = true
+serde.workspace = true
 ignore.workspace = true
 rayon.workspace = true
 tree-sitter.workspace = true
@@ -28,6 +29,7 @@ tree-sitter-typescript = { workspace = true, optional = true }
 tree-sitter-python = { workspace = true, optional = true }
 
 [dev-dependencies]
+serde_json.workspace = true
 model-link.workspace = true
 model-scip.workspace = true
 model-detect.workspace = true

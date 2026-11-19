@@ -967,6 +967,8 @@ dependencies = [
  "model-link",
  "model-scip",
  "rayon",
+ "serde",
+ "serde_json",
  "tree-sitter",
  "tree-sitter-java",
  "tree-sitter-python",

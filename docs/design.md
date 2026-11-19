@@ -327,6 +327,57 @@ angular-realworld, references at file level go from 67% to the code that
 really is outside any named definition (test callbacks 54%, imports 9%,
 top-level config 4%).
 
+### 5.1 Per-file fragments
+
+Extraction is split in two so that the expensive, per-file half can be
+cached and replaced:
+
+```
+file ──► Extractor::fragment ──► Fragment ─┐ (cached by git blob)
+file ──► Extractor::fragment ──► Fragment ─┼─► FragmentSet::compose ──► ModelBuilder ──► link ──► Model
+file ──► (cache hit, no parse) ► Fragment ─┘
+```
+
+- A **`Fragment`** is everything read from one file and nothing about any
+  other: path, language, extent, declared namespace, definitions (kind, fine
+  kind, name, ranges, parent by index), props, and the **unresolved uses**
+  (kind, name, owning definition, site). It holds no entity ids, keys or
+  interned strings, so it is self-contained and `serde`-serialisable. It
+  depends only on the file's path and content, the grammar's query and the
+  layout version.
+- **Composition** (`FragmentSet::compose`) is where cross-file knowledge
+  enters: it derives keys (from path, namespace, nesting, overload order),
+  creates entities, then resolves every use by name against all fragments.
+  A new relation kind (name-based or not) is a new `UseKind`/capture and
+  composition rule, not a cache change.
+- **Rebuilding after a change** = `FragmentSet::insert`/`remove` for the
+  changed paths, then `compose` into a fresh builder. Only the changed files
+  are read; everything else is cached data. The result is byte-identical to a
+  direct build (JSON compared on jpetstore, angular-realworld,
+  spring-boot-realworld and vscode fixtures, with and without SCIP linking).
+- **Cache** (`model-index::FragmentCache`, driven by `model-factory`): the
+  same keying as the SCIP `DocumentCache`,
+  `<git-common-dir>/<app>/fragments/<tag>/<blob[..2]>/<blob>-<fnv(path)>`.
+  The tag is `<language>-f<layout>-<hash of crate version and query>`, so a
+  new query or crate release never reads stale fragments. Blobs are hashed
+  from the files on disk (`git hash-object`), so uncommitted edits are
+  handled and a hit is valid in any commit or worktree. Corrupt or foreign
+  entries are ignored (re-parsed).
+- **Measured** (release, warm = every fragment reused):
+
+  | Fixture | Files | Direct | Cold (parse + store) | Warm |
+  |---|---|---|---|---|
+  | jpetstore | 46 | 27 ms | 53 ms | 40 ms |
+  | spring-boot-realworld | 116 | 27 ms | 62 ms | 41 ms |
+  | vscode (no SCIP) | 15.7k | 3.9 s | 11.2 s | 7.6–10.6 s |
+
+  The cache is correct and skips all parsing, but it does **not** make a
+  full build faster today: tree-sitter parses these projects at about
+  4 000 files/s, and reading back JSON fragments (219 MB for vscode) plus
+  hashing 15.7k files costs more. Its value is replacing one file, and
+  serving sessions that need only some files (model-session); a binary
+  fragment format is the next step if full warm builds matter.
+
 ### Pharo / Tonel
 
 `model-lang-pharo` ports Structure's hand-written Tonel reader and send linker
@@ -509,9 +560,13 @@ Each step is one PR, Structure's tests and goldens staying green:
 
 - Persisted binary format (bincode-like columns, or memory-mapped) for big
   models and the GraphQL server; JSON is 2.3× the in-memory size.
-- Incremental rebuild: replace the entities and sites of changed files
-  without rebuilding the whole model (the builder would need removal, or a
-  per-file layering).
+- Incremental rebuild: **decided for tree-sitter facts (§5.1)**, open for the
+  rest. A file's fragment can be replaced and the model composed again
+  without reading any other file; composition itself is still a full pass
+  (no removal in the builder, no per-file layering of the frozen model).
+  Still open: SCIP documents (cached per file, but linking re-runs on the
+  whole index) and a compact fragment format (JSON makes a warm build of
+  vscode slower than parsing, see §5.1).
 - WASM: which crates must stay WASM-compatible (Structure's browser
   extension parses without SCIP).
 

@@ -11,11 +11,12 @@ mod indexers;
 mod process;
 mod progress;
 
-pub use cache::{Coverage, DocumentCache};
+pub use cache::{Coverage, DocumentCache, FragmentCache};
 pub use ensure::{
     DEFAULT_TIMEOUT_SECS, IndexOptions, IndexSource, Reindex, default_timeout, ensure_index,
     newer_sources,
 };
+pub use git::hash_paths as blob_ids;
 pub use indexers::{
     DEFAULT_NODE_HEAP_MB, Indexer, SCIP_JAVA_VERSION, SCIP_TS_VERSION, discover_tsconfigs,
     for_language, indexers, node_options, ts_index_args,

@@ -31,8 +31,9 @@ pub(crate) fn common_dir(dir: &Path) -> anyhow::Result<PathBuf> {
     Ok(dir.join(common.trim()))
 }
 
-/// Blob ids of `paths` (relative to `dir`) as they are on disk.
-pub(crate) fn hash_paths(dir: &Path, paths: &[String]) -> anyhow::Result<Vec<String>> {
+/// Git blob ids of `paths` (relative to `dir`) as they are on disk, in
+/// order; works outside a repository too.
+pub fn hash_paths(dir: &Path, paths: &[String]) -> anyhow::Result<Vec<String>> {
     if paths.is_empty() {
         return Ok(vec![]);
     }

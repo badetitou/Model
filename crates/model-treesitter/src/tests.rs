@@ -2,7 +2,10 @@ use model_core::{
     EntityKind as K, Model, ModelBuilder, Provenance, Range, RelationKind as R, Value,
 };
 
-use crate::{ExtractOptions, ExtractStats, compile, extract_sources, grammars};
+use crate::{
+    ExtractOptions, ExtractStats, Extractor, Fragment, FragmentSet, compile, extract_sources,
+    grammars,
+};
 
 fn model(sources: &[(&str, &str)]) -> (Model, ExtractStats) {
     let mut b = ModelBuilder::new();
@@ -452,4 +455,68 @@ class Box<T extends Number> {
     let e = m.entities().find(|e| e.name() == "// note").unwrap();
     assert_eq!(e.parent().unwrap().name(), "put");
     assert_eq!(e.kind(), K::Variable);
+}
+
+fn json(sources: &[(&str, &str)], set: &FragmentSet) -> String {
+    let _ = sources;
+    let mut b = ModelBuilder::new();
+    set.compose(&mut b, true);
+    serde_json::to_string(&b.build()).unwrap()
+}
+
+fn fragments(sources: &[(&str, &str)]) -> FragmentSet {
+    let ex = Extractor::new(&ExtractOptions::default()).unwrap();
+    sources
+        .iter()
+        .filter_map(|(p, s)| ex.fragment(p, s.as_bytes()).unwrap())
+        .collect()
+}
+
+const JAVA_B: &str = "package com.acme.app;\nclass B { void run() { new A().go(); } }";
+const JAVA_B2: &str =
+    "package com.acme.app;\nclass B { void run() { new A().go(); } void extra() {} }";
+
+#[test]
+fn fragments_round_trip_and_compose_to_the_direct_model() {
+    let sources = [("a/A.java", JAVA_A), ("b/B.java", JAVA_B)];
+    let (direct, _) = model(&sources);
+    let set = fragments(&sources);
+    let wire: Vec<Fragment> = set
+        .iter()
+        .map(|f| serde_json::from_str(&serde_json::to_string(f).unwrap()).unwrap())
+        .collect();
+    assert_eq!(wire, set.iter().cloned().collect::<Vec<_>>());
+    let revived: FragmentSet = wire.into_iter().collect();
+    assert_eq!(
+        serde_json::to_string(&direct).unwrap(),
+        json(&sources, &revived)
+    );
+}
+
+#[test]
+fn replacing_one_fragment_rebuilds_the_changed_project() {
+    let before = [("a/A.java", JAVA_A), ("b/B.java", JAVA_B)];
+    let after = [("a/A.java", JAVA_A), ("b/B.java", JAVA_B2)];
+    let mut set = fragments(&before);
+    let ex = Extractor::new(&ExtractOptions::default()).unwrap();
+    set.insert(
+        ex.fragment("b/B.java", JAVA_B2.as_bytes())
+            .unwrap()
+            .unwrap(),
+    );
+    let (direct, _) = model(&after);
+    assert_eq!(serde_json::to_string(&direct).unwrap(), json(&after, &set));
+    // Dropping a file's fragment removes its entities.
+    set.remove("b/B.java");
+    let (only_a, _) = model(&[("a/A.java", JAVA_A)]);
+    assert_eq!(serde_json::to_string(&only_a).unwrap(), json(&after, &set));
+}
+
+#[test]
+fn fragment_tag_follows_the_grammar() {
+    let ex = Extractor::new(&ExtractOptions::default()).unwrap();
+    let (j, t) = (ex.tag("A.java").unwrap(), ex.tag("a.ts").unwrap());
+    assert_ne!(j, t);
+    assert_eq!(ex.tag("A.java").unwrap(), j);
+    assert!(ex.tag("notes.txt").is_none());
 }

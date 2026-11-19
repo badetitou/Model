@@ -229,6 +229,54 @@ impl DocumentCache {
     }
 }
 
+/// Content-addressed cache of per-file extraction fragments (opaque bytes
+/// to this crate): `<git-common-dir>/<app>/fragments/<tag>/<blob[..2]>/<blob>-<path hash>`.
+///
+/// Same keying as [`DocumentCache`]: the fragment read from `path` at blob
+/// `b` is valid wherever `path` has blob `b`, whatever the commit or
+/// worktree; the tag names the extractor, its version and its query.
+/// Unlike SCIP documents, fragments depend on nothing but the file, so a
+/// hit is always valid, including for uncommitted edits (blobs are hashed
+/// from the files on disk, see [`blob_ids`]).
+#[derive(Debug, Clone)]
+pub struct FragmentCache {
+    dir: PathBuf,
+}
+
+impl FragmentCache {
+    /// Cache in the repository containing `root`, under
+    /// `<git-common-dir>/<app>/fragments`; `None` outside git.
+    pub fn for_repo(root: &Path, app: &str) -> Option<FragmentCache> {
+        let common = git::common_dir(root).ok()?;
+        Some(FragmentCache::at(common.join(app).join("fragments")))
+    }
+
+    /// Cache in an explicit directory.
+    pub fn at(dir: PathBuf) -> FragmentCache {
+        FragmentCache { dir }
+    }
+
+    fn entry(&self, tag: &str, path: &str, blob: &str) -> PathBuf {
+        self.dir
+            .join(tag)
+            .join(&blob[..2.min(blob.len())])
+            .join(format!("{blob}-{:016x}", fnv(path)))
+    }
+
+    pub fn get(&self, tag: &str, path: &str, blob: &str) -> Option<Vec<u8>> {
+        std::fs::read(self.entry(tag, path, blob)).ok()
+    }
+
+    /// Stores `bytes`; an existing entry is left alone.
+    pub fn put(&self, tag: &str, path: &str, blob: &str, bytes: &[u8]) -> anyhow::Result<()> {
+        let target = self.entry(tag, path, blob);
+        if target.is_file() {
+            return Ok(());
+        }
+        write_atomic(&target, bytes)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

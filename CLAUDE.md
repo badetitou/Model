@@ -30,7 +30,8 @@ Structure (`../Structure`), its first client.
   index (Structure's `fixtures/*/index.scip`).
 - `crates/model-treesitter` — `extract(builder, root, opts)`: `facts.rs`
   runs a grammar's query (capture roles, nesting by extent), `apply.rs` makes
-  entities/keys and resolves uses by name; `grammars.rs` registry (features
+  entities/keys and resolves uses by name (`FragmentSet::compose`); per-file
+  serialisable `Fragment` (`Extractor`, `load_fragments`, `FragmentStore`); `grammars.rs` registry (features
   `java`, `typescript`, `python`); `queries/*.scm`. Captures documented in its
   README. `tests/fixtures.rs` needs `MODEL_FIXTURES` (absolute path, e.g.
   Structure's `fixtures/`), skipped otherwise; `examples/build_model.rs`.
@@ -41,7 +42,7 @@ Structure (`../Structure`), its first client.
 - `crates/model-index` — `ensure_index` (reuse / staleness / run, only the
   index's own tool), `process::run` (indexer process), `indexers.rs`
   registry (command per output file, hints), `cache.rs` (`DocumentCache`,
-  git-blob keyed), `git.rs`. Port of Structure's `pipeline/{indexer,process,progress,scip_cache}`.
+  `FragmentCache`, git-blob keyed), `git.rs`. Port of Structure's `pipeline/{indexer,process,progress,scip_cache}`.
 - `crates/model-factory` (crate `model-factory`) — facade `build(root, opts, progress)`: detect → one index
   job per indexer and outermost marker root → tree-sitter (relations off
   for indexed languages) → link (`Lift`, or `Create` without grammar).

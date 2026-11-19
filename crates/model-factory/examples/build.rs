@@ -1,4 +1,4 @@
-//! `cargo run --release -p model-factory --example build -- <root> [--reindex never|if-missing|if-stale|always] [--no-scip] [--no-cache] [--from-cache] [--json <file>]`
+//! `cargo run --release -p model-factory --example build -- <root> [--reindex never|if-missing|if-stale|always] [--no-scip] [--no-cache] [--from-cache] [--fragment-cache <dir>] [--json <file>]`
 //!
 //! Builds the model of `<root>` and prints what it holds. Defaults to
 //! `--reindex never`: only existing `index.scip` files are used.
@@ -39,6 +39,11 @@ fn main() -> anyhow::Result<()> {
             "--no-scip" => opts.scip = false,
             "--no-cache" => opts.cache = None,
             "--from-cache" => opts.from_cache = true,
+            // Keeps fragments out of the repository (e.g. on fixtures).
+            "--fragment-cache" => {
+                opts.fragment_cache_dir =
+                    Some(args.next().context("--fragment-cache <dir>")?.into())
+            }
             "--json" => json = Some(args.next().context("--json <file>")?.into()),
             "--reindex" => {
                 opts.index.reindex = match args.next().as_deref() {
@@ -85,6 +90,10 @@ fn main() -> anyhow::Result<()> {
             }
         );
     }
+    println!(
+        "fragments: {} reused from the cache, {} parsed",
+        b.fragments.reused, b.fragments.extracted
+    );
     if let Some(p) = &b.pharo {
         println!(
             "pharo frontend ({} files, {} classes, {} methods): {} sends resolved, {} unresolved, {} calls",

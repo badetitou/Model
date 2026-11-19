@@ -323,3 +323,79 @@ fn facade_exposes_generic_analyses() {
     assert!(out.relations_by_kind.contains_key("calls"));
     let _ = std::fs::remove_dir_all(&d);
 }
+
+fn sh_git(dir: &Path, args: &[&str]) {
+    let ok = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+        .args(args)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    assert!(ok, "git {args:?}");
+}
+
+fn json(b: &crate::Build) -> String {
+    serde_json::to_string(&b.model).unwrap()
+}
+
+#[test]
+fn cached_fragments_skip_extraction_and_give_the_same_model() {
+    let files = [
+        (
+            "src/a/A.java",
+            "package a;\npublic class A { void m() { new B().n(); } }",
+        ),
+        ("src/a/B.java", "package a;\npublic class B { void n() {} }"),
+    ];
+    let root = tree("fragments", &files);
+    sh_git(&root, &["init", "-q"]);
+    let cache = root.join("frag-cache");
+    let opts = BuildOptions {
+        scip: false,
+        fragment_cache_dir: Some(cache.clone()),
+        ..offline()
+    };
+    let uncached = build(
+        &root,
+        &BuildOptions {
+            fragment_cache_dir: None,
+            ..opts.clone()
+        },
+        &|_| {},
+    )
+    .unwrap();
+    assert_eq!(uncached.fragments.extracted, 2);
+
+    let first = build(&root, &opts, &|_| {}).unwrap();
+    assert_eq!((first.fragments.reused, first.fragments.extracted), (0, 2));
+    let second = build(&root, &opts, &|_| {}).unwrap();
+    assert_eq!(
+        (second.fragments.reused, second.fragments.extracted),
+        (2, 0)
+    );
+    assert_eq!(json(&uncached), json(&first));
+    assert_eq!(json(&first), json(&second));
+
+    // One edited file: only its fragment is read again.
+    std::fs::write(
+        root.join("src/a/B.java"),
+        "package a;\npublic class B { void n() {} void o() {} }",
+    )
+    .unwrap();
+    let third = build(&root, &opts, &|_| {}).unwrap();
+    assert_eq!((third.fragments.reused, third.fragments.extracted), (1, 1));
+    let fresh = build(
+        &root,
+        &BuildOptions {
+            fragment_cache_dir: None,
+            ..opts
+        },
+        &|_| {},
+    )
+    .unwrap();
+    assert_eq!(json(&third), json(&fresh));
+    assert!(json(&third).contains("o()"));
+    let _ = std::fs::remove_dir_all(&root);
+}

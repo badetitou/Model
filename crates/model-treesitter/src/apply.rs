@@ -9,8 +9,8 @@ use model_core::{
 };
 
 use crate::ExtractStats;
-use crate::facts::{Desc, FileFacts, UseKind};
-use crate::grammars::Namespaces;
+use crate::facts::{Desc, Fragment, UseKind};
+use crate::grammars::{Namespaces, grammars};
 
 /// What a file contributes to name resolution.
 struct FileCtx {
@@ -33,7 +33,7 @@ struct Pending {
 
 pub(crate) fn apply(
     b: &mut ModelBuilder,
-    files: &[FileFacts],
+    files: &[&Fragment],
     relations: bool,
     stats: &mut ExtractStats,
 ) {
@@ -44,7 +44,9 @@ pub(crate) fn apply(
     let mut members: HashMap<(EntityId, String), EntityId> = HashMap::new();
 
     for (fi, f) in files.iter().enumerate() {
-        let g = f.grammar;
+        let Some(g) = grammars().iter().find(|g| g.language == f.language) else {
+            continue;
+        };
         let lang = LanguageId::new(g.language);
         stats.files += 1;
         stats.files_with_errors += usize::from(f.has_errors);

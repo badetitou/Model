@@ -2,23 +2,25 @@
 //! extent), uses (names to resolve later) and props.
 
 use model_core::{EntityKind, Range};
+use serde::{Deserialize, Serialize};
 use tree_sitter::{Node, Parser, Query, QueryCursor, StreamingIterator};
 
 use crate::grammars::Grammar;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Def {
     pub kind: EntityKind,
     /// Fine kind refining `kind` (`record`...); `None` = the archetype's own.
+    #[serde(with = "fine_name")]
     pub fine: Option<&'static Fine>,
     pub name: String,
     pub range: Range,
     pub name_range: Range,
-    /// Enclosing definition (index into `FileFacts::defs`).
+    /// Enclosing definition (index into `Fragment::defs`).
     pub parent: Option<usize>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum UseKind {
     Inherits,
     Implements,
@@ -27,7 +29,7 @@ pub(crate) enum UseKind {
     Type,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Use {
     pub kind: UseKind,
     /// Innermost enclosing definition; `None` = the file.
@@ -36,7 +38,7 @@ pub(crate) struct Use {
     pub site: Range,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Prop {
     /// Innermost enclosing definitions: several when they share an extent
     /// (`@A int x, y;`). Empty = the file.
@@ -45,16 +47,53 @@ pub(crate) struct Prop {
     pub value: String,
 }
 
-pub(crate) struct FileFacts {
+/// Everything extraction learns from one file, and nothing about any other:
+/// the unit that is cached per file and composed into a model.
+///
+/// Self-contained: positions, names and nesting only. Uses are *unresolved*
+/// (a name, a kind, the owning definition by index, a site); resolving them
+/// needs the other files and happens at composition (`FragmentSet::compose`).
+/// Definition keys are derived at composition too, from the file's path,
+/// namespace and nesting, so a fragment holds no entity or string ids.
+/// Serialisable; it depends only on the file's path and content, the
+/// grammar's query and [`FORMAT`] (see [`crate::Extractor::tag`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Fragment {
+    /// Relative to the extraction root, `/`-separated.
     pub path: String,
-    pub grammar: &'static Grammar,
-    pub extent: Range,
-    pub namespace: Option<String>,
+    /// Language id of the grammar that read it.
+    pub language: String,
+    pub(crate) extent: Range,
+    pub(crate) namespace: Option<String>,
     /// Sorted by start, outer first.
-    pub defs: Vec<Def>,
-    pub uses: Vec<Use>,
-    pub props: Vec<Prop>,
+    pub(crate) defs: Vec<Def>,
+    pub(crate) uses: Vec<Use>,
+    pub(crate) props: Vec<Prop>,
+    /// Parsed with syntax errors (still extracted).
     pub has_errors: bool,
+}
+
+/// Version of the fragment layout; part of the cache tag.
+pub(crate) const FORMAT: u32 = 1;
+
+/// A `Fine` kind is stored as its capture name.
+mod fine_name {
+    use super::{FINE, Fine};
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(f: &Option<&'static Fine>, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_some(&f.map(|f| f.name))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<&'static Fine>, D::Error> {
+        let name = Option::<String>::deserialize(d)?;
+        name.map_or(Ok(None), |n| {
+            FINE.iter()
+                .find(|f| f.name == n)
+                .map(Some)
+                .ok_or_else(|| serde::de::Error::custom(format!("unknown fine kind {n}")))
+        })
+    }
 }
 
 /// How a descriptor is written for a fine kind.
@@ -212,7 +251,7 @@ pub(crate) fn read(
     grammar: &'static Grammar,
     query: &Query,
     roles: &[Role],
-) -> anyhow::Result<FileFacts> {
+) -> anyhow::Result<Fragment> {
     let mut parser = Parser::new();
     parser.set_language(&grammar.tree_sitter_language())?;
     let tree = parser
@@ -327,9 +366,9 @@ pub(crate) fn read(
             value,
         })
         .collect();
-    Ok(FileFacts {
+    Ok(Fragment {
         path: path.to_string(),
-        grammar,
+        language: grammar.language.to_string(),
         extent: range(root),
         namespace,
         defs,

@@ -29,12 +29,18 @@ pub use model_treesitter as treesitter;
 pub use model_analysis::Analysis;
 pub use model_core::{EntityKind, EntityRef, Model, RelationKind, RelationRef};
 
+use std::collections::HashMap;
+
 use model_core::ModelBuilder;
 use model_detect::Detection;
-use model_index::{Coverage, DocumentCache, IndexOptions, IndexSource, Indexer, Reindex};
+use model_index::{
+    Coverage, DocumentCache, FragmentCache, IndexOptions, IndexSource, Indexer, Reindex,
+};
 use model_link::{LinkOptions, LinkStats, Unmapped};
 use model_scip::ScipIndex;
-use model_treesitter::{ExtractOptions, ExtractStats};
+use model_treesitter::{
+    ExtractOptions, ExtractStats, Extractor, Fragment, FragmentSet, FragmentStore, LoadStats,
+};
 
 #[derive(Debug, Clone)]
 pub struct BuildOptions {
@@ -47,6 +53,10 @@ pub struct BuildOptions {
     /// `root` is a clean checkout of `HEAD`: without `index.scip`, compose
     /// the index from cached documents instead of running the indexer.
     pub from_cache: bool,
+    /// Directory of the per-file fragment cache; `None` = in the repository
+    /// (`<git-common-dir>/<cache>/fragments`) when `cache` is set and `root`
+    /// is in git. Without either, every file is parsed.
+    pub fragment_cache_dir: Option<PathBuf>,
     /// Only these languages (`model-detect` ids); `None` = all detected.
     pub languages: Option<Vec<String>>,
 }
@@ -58,6 +68,7 @@ impl Default for BuildOptions {
             index: IndexOptions::default(),
             cache: Some("model".into()),
             from_cache: false,
+            fragment_cache_dir: None,
             languages: None,
         }
     }
@@ -101,6 +112,8 @@ pub struct Build {
     pub extracted: Vec<(Vec<String>, bool, ExtractStats)>,
     /// Pharo/Tonel facts extracted directly (no SCIP indexer or grammar).
     pub pharo: Option<lang_pharo::PharoStats>,
+    /// Tree-sitter fragments taken from the cache vs parsed (all passes).
+    pub fragments: LoadStats,
     pub indexes: Vec<IndexReport>,
     pub warnings: Vec<String>,
 }
@@ -291,6 +304,15 @@ pub fn build(
         .filter(|l| has_grammar(l))
         .map(String::from)
         .collect();
+    let fragment_cache = opts
+        .fragment_cache_dir
+        .clone()
+        .map(FragmentCache::at)
+        .or_else(|| {
+            let app = opts.cache.as_deref()?;
+            FragmentCache::for_repo(root, app)
+        });
+    let mut fragments = LoadStats::default();
     let mut b = ModelBuilder::new();
     let mut extracted = Vec::new();
     for with_index in [true, false] {
@@ -306,7 +328,13 @@ pub fn build(
             relations: !with_index,
             languages: Some(langs.clone()),
         };
-        let st = model_treesitter::extract(&mut b, root, &eo)?;
+        let (set, load, warning) = extract_fragments(root, &eo, fragment_cache.as_ref())?;
+        warnings.extend(warning);
+        fragments.reused += load.reused;
+        fragments.extracted += load.extracted;
+        fragments.unreadable += load.unreadable;
+        let mut st = set.compose(&mut b, eo.relations);
+        st.unreadable = load.unreadable;
         extracted.push((langs, !with_index, st));
     }
 
@@ -352,9 +380,61 @@ pub fn build(
         detection,
         extracted,
         pharo,
+        fragments,
         indexes: reports,
         warnings,
     })
+}
+
+/// A [`FragmentCache`] seen by the extractor: fragments are stored as JSON
+/// under the git blob their file has on disk.
+struct BlobStore<'a> {
+    cache: &'a FragmentCache,
+    /// Blob id of each source file, by path.
+    blobs: HashMap<String, String>,
+}
+
+impl FragmentStore for BlobStore<'_> {
+    fn load(&self, path: &str, tag: &str) -> Option<Fragment> {
+        let bytes = self.cache.get(tag, path, self.blobs.get(path)?)?;
+        serde_json::from_slice(&bytes).ok()
+    }
+
+    fn save(&self, f: &Fragment, tag: &str) {
+        if let (Some(blob), Ok(bytes)) = (self.blobs.get(&f.path), serde_json::to_vec(f)) {
+            let _ = self.cache.put(tag, &f.path, blob, &bytes);
+        }
+    }
+}
+
+/// The tree-sitter fragments of `root`, reusing those `cache` holds for the
+/// files' current content and parsing (then storing) the others. The warning
+/// says why the cache was not used, if it was not.
+pub fn extract_fragments(
+    root: &Path,
+    opts: &ExtractOptions,
+    cache: Option<&FragmentCache>,
+) -> anyhow::Result<(FragmentSet, LoadStats, Option<String>)> {
+    let extractor = Extractor::new(opts)?;
+    let files = model_treesitter::source_files(root, opts)?;
+    let mut warning = None;
+    let store = cache.and_then(|cache| match model_index::blob_ids(root, &files) {
+        Ok(ids) => Some(BlobStore {
+            cache,
+            blobs: files.iter().cloned().zip(ids).collect(),
+        }),
+        Err(e) => {
+            warning = Some(format!("cannot use the fragment cache: {e:#}"));
+            None
+        }
+    });
+    let (set, stats) = model_treesitter::load_fragments(
+        &extractor,
+        root,
+        &files,
+        store.as_ref().map(|s| s as &dyn FragmentStore),
+    )?;
+    Ok((set, stats, warning))
 }
 
 #[cfg(test)]
