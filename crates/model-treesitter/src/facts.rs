@@ -25,6 +25,15 @@ pub(crate) enum UseKind {
     Imports,
     Call,
     Type,
+    /// Type of the entity named by the `@typed` capture (else the owner).
+    DeclaredType,
+    Throws,
+    /// Bare name read, written, read and written (`+=`, `++`), or used as a
+    /// call/field receiver.
+    Read,
+    Write,
+    ReadWrite,
+    Receiver,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -132,6 +141,8 @@ pub(crate) enum Role {
     Namespace,
     Def(EntityKind, Option<&'static Fine>),
     Use(UseKind),
+    /// Identifier of the entity a `declared_type` use types.
+    Typed,
     Prop(String),
     Ignored,
 }
@@ -140,6 +151,9 @@ pub(crate) fn role(capture: &str) -> Role {
     use EntityKind as K;
     if capture == "name" {
         return Role::Name;
+    }
+    if capture == "typed" {
+        return Role::Typed;
     }
     if capture == "namespace" {
         return Role::Namespace;
@@ -176,6 +190,12 @@ pub(crate) fn role(capture: &str) -> Role {
         "relation.imports" => Role::Use(UseKind::Imports),
         "reference.call" => Role::Use(UseKind::Call),
         "reference.type" | "reference.class" => Role::Use(UseKind::Type),
+        "reference.declared_type" => Role::Use(UseKind::DeclaredType),
+        "reference.throws" => Role::Use(UseKind::Throws),
+        "access.read" => Role::Use(UseKind::Read),
+        "access.write" => Role::Use(UseKind::Write),
+        "access.read_write" => Role::Use(UseKind::ReadWrite),
+        "access.receiver" => Role::Use(UseKind::Receiver),
         _ => Role::Ignored,
     }
 }
@@ -222,7 +242,7 @@ pub(crate) fn read(
 
     let mut namespace = None;
     let mut defs: Vec<Def> = Vec::new();
-    let mut uses: Vec<(UseKind, String, Range)> = Vec::new();
+    let mut uses: Vec<(UseKind, String, Range, Option<Range>)> = Vec::new();
     let mut props: Vec<(String, String, Range)> = Vec::new();
     let mut cursor = QueryCursor::new();
     let mut matches = cursor.matches(query, root, src);
@@ -232,6 +252,11 @@ pub(crate) fn read(
             .iter()
             .find(|c| roles[c.index as usize] == Role::Name)
             .map(|c| c.node);
+        let typed = m
+            .captures()
+            .iter()
+            .find(|c| roles[c.index as usize] == Role::Typed)
+            .map(|c| range(c.node));
         for c in m.captures() {
             match &roles[c.index as usize] {
                 Role::Namespace => namespace = Some(text(name.unwrap_or(c.node), src)),
@@ -248,10 +273,10 @@ pub(crate) fn read(
                 }
                 Role::Use(kind) => {
                     let Some(n) = name else { continue };
-                    uses.push((*kind, text(n, src), range(n)));
+                    uses.push((*kind, text(n, src), range(n), typed));
                 }
                 Role::Prop(key) => props.push((key.clone(), text(c.node, src), range(c.node))),
-                Role::Name | Role::Ignored => {}
+                Role::Name | Role::Typed | Role::Ignored => {}
             }
         }
     }
@@ -308,9 +333,11 @@ pub(crate) fn read(
     };
     let uses = uses
         .into_iter()
-        .map(|(kind, name, site)| Use {
+        .map(|(kind, name, site, typed)| Use {
             kind,
-            owner: owner(site),
+            owner: typed
+                .and_then(|t| defs.iter().position(|d| d.name_range == t))
+                .or_else(|| owner(site)),
             name,
             site,
         })

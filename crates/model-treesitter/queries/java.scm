@@ -68,3 +68,75 @@
 
 (marker_annotation name: _ @prop.annotations)
 (annotation name: _ @prop.annotations)
+
+; Relations of FamixJava's typed entities, exceptions and accesses. `@typed`
+; names the entity the type belongs to (a parameter or local is not the
+; owner of its position); accesses resolve by name to a parameter, local or
+; field of an enclosing type, and are dropped when unknown.
+(method_declaration type: [
+  (type_identifier) @name
+  (scoped_type_identifier) @name
+  (generic_type [(type_identifier) (scoped_type_identifier)] @name)
+  (array_type element: (type_identifier) @name)
+] name: (identifier) @typed
+  (#not-eq? @name "var")) @reference.declared_type
+
+(formal_parameter type: [
+  (type_identifier) @name
+  (scoped_type_identifier) @name
+  (generic_type [(type_identifier) (scoped_type_identifier)] @name)
+  (array_type element: (type_identifier) @name)
+] name: (identifier) @typed
+  (#not-eq? @name "var")) @reference.declared_type
+
+(field_declaration type: [
+  (type_identifier) @name
+  (scoped_type_identifier) @name
+  (generic_type [(type_identifier) (scoped_type_identifier)] @name)
+  (array_type element: (type_identifier) @name)
+] declarator: (variable_declarator name: (identifier) @typed)
+  (#not-eq? @name "var")) @reference.declared_type
+
+(constant_declaration type: [
+  (type_identifier) @name
+  (scoped_type_identifier) @name
+  (generic_type [(type_identifier) (scoped_type_identifier)] @name)
+  (array_type element: (type_identifier) @name)
+] declarator: (variable_declarator name: (identifier) @typed)
+  (#not-eq? @name "var")) @reference.declared_type
+
+(local_variable_declaration type: [
+  (type_identifier) @name
+  (scoped_type_identifier) @name
+  (generic_type [(type_identifier) (scoped_type_identifier)] @name)
+  (array_type element: (type_identifier) @name)
+] declarator: (variable_declarator name: (identifier) @typed)
+  (#not-eq? @name "var")) @reference.declared_type
+
+(throws [
+  (type_identifier) @name
+  (scoped_type_identifier) @name
+]) @reference.throws
+
+(assignment_expression left: [(identifier) @name (field_access object: (this) field: (identifier) @name)] operator: "=") @access.write
+(assignment_expression left: [(identifier) @name (field_access object: (this) field: (identifier) @name)] operator: ["+=" "-=" "*=" "/=" "%=" "&=" "|=" "^=" "<<=" ">>=" ">>>="]) @access.read_write
+(update_expression [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read_write
+
+(argument_list [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(binary_expression left: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(binary_expression right: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(assignment_expression right: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(variable_declarator value: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(return_statement [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(parenthesized_expression [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(unary_expression operand: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(array_access array: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(array_access index: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(ternary_expression condition: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(ternary_expression consequence: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(ternary_expression alternative: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(cast_expression value: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+(enhanced_for_statement value: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.read
+
+(method_invocation object: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.receiver
+(field_access object: (identifier) @name) @access.receiver

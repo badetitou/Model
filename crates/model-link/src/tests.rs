@@ -1,4 +1,7 @@
-use model_core::{EntityKind as K, LanguageId, Model, ModelBuilder, Range, RelationKind as R};
+use model_core::{
+    EntityKind as K, LanguageId, Model, ModelBuilder, Provenance, Range, RelationKind as R,
+    SiteFlags,
+};
 use model_scip::{Definition, Reference, ScipDocument, ScipIndex, ScipRelationship, ScipSymbol};
 
 use crate::{LinkOptions, LinkStats, from_scip, link};
@@ -16,6 +19,8 @@ enum O {
     DefIn(&'static str, Range, Range),
     Ref(&'static str, Range),
     Import(&'static str, Range),
+    /// Reference with SCIP `WriteAccess` / `ReadAccess` roles.
+    Acc(&'static str, Range, bool, bool),
 }
 
 /// Index of `(path, occurrences)`; symbols are prefixed with [`pfx`] unless
@@ -60,8 +65,17 @@ impl Ix {
                         symbol: self.sym(s),
                         range,
                         import,
+                        write: false,
+                        read: false,
                     })
                 }
+                O::Acc(s, range, write, read) => d.references.push(Reference {
+                    symbol: self.sym(s),
+                    range,
+                    import: false,
+                    write,
+                    read,
+                }),
             }
         }
         self.0.documents.push(d);
@@ -95,6 +109,25 @@ impl Ix {
                 relationships,
             },
         );
+        self
+    }
+
+    /// `s` has type `t` (SCIP `is_type_definition`).
+    fn typed(mut self, s: &str, t: &str) -> Self {
+        let (id, ty) = (self.sym(s), self.sym(t));
+        let rel = ScipRelationship {
+            symbol: ty,
+            is_implementation: false,
+            is_reference: false,
+            is_type_definition: true,
+            is_definition: false,
+        };
+        self.0
+            .symbols
+            .entry(id)
+            .or_default()
+            .relationships
+            .push(rel);
         self
     }
 }
@@ -327,6 +360,7 @@ fn links_onto_syntactic_entities() {
             calls: 5,
             uses: 3,
             implements: 2,
+            overrides: 1,
             ..LinkStats::default()
         }
     );
@@ -542,4 +576,68 @@ fn language_override_and_normalisation() {
     let m = b.build();
     assert!(m.by_key("model ts . . src/`a.ts`/").is_some());
     assert_eq!(m.languages(), [LanguageId::new("ts")]);
+}
+
+#[test]
+fn accesses_declared_types_and_overrides_from_scip() {
+    let a = "scip-java maven app 1.0 app/A#";
+    let f = "scip-java maven app 1.0 app/A#f.";
+    let run = "scip-java maven app 1.0 app/A#run().";
+    let t = "scip-java maven app 1.0 app/T#";
+    let i = "scip-java maven app 1.0 app/I#";
+    let irun = "scip-java maven app 1.0 app/I#run().";
+    let ix = Ix::new()
+        .doc(
+            "A.java",
+            "Java",
+            vec![
+                O::DefIn(a, r(1, 6, 1, 7), r(1, 0, 9, 1)),
+                O::DefIn(f, r(2, 4, 2, 5), r(2, 2, 2, 6)),
+                O::DefIn(run, r(3, 2, 3, 5), r(3, 2, 8, 3)),
+                O::Acc(f, r(4, 4, 4, 5), true, false),
+                O::Acc(f, r(5, 4, 5, 5), false, true),
+                O::Acc(f, r(6, 4, 6, 5), true, true),
+                O::Ref(f, r(7, 4, 7, 5)),
+            ],
+        )
+        .doc(
+            "T.java",
+            "Java",
+            vec![
+                O::DefIn(t, r(1, 6, 1, 7), r(1, 0, 2, 1)),
+                O::DefIn(i, r(4, 10, 4, 11), r(4, 0, 6, 1)),
+                O::DefIn(irun, r(5, 2, 5, 5), r(5, 2, 5, 8)),
+            ],
+        )
+        .info(a, Some(K::Class), None, &[])
+        .info(f, Some(K::Field), None, &[])
+        .info(run, Some(K::Method), None, &[irun])
+        .info(t, Some(K::Class), None, &[])
+        .info(i, Some(K::Interface), None, &[])
+        .info(irun, Some(K::Method), None, &[])
+        .typed(f, t)
+        .0;
+    let (b, st) = from_scip(&ix, None);
+    assert_eq!(
+        (st.accesses, st.uses, st.declared_types, st.overrides),
+        (3, 1, 1, 1)
+    );
+    let m = b.build();
+    let acc = m
+        .relations()
+        .find(|r| r.kind() == &R::Accesses)
+        .expect("accesses");
+    assert_eq!(acc.provenance(), Provenance::Scip);
+    assert_eq!((acc.from().name(), acc.to().name()), ("run", "f"));
+    assert_eq!(
+        acc.site_flags(),
+        [
+            SiteFlags::WRITE,
+            SiteFlags::READ,
+            SiteFlags::READ | SiteFlags::WRITE
+        ]
+    );
+    assert_eq!(edges(&m, R::References).len(), 1, "no role: plain use");
+    assert_eq!(edges(&m, R::DeclaredType), [("f".into(), t.into(), 0)]);
+    assert_eq!(edges(&m, R::Overrides), [("run".into(), irun.into(), 0)]);
 }

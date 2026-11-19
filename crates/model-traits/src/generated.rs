@@ -52,7 +52,7 @@ pub static TRAITS: &[TraitDef] = &[
             RelationDef { name: "incomingInvocations", target: "TInvocation", multivalued: true, derived: true, opposite: Some("candidates") },
             RelationDef { name: "receivingInvocations", target: "TInvocation", multivalued: true, derived: true, opposite: Some("receiver") },
         ],
-        carries: &["calls"],
+        carries: &["calls", "overrides"],
         contains: &[],
     },
     TraitDef {
@@ -61,7 +61,7 @@ pub static TRAITS: &[TraitDef] = &[
         fm3: &["TWithAccesses"],
         props: &[],
         relations: &[],
-        carries: &["references"],
+        carries: &["references", "accesses"],
         contains: &[],
     },
     TraitDef {
@@ -84,10 +84,28 @@ pub static TRAITS: &[TraitDef] = &[
         carries: &[],
         contains: &[],
     },
+    TraitDef {
+        name: "Typed",
+        bit: 7,
+        fm3: &["TTypedEntity"],
+        props: &[],
+        relations: &[],
+        carries: &["declared_type"],
+        contains: &[],
+    },
+    TraitDef {
+        name: "Exceptions",
+        bit: 8,
+        fm3: &["TWithExceptions"],
+        props: &[],
+        relations: &[],
+        carries: &["throws"],
+        contains: &[],
+    },
 ];
 
 pub static CLASS_TRAITS: &[ClassTraits] = &[
-    ClassTraits { fm3_class: "Famix-Java-Entities.Method", traits: &["Named", "WithMembers", "Invocation", "Access", "Modifiers", "Annotations"] },
+    ClassTraits { fm3_class: "Famix-Java-Entities.Method", traits: &["Named", "WithMembers", "Invocation", "Access", "Modifiers", "Annotations", "Typed", "Exceptions"] },
     ClassTraits { fm3_class: "Famix-Java-Entities.ContainerEntity", traits: &["Named", "WithMembers", "Annotations"] },
     ClassTraits { fm3_class: "Famix-Java-Entities.Type", traits: &["Named", "WithMembers", "Annotations"] },
     ClassTraits { fm3_class: "Famix-Java-Entities.Class", traits: &["Named", "WithMembers", "WithInheritances", "Invocation", "Modifiers", "Annotations"] },

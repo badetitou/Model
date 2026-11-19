@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use model_core::{
     Descriptor, EntityId, EntityKind, KindId, LanguageId, ModelBuilder, Provenance, Range,
-    RelationKind, SymbolKey, TraitMask, Value,
+    RelationKind, SiteFlags, SymbolKey, TraitMask, Value,
 };
 
 use crate::ExtractStats;
@@ -42,6 +42,9 @@ pub(crate) fn apply(
     let mut types: HashMap<String, Vec<EntityId>> = HashMap::new();
     let mut callables: HashMap<String, Vec<EntityId>> = HashMap::new();
     let mut members: HashMap<(EntityId, String), EntityId> = HashMap::new();
+    // Parameters and locals by (member, name); fields by (type, name).
+    let mut vars: HashMap<(EntityId, String), EntityId> = HashMap::new();
+    let mut fields: HashMap<(EntityId, String), EntityId> = HashMap::new();
 
     for (fi, f) in files.iter().enumerate() {
         let g = f.grammar;
@@ -140,8 +143,16 @@ pub(crate) fn apply(
                 b.set_parent(id, Some(parent_id));
                 stats.definitions += 1;
                 if attached {
-                    // Parameters, locals, annotations, comments: not
-                    // resolution targets.
+                    // Annotations, comments...: not resolution targets;
+                    // parameters and locals are, for accesses only.
+                    if matches!(d.fine.map(|f| f.name), Some("parameter" | "local_variable")) {
+                        vars.entry((parent_id, d.name.clone())).or_insert(id);
+                    }
+                } else if matches!(
+                    d.kind,
+                    EntityKind::Field | EntityKind::Property | EntityKind::Constant
+                ) {
+                    fields.entry((parent_id, d.name.clone())).or_insert(id);
                 } else if d.kind.is_type() {
                     types.entry(d.name.clone()).or_default().push(id);
                 } else if d.kind.is_callable() {
@@ -204,7 +215,11 @@ pub(crate) fn apply(
         types,
         callables,
         members,
+        vars,
+        fields,
     };
+    // Resolved `extends` / `implements`, for `overrides`.
+    let mut supers: HashMap<EntityId, Vec<EntityId>> = HashMap::new();
     for p in pending {
         let ctx = &ctxs[p.file];
         let (kind, to) = match p.kind {
@@ -221,6 +236,34 @@ pub(crate) fn apply(
                 stats.imports += 1;
                 (RelationKind::Imports, to)
             }
+            UseKind::DeclaredType | UseKind::Throws => {
+                let to = index.ty(b, ctx, &p.name, stats);
+                let kind = if p.kind == UseKind::Throws {
+                    stats.throws += 1;
+                    RelationKind::Throws
+                } else {
+                    stats.declared_types += 1;
+                    RelationKind::DeclaredType
+                };
+                b.occurrence(&kind, p.from, to, Provenance::TreeSitter, p.site);
+                continue;
+            }
+            UseKind::Read | UseKind::Write | UseKind::ReadWrite | UseKind::Receiver => {
+                let Some(to) = index.variable(b, p.from, &p.name) else {
+                    stats.unresolved += 1;
+                    continue;
+                };
+                let flags = match p.kind {
+                    UseKind::Write => SiteFlags::WRITE,
+                    UseKind::ReadWrite => SiteFlags::READ | SiteFlags::WRITE,
+                    UseKind::Receiver => SiteFlags::READ | SiteFlags::RECEIVER,
+                    _ => SiteFlags::READ,
+                };
+                stats.accesses += 1;
+                let kind = RelationKind::Accesses;
+                b.occurrence_flagged(&kind, p.from, to, Provenance::TreeSitter, p.site, flags);
+                continue;
+            }
             k => {
                 let to = index.ty(b, ctx, &p.name, stats);
                 let kind = match k {
@@ -229,10 +272,49 @@ pub(crate) fn apply(
                     _ => RelationKind::References,
                 };
                 stats.references += 1;
+                if matches!(kind, RelationKind::Inherits | RelationKind::Implements) {
+                    supers.entry(p.from).or_default().push(to);
+                }
                 (kind, to)
             }
         };
         b.occurrence(&kind, p.from, to, Provenance::TreeSitter, p.site);
+    }
+    overrides(b, &index, &supers, stats);
+}
+
+/// A method overrides the same-named method of a supertype, by name only:
+/// overloads are not told apart (best effort).
+fn overrides(
+    b: &mut ModelBuilder,
+    index: &Index,
+    supers: &HashMap<EntityId, Vec<EntityId>>,
+    stats: &mut ExtractStats,
+) {
+    let mut found = Vec::new();
+    for ((owner, name), &m) in &index.members {
+        if b.kind(m) != EntityKind::Method {
+            continue;
+        }
+        let mut seen = vec![*owner];
+        let mut todo = supers.get(owner).cloned().unwrap_or_default();
+        while let Some(t) = todo.pop() {
+            if seen.contains(&t) {
+                continue;
+            }
+            seen.push(t);
+            if let Some(&sup) = index.members.get(&(t, name.clone()))
+                && b.kind(sup) == EntityKind::Method
+            {
+                found.push((m, sup));
+                continue;
+            }
+            todo.extend(supers.get(&t).into_iter().flatten().copied());
+        }
+    }
+    for (m, sup) in found {
+        stats.overrides += 1;
+        b.relate(&RelationKind::Overrides, m, sup, Provenance::TreeSitter);
     }
 }
 
@@ -241,9 +323,24 @@ struct Index {
     callables: HashMap<String, Vec<EntityId>>,
     /// (owner, name) -> first callable of that name declared in it.
     members: HashMap<(EntityId, String), EntityId>,
+    vars: HashMap<(EntityId, String), EntityId>,
+    fields: HashMap<(EntityId, String), EntityId>,
 }
 
 impl Index {
+    /// A parameter or local of `from`, else a field of its enclosing types.
+    fn variable(&self, b: &ModelBuilder, from: EntityId, name: &str) -> Option<EntityId> {
+        let mut cur = Some(from);
+        while let Some(id) = cur {
+            let key = (id, name.to_string());
+            if let Some(&v) = self.vars.get(&key).or_else(|| self.fields.get(&key)) {
+                return Some(v);
+            }
+            cur = b.parent(id);
+        }
+        None
+    }
+
     /// A callable named `name`: in the nearest enclosing type of `from`,
     /// else the only one in the project.
     fn callable(&self, b: &ModelBuilder, from: EntityId, name: &str) -> Option<EntityId> {

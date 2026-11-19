@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::{Error, Json, Object, Result, SimpleObject};
-use model_core::{EntityId, EntityRef, Model, Props, RelationId, RelationKind, RelationRef};
+use model_core::{
+    EntityId, EntityRef, Model, Props, RelationId, RelationKind, RelationRef, SiteFlags,
+};
 
 pub const DEFAULT_PAGE: usize = 50;
 pub const MAX_PAGE: usize = 1000;
@@ -66,6 +68,18 @@ impl From<model_core::Range> for Range {
             end_col: r.end_col,
         }
     }
+}
+
+/// An occurrence with its flags (a relation's `sites` without them).
+#[derive(SimpleObject, Clone)]
+pub struct Site {
+    pub range: Range,
+    /// `read` / `write` (accesses), `receiver`.
+    pub flags: Vec<String>,
+    pub read: bool,
+    pub write: bool,
+    /// The target is the receiver (`x` in `x.f()`).
+    pub receiver: bool,
 }
 
 #[derive(SimpleObject)]
@@ -617,6 +631,22 @@ impl Relation {
     async fn sites(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Range>> {
         page(
             self.r()?.sites().iter().map(|&s| Range::from(s)),
+            first,
+            after,
+        )
+    }
+
+    /// Occurrences with their read/write/receiver flags.
+    async fn flagged_sites(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Site>> {
+        let r = self.r()?;
+        page(
+            r.sites().iter().zip(r.site_flags()).map(|(&s, &f)| Site {
+                range: Range::from(s),
+                flags: f.names().map(str::to_string).collect(),
+                read: f.contains(SiteFlags::READ),
+                write: f.contains(SiteFlags::WRITE),
+                receiver: f.contains(SiteFlags::RECEIVER),
+            }),
             first,
             after,
         )

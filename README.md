@@ -56,7 +56,7 @@ Namespace ⊃ Class ⊃ Method
 - **Every occurrence is kept.** A relation is unique per
   `(from, kind, to, provenance)` and stores *all* its sites, so dependency
   weight, impact of a diff or a heat map needs no re-parse.
-- **Compact and fast.** ~42 bytes per site all included, 5M sites in ~200 MiB;
+- **Compact and fast.** ~43 bytes per site all included (range + 1-byte flags), 5M sites in ~200 MiB;
   reads borrow the model and never allocate.
 - **Stable identity.** Entities are keyed by SCIP symbols (or SCIP-like keys for
   languages without an indexer), so two builds are comparable.

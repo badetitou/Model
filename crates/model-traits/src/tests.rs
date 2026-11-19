@@ -40,7 +40,12 @@ fn trait_data_comes_from_fm3() {
             .iter()
             .any(|r| r.opposite == Some("parentType"))
     );
-    assert_eq!(trait_def("Invocation").unwrap().carries, ["calls"]);
+    assert_eq!(trait_def("Typed").unwrap().carries, ["declared_type"]);
+    assert_eq!(trait_def("Exceptions").unwrap().carries, ["throws"]);
+    assert_eq!(
+        trait_def("Invocation").unwrap().carries,
+        ["calls", "overrides"]
+    );
 }
 
 #[test]

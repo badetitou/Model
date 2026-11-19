@@ -80,10 +80,12 @@ Model
  │     file, range, name_range
  │     props     open map: "java.annotations", "visibility", "http.endpoints"...
  └── relations   one per distinct (from, kind, to, provenance)
-       kind        Calls | References | Inherits | Implements | Imports | Other(String)
+       kind        Calls | References | Inherits | Implements | Imports
+                   | DeclaredType | Accesses | Throws | Overrides | Other(String)
        from, to    EntityId
        provenance  TreeSitter | Scip | Frontend | Derived
-       sites       every occurrence range, in `from`'s file
+       sites       every occurrence range, in `from`'s file, each with a
+                   1-byte `SiteFlags` (read, write, receiver)
 ```
 
 Design choices:
@@ -104,6 +106,33 @@ Design choices:
   attributed to its innermost enclosing entity, so its file is the file of
   `from` and is not stored. Aggregation (dependency weight, matrix cells) is
   an analysis concern: `sites().len()` is the weight.
+
+### Relation kinds
+
+| Kind (JSON) | From → to | Sites | Carried by trait |
+|---|---|---|---|
+| `calls` | callable → callable | calls; flags unused | Invocation |
+| `references` | any → any | other uses of a symbol | Access |
+| `inherits`, `implements` | type → type | none | WithInheritances |
+| `imports` | any → any | import statements | — |
+| `declared_type` | typed entity (field, parameter, local, method return) → type | type position | Typed |
+| `accesses` | member → field / parameter / local | the identifier; flags `read`, `write`, `receiver` | Access |
+| `throws` | method → exception type | `throws` clause | Exceptions |
+| `overrides` | method → overridden or implemented method | none | Invocation |
+
+`SiteFlags` bits: `1` read, `2` write, `4` receiver (the target is the
+receiver, `x` in `x.f()`); `x += 1` is read|write. They are a property of
+the site: the same site asserted twice keeps the union of its flags.
+Provenance by source: SCIP gives `accesses` (read/write from the reference
+roles, only when the indexer sets one, else the use stays a `references`),
+`declared_type` (type-definition relationships) and `overrides`
+(implementation relationships between callables; `implements` is still
+emitted for them). SCIP has neither `throws` nor receivers, and the linker
+skips locals and parameters, so those come from tree-sitter, by name
+(`Provenance::TreeSitter`): the type of a field, parameter, local or return,
+the `throws` clause, bare or `this.x` accesses to a parameter, local or field
+of an enclosing type, and a method overriding a same-named method of a
+supertype (overloads not told apart). Generics and lambdas are out of scope.
 
 ### Traits (`model-traits`)
 
@@ -156,7 +185,7 @@ large Java codebase), so the frozen `Model` is laid out for them:
 | key lookup | ids sorted by key, binary search | 4 B / entity |
 | children | CSR by parent | 8 B / entity |
 | relations | deduplicated, sorted by `(from, kind, to, provenance)`; outgoing = one slice (CSR) | 12 B + 4 B incoming index + 4 B site offset |
-| sites | bare `Range`, grouped by relation (CSR), sorted, deduplicated | 16 B |
+| sites | `Range` + 1-byte `SiteFlags` column, grouped by relation (CSR), sorted, deduplicated (one site per relation and range, flags merged) | 17 B |
 
 Kinds are two-level: `EntityKind` (15) is the archetype analyses match on;
 the row stores a 1-byte `KindId` (fine kind: `record`, `annotation_type`,
@@ -172,7 +201,8 @@ borrow the model; nothing is allocated on read. `ModelBuilder` stays simple
 
 Measured with `cargo run --release -p model-core --example memory`
 (220k entities, 5M call sites, worst case: every site its own relation):
-**~200 MiB, 42 B/site all included**, build + freeze in ~1.4 s.
+**~203 MiB, 42.7 B/site all included**, build + freeze in ~1.6 s (the flags
+column added 1 B/site, +2.4% over the 198.6 MiB / 41.7 B/site without it).
 `Model::memory()` reports the figures for real models. JSON of the same
 model: 460 MiB, a binary format is on the roadmap (§10).
 
@@ -187,7 +217,9 @@ close), `u16` columns, memory-mapped binary format.
                  "language": "java", "file": "src/A.java",
                  "range": [3,2,9,3], "name_range": [3,14,3,17] }],
   "relations": [{ "kind": "calls", "from": 2, "to": 7,
-                  "provenance": "scip", "sites": [[5,4,5,10],[6,4,6,10]] }] }
+                  "provenance": "scip", "sites": [[5,4,5,10],[6,4,6,10]] },
+                { "kind": "accesses", "from": 2, "to": 4, "provenance": "scip",
+                  "sites": [[7,4,7,5]], "flags": [2] }] }
 ```
 
 Loading goes through the builder: unknown or duplicate ids are errors.
@@ -256,9 +288,13 @@ detect ──► for each detected language / project root:
      `external` entities with their ancestor chain (`java/util/List#` under
      `java/util/` under `java/`); references to project symbols without
      entity are dropped and counted.
+   - A reference with a SCIP `WriteAccess` / `ReadAccess` role to a field,
+     property, constant or variable becomes an `Accesses` site with the
+     matching `SiteFlags`; `is_type_definition` relationships (symbol typed by
+     a type) become `DeclaredType`.
    - `is_implementation` relationships become `Implements`, or `Inherits`
      when a type "implements" a class or struct (SCIP does not tell
-     `extends` apart).
+     `extends` apart); between two callables they also give `Overrides`.
    - Not done here: propagating calls to interface methods onto their
      implementations (Structure does it while linking); it is a `Derived`
      analysis.

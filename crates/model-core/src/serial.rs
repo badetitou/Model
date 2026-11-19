@@ -8,6 +8,10 @@
 //!                   "provenance": "scip", "sites": [[5,4,5,10]] }] }
 //! ```
 //!
+//! A relation whose sites carry flags adds `"flags": [1]`, one byte per site
+//! (bit 0 read, bit 1 write, bit 2 receiver; see [`SiteFlags`]); it is
+//! omitted when every flag is zero.
+//!
 //! Fine kinds: an entity whose kind refines its archetype adds
 //! `"fine_kind": "record"`, and a top-level `"metamodel"` lists the kinds
 //! beyond the 15 defaults (`{"name","archetype","traits","fm3"}`), in id order.
@@ -25,7 +29,7 @@ use crate::ModelBuilder;
 use crate::entity::{EntityId, EntityKind, LanguageId};
 use crate::metamodel::{KindId, KindInfo, TraitMask};
 use crate::model::{EntityRef, Model, RelationRef};
-use crate::relation::{Provenance, RelationKind};
+use crate::relation::{Provenance, RelationKind, SiteFlags};
 use crate::source::Range;
 use crate::value::Props;
 
@@ -49,6 +53,10 @@ fn is_false(b: &bool) -> bool {
 
 fn no_props(p: &&Props) -> bool {
     p.is_empty()
+}
+
+fn no_flags(f: &&[SiteFlags]) -> bool {
+    f.iter().all(|f| f.is_empty())
 }
 
 fn no_sites(s: &&[Range]) -> bool {
@@ -131,6 +139,12 @@ struct RelationOut<'a> {
     provenance: Provenance,
     #[serde(skip_serializing_if = "no_sites")]
     sites: &'a [Range],
+    #[serde(skip_serializing_if = "no_flags", serialize_with = "flag_bytes")]
+    flags: &'a [SiteFlags],
+}
+
+fn flag_bytes<S: Serializer>(f: &&[SiteFlags], s: S) -> Result<S::Ok, S::Error> {
+    s.collect_seq(f.iter().map(|f| f.0))
 }
 
 impl<'a> From<RelationRef<'a>> for RelationOut<'a> {
@@ -141,6 +155,7 @@ impl<'a> From<RelationRef<'a>> for RelationOut<'a> {
             to: r.to().id(),
             provenance: r.provenance(),
             sites: r.sites(),
+            flags: r.site_flags(),
         }
     }
 }
@@ -202,6 +217,8 @@ struct RelationIn {
     provenance: Provenance,
     #[serde(default)]
     sites: Vec<Range>,
+    #[serde(default)]
+    flags: Vec<u8>,
 }
 
 fn into_model(m: ModelIn) -> Result<Model, String> {
@@ -258,8 +275,12 @@ fn into_model(m: ModelIn) -> Result<Model, String> {
         if r.sites.is_empty() {
             b.relate(&r.kind, from, to, r.provenance);
         }
-        for &site in &r.sites {
-            b.occurrence(&r.kind, from, to, r.provenance, site);
+        if !r.flags.is_empty() && r.flags.len() != r.sites.len() {
+            return Err(format!("relation {i}: `flags` must match `sites`"));
+        }
+        for (k, &site) in r.sites.iter().enumerate() {
+            let flags = SiteFlags(r.flags.get(k).copied().unwrap_or(0));
+            b.occurrence_flagged(&r.kind, from, to, r.provenance, site, flags);
         }
     }
     Ok(b.build())
@@ -294,7 +315,10 @@ mod tests {
                 )
             })
             .collect();
-        v.extend(m.relations().map(|r| format!("{r:?} {:?}", r.sites())));
+        v.extend(
+            m.relations()
+                .map(|r| format!("{r:?} {:?} {:?}", r.sites(), r.site_flags())),
+        );
         v
     }
 
@@ -310,6 +334,37 @@ mod tests {
         let back: Model = serde_json::from_str(&json).unwrap();
         assert_eq!(snapshot(&back), snapshot(&m));
         assert_eq!(serde_json::to_string(&back).unwrap(), json);
+    }
+
+    #[test]
+    fn site_flags_round_trip_and_merge() {
+        use crate::{EntityKind, ModelBuilder, Provenance, Range, RelationKind, SiteFlags};
+        let mut b = ModelBuilder::new();
+        let m = b.entity("m", EntityKind::Method, "m");
+        let f = b.entity("f", EntityKind::Field, "f");
+        let r = |l| Range::new(l, 0, l, 1);
+        let k = RelationKind::Accesses;
+        b.occurrence_flagged(&k, m, f, Provenance::Scip, r(1), SiteFlags::READ);
+        b.occurrence_flagged(&k, m, f, Provenance::Scip, r(1), SiteFlags::WRITE);
+        b.occurrence_flagged(&k, m, f, Provenance::Scip, r(2), SiteFlags::WRITE);
+        b.occurrence(&k, m, f, Provenance::Scip, r(3));
+        let model = b.build();
+        let rel = model.relations().next().unwrap();
+        assert_eq!(rel.sites().len(), 3);
+        assert_eq!(
+            rel.site_flags(),
+            [
+                SiteFlags::READ | SiteFlags::WRITE,
+                SiteFlags::WRITE,
+                SiteFlags::NONE
+            ]
+        );
+        let json = serde_json::to_string(&model).unwrap();
+        assert!(json.contains(r#""flags":[3,2,0]"#), "{json}");
+        let back: Model = serde_json::from_str(&json).unwrap();
+        assert_eq!(snapshot(&back), snapshot(&model));
+        let bad = json.replace(r#""flags":[3,2,0]"#, r#""flags":[3]"#);
+        assert!(serde_json::from_str::<Model>(&bad).is_err());
     }
 
     #[test]

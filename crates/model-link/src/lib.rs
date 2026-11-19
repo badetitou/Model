@@ -18,7 +18,8 @@ use std::collections::{HashMap, HashSet};
 use rayon::prelude::*;
 
 use model_core::{
-    EntityId, EntityKind, LanguageId, ModelBuilder, Provenance, Range, RelationKind, SymbolKey,
+    EntityId, EntityKind, LanguageId, ModelBuilder, Provenance, Range, RelationKind, SiteFlags,
+    SymbolKey,
 };
 use model_scip::{Definition, ScipDocument, ScipIndex, SymbolId};
 
@@ -69,6 +70,12 @@ pub struct LinkStats {
     pub imports: usize,
     pub implements: usize,
     pub inherits: usize,
+    /// Read/write references to fields and variables (`accesses` sites).
+    pub accesses: usize,
+    /// `declared_type` relations (SCIP type definitions).
+    pub declared_types: usize,
+    /// `overrides` relations (method implements/overrides method).
+    pub overrides: usize,
 }
 
 /// Model built from a SCIP index alone ([`Unmapped::Create`]).
@@ -212,7 +219,7 @@ pub fn link(b: &mut ModelBuilder, index: &ScipIndex, opts: &LinkOptions) -> Link
 
     // 4. References, attributed to their innermost enclosing entity.
     let files = FileIndex::all(b);
-    type Found = (EntityId, SymbolId, Range, bool);
+    type Found = (EntityId, SymbolId, Range, bool, SiteFlags);
     let per_doc: Vec<(usize, usize, Vec<Found>)> = index
         .documents
         .par_iter()
@@ -228,7 +235,16 @@ pub fn link(b: &mut ModelBuilder, index: &ScipIndex, opts: &LinkOptions) -> Link
                 }
                 refs += 1;
                 match fi.innermost(r.range) {
-                    Some(src) => found.push((src, r.symbol, r.range, r.import)),
+                    Some(src) => {
+                        let mut flags = SiteFlags::NONE;
+                        if r.write {
+                            flags |= SiteFlags::WRITE;
+                        }
+                        if r.read {
+                            flags |= SiteFlags::READ;
+                        }
+                        found.push((src, r.symbol, r.range, r.import, flags));
+                    }
                     None => outside += 1,
                 }
             }
@@ -239,7 +255,7 @@ pub fn link(b: &mut ModelBuilder, index: &ScipIndex, opts: &LinkOptions) -> Link
     for (refs, outside, found) in per_doc {
         stats.references += refs;
         stats.unattributed += outside;
-        for (from, sym, site, import) in found {
+        for (from, sym, site, import, flags) in found {
             let to = match resolved.get(&sym) {
                 Some(&t) => t,
                 None if project.contains(&sym) => {
@@ -258,9 +274,21 @@ pub fn link(b: &mut ModelBuilder, index: &ScipIndex, opts: &LinkOptions) -> Link
                     }
                 },
             };
+            let target = b.kind(to.id);
+            let variable = matches!(
+                target,
+                EntityKind::Field
+                    | EntityKind::Property
+                    | EntityKind::Constant
+                    | EntityKind::Variable
+            );
             let kind = if import {
                 stats.imports += 1;
                 RelationKind::Imports
+            } else if to.exact && variable && !flags.is_empty() {
+                // SCIP read/write roles: the only references we can type.
+                stats.accesses += 1;
+                RelationKind::Accesses
             } else if to.exact && b.kind(to.id).is_callable() {
                 stats.calls += 1;
                 RelationKind::Calls
@@ -268,7 +296,7 @@ pub fn link(b: &mut ModelBuilder, index: &ScipIndex, opts: &LinkOptions) -> Link
                 stats.uses += 1;
                 RelationKind::References
             };
-            b.occurrence(&kind, from, to.id, Provenance::Scip, site);
+            b.occurrence_flagged(&kind, from, to.id, Provenance::Scip, site, flags);
         }
     }
 
@@ -285,7 +313,7 @@ pub fn link(b: &mut ModelBuilder, index: &ScipIndex, opts: &LinkOptions) -> Link
             continue;
         };
         for r in &index.symbols[&sym].relationships {
-            if !r.is_implementation {
+            if !r.is_implementation && !r.is_type_definition {
                 continue;
             }
             let to = match resolved.get(&r.symbol) {
@@ -302,6 +330,18 @@ pub fn link(b: &mut ModelBuilder, index: &ScipIndex, opts: &LinkOptions) -> Link
             };
             if to == from {
                 continue;
+            }
+            if r.is_type_definition {
+                // `val x: T`, a field or method typed by `T`.
+                if b.kind(to).is_type() && !b.kind(from).is_type() {
+                    stats.declared_types += 1;
+                    b.relate(&RelationKind::DeclaredType, from, to, Provenance::Scip);
+                }
+                continue;
+            }
+            if b.kind(from).is_callable() && b.kind(to).is_callable() {
+                stats.overrides += 1;
+                b.relate(&RelationKind::Overrides, from, to, Provenance::Scip);
             }
             let inherits = b.kind(from).is_type()
                 && matches!(b.kind(to), EntityKind::Class | EntityKind::Struct);
