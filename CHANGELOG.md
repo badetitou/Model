@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `model-fm3`: new crate reading a Moose FM3 metamodel exported as JSON
+  (`FMJSONPrinter`) into typed structs: `Metamodel` with packages, classes,
+  traits and properties (type, multivalued, container, derived, opposite),
+  superclass and trait usage, built-in types as `Ref::Builtin`. Nested
+  entities are accepted; dangling references and duplicate ids are errors.
+  Checked with a subset of the FamixJava metamodel export.
+
 ## 0.3.0 — 2026-11-18
 
 All ten crates are now published on crates.io; git tags remain available for

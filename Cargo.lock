@@ -896,6 +896,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "model-fm3"
+version = "0.3.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "model-graphql"
 version = "0.3.0"
 dependencies = [

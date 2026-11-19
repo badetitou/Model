@@ -52,6 +52,9 @@ Structure (`../Structure`), its first client.
   `router`: GraphiQL `/`, API `/graphql`), `main.rs` (bin: build or load
   JSON, serve; `--no-cache` on fixtures). `schema.graphql` is checked by a
   test: regenerate with `UPDATE_SCHEMA=1 cargo test -p model-graphql`.
+- `crates/model-fm3` — `Metamodel::from_json_str|from_path`: typed reader for
+  Moose FM3 metamodel JSON (packages, classes, traits, properties, `Ref`);
+  fixture `tests/fixtures/famixjava-subset.json` (real export, trimmed).
 - `crates/model-detect` — `detect(root)`: languages, file counts, project
   roots; `languages.rs` is the data table (`LanguageSpec`).
 
@@ -69,7 +72,7 @@ Structure (`../Structure`), its first client.
 
 ## Releasing
 
-All ten crates are publishable on crates.io. Keep the workspace version and
+All eleven crates are publishable on crates.io. Keep the workspace version and
 `CHANGELOG.md` in sync; internal path dependencies in `[workspace.dependencies]`
 must carry the same `version`. The facade is `model-factory` because `model` is
 taken on crates.io.
@@ -82,5 +85,5 @@ checks that the tag matches `Cargo.toml`, publishes every crate with
 a GitHub Release whose notes come from `scripts/release-notes.sh`.
 
 The repository needs a `CARGO_REGISTRY_TOKEN` secret with publish rights on all
-ten crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
+eleven crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
 crates.io versions are immutable.
