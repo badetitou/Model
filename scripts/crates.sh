@@ -2,6 +2,7 @@
 CRATES=(
   model-core
   model-fm3
+  model-traits
   model-detect
   model-scip
   model-analysis

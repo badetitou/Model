@@ -4,6 +4,13 @@
 
 ### Added
 
+- `model-traits`: new crate, traits as data (Named, WithMembers,
+  WithInheritances, Invocation, Access, Modifiers, Annotations: typed props,
+  relations, relation kinds carried, containment rules) generated from the
+  FamixJava FM3 export (`cargo run -p model-traits --example generate`),
+  plus a per-FM3-class trait table to fill kinds' `TraitMask`.
+- `model-core`: `Model::of_trait` and `EntityRef::has_trait` query a kind's
+  `TraitMask`.
 - `model-core`: fine-grained kinds. `KindId` (1 byte in the entity row) and a
   `Metamodel` table (kind -> archetype, `TraitMask`, optional FM3 class name)
   carried by the `Model`; `EntityKind` stays the archetype. Builder:

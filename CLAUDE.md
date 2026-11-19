@@ -55,6 +55,13 @@ Structure (`../Structure`), its first client.
 - `crates/model-fm3` — `Metamodel::from_json_str|from_path`: typed reader for
   Moose FM3 metamodel JSON (packages, classes, traits, properties, `Ref`);
   fixture `tests/fixtures/famixjava-subset.json` (real export, trimmed).
+- `crates/model-traits` — traits as data (`TraitDef`: name, bit, props,
+  relations, `carries`, containment), `generated.rs` produced from
+  `traits.json` + the FamixJava FM3 export by `examples/generate.rs`
+  (`cargo run -p model-traits --example generate`); `mask`, `trait_def`,
+  `mask_of_fm3_class` feed `Metamodel::define`, then `Model::of_trait` /
+  `EntityRef::has_trait` (core only sees opaque `TraitMask` bits). A test
+  fails when `generated.rs` is stale.
 - `crates/model-detect` — `detect(root)`: languages, file counts, project
   roots; `languages.rs` is the data table (`LanguageSpec`).
 

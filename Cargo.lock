@@ -965,6 +965,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "model-traits"
+version = "0.3.0"
+dependencies = [
+ "model-core",
+ "model-fm3",
+ "serde_json",
+]
+
+[[package]]
 name = "model-treesitter"
 version = "0.3.0"
 dependencies = [
