@@ -1,6 +1,6 @@
 //! Imports Moose/Famix JSON models into Model and compares them with a
 //! model built from the sources: the differential oracle against
-//! VerveineJ. Moose export is a separate concern (not here).
+//! VerveineJ. It also exports a model as Moose JSON ([`export_json`]).
 //!
 //! ```
 //! use model_core::ModelBuilder;
@@ -18,9 +18,11 @@
 //! ```
 
 mod diff;
+mod export;
 mod import;
 pub mod json;
 pub mod mapping;
 
 pub use diff::{DiffReport, DiffRow, diff};
+pub use export::{ExportOptions, ExportReport, export_json, export_path};
 pub use import::{ImportOptions, ImportReport, import_json, import_path};

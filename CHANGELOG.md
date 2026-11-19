@@ -4,6 +4,18 @@
 
 ### Added
 
+- `model-moose`: `export_json` / `export_path` write a `Model` as Moose JSON
+  (streaming, `FM3` then `id` first, references only): kinds to FamixJava
+  classes (`KindInfo::fm3`, else a kind-name table), containment through the
+  container property of the (child, parent) pair, relations as reified
+  associations anchored per site (`Invocation`, `Access` with `isWrite`,
+  `Reference`, `Inheritance`, `Implementation`, `Import`), `typing` /
+  `EntityTyping`, `declaredExceptions`, `IndexedFileAnchor` with character
+  offsets read from the sources, stub annotation types, `self` implicit
+  variables, `Parametric*` owners, dotted packages split into a chain.
+  Derived properties, metrics and associations Famix refuses (a reference
+  from a class...) are left out and counted in `ExportReport`. Loads in Moose
+  with `FamixJavaModel new importFromJSONStream:`. `examples/export.rs`.
 - Relations: `declared_type`, `accesses`, `throws`, `overrides`
   (`RelationKind`) and a 1-byte `SiteFlags` column on sites (`READ`, `WRITE`,
   `RECEIVER`; `ModelBuilder::occurrence_flagged`, `RelationRef::site_flags`,

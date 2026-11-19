@@ -960,6 +960,7 @@ dependencies = [
  "model-core",
  "model-fm3",
  "model-traits",
+ "model-treesitter",
  "serde_json",
 ]
 

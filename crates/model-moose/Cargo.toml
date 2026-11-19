@@ -1,6 +1,6 @@
 [package]
 name = "model-moose"
-description = "Imports Moose/Famix JSON models into Model, with a diff report against a Model built from sources"
+description = "Imports and exports Moose/Famix JSON models, with a diff report against a Model built from sources"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -18,3 +18,5 @@ model-fm3.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+model-treesitter.workspace = true
+model-fm3.workspace = true

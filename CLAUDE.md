@@ -68,7 +68,12 @@ Structure (`../Structure`), its first client.
   `moose.<prop>`) and `diff(left, right)` → `DiffReport` by FM3 class,
   archetype and relation. Depends on core, traits, fm3 only.
   `examples/import.rs`; `MOOSE_JSON=file cargo test -p model-moose` runs a
-  real export.
+  real export. Export: `export_json`/`export_path` (`export.rs`, streaming,
+  hand-written JSON; class/container/domain tables in `mapping`; anchors need
+  the source files, see the module doc); `tests/export.rs` validates every
+  property against the full FamixJava FM3 fixture and round-trips through the
+  importer. `examples/export.rs`. Acceptance in Moose: load with
+  `FamixJavaModel new importFromJSONStream:`.
 - `crates/model-detect` — `detect(root)`: languages, file counts, project
   roots; `languages.rs` is the data table (`LanguageSpec`).
 
