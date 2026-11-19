@@ -59,6 +59,15 @@ pub struct BuildOptions {
     pub fragment_cache_dir: Option<PathBuf>,
     /// Only these languages (`model-detect` ids); `None` = all detected.
     pub languages: Option<Vec<String>>,
+    /// Only these files or directories (paths relative to `root`, `/`
+    /// separated): tree-sitter parses nothing else and SCIP documents
+    /// elsewhere are dropped, so symbols defined outside become externals.
+    /// `None` = everything; `Some(vec![])` = nothing. The Pharo frontend
+    /// still reads the whole root.
+    pub scope: Option<Vec<String>>,
+    /// Resolve relations by name in tree-sitter for languages without an
+    /// index. Off, such languages give entities only.
+    pub syntactic_relations: bool,
 }
 
 impl Default for BuildOptions {
@@ -70,8 +79,24 @@ impl Default for BuildOptions {
             from_cache: false,
             fragment_cache_dir: None,
             languages: None,
+            scope: None,
+            syntactic_relations: true,
         }
     }
+}
+
+/// `path` is one of `scope`'s files or under one of its directories.
+pub fn in_scope(scope: Option<&[String]>, path: &str) -> bool {
+    scope.is_none_or(|s| {
+        s.iter().any(|e| {
+            let e = e.trim_end_matches('/');
+            e.is_empty()
+                || path == e
+                || path
+                    .strip_prefix(e)
+                    .is_some_and(|rest| rest.starts_with('/'))
+        })
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -287,6 +312,10 @@ pub fn build(
         }
         if let Some((mut idx, origin)) = got {
             idx.prefix_paths(&job.root.to_string_lossy().replace('\\', "/"));
+            if opts.scope.is_some() {
+                idx.documents
+                    .retain(|d| in_scope(opts.scope.as_deref(), &d.relative_path));
+            }
             indexes.push((job, idx, origin));
         }
     }
@@ -325,10 +354,11 @@ pub fn build(
             continue;
         }
         let eo = ExtractOptions {
-            relations: !with_index,
+            relations: !with_index && opts.syntactic_relations,
             languages: Some(langs.clone()),
         };
-        let (set, load, warning) = extract_fragments(root, &eo, fragment_cache.as_ref())?;
+        let (set, load, warning) =
+            extract_fragments_in(root, &eo, fragment_cache.as_ref(), opts.scope.as_deref())?;
         warnings.extend(warning);
         fragments.reused += load.reused;
         fragments.extracted += load.extracted;
@@ -415,8 +445,20 @@ pub fn extract_fragments(
     opts: &ExtractOptions,
     cache: Option<&FragmentCache>,
 ) -> anyhow::Result<(FragmentSet, LoadStats, Option<String>)> {
+    extract_fragments_in(root, opts, cache, None)
+}
+
+/// [`extract_fragments`] restricted to the files in `scope` (see
+/// [`in_scope`]); only those are hashed, loaded or parsed.
+pub fn extract_fragments_in(
+    root: &Path,
+    opts: &ExtractOptions,
+    cache: Option<&FragmentCache>,
+    scope: Option<&[String]>,
+) -> anyhow::Result<(FragmentSet, LoadStats, Option<String>)> {
     let extractor = Extractor::new(opts)?;
-    let files = model_treesitter::source_files(root, opts)?;
+    let mut files = model_treesitter::source_files(root, opts)?;
+    files.retain(|f| in_scope(scope, f));
     let mut warning = None;
     let store = cache.and_then(|cache| match model_index::blob_ids(root, &files) {
         Ok(ids) => Some(BlobStore {

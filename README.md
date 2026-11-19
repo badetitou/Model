@@ -265,6 +265,7 @@ go into `props`, and plugins can add relations under their own name.
 | [`model-lang-pharo`](https://github.com/badetitou/Model/tree/main/crates/model-lang-pharo) | direct Tonel frontend: classes, methods, references, resolved sends |
 | [`model-analysis`](https://github.com/badetitou/Model/tree/main/crates/model-analysis) | `Analysis` trait: metrics, degrees, cycles, unused, quotient, impact, derived relations |
 | [`model-factory`](https://github.com/badetitou/Model/tree/main/crates/model-factory) | facade: detect → index → extract → link; `model_factory::analysis` re-export |
+| [`model-session`](https://github.com/badetitou/Model/tree/main/crates/model-session) | demand-driven import: `require(scope, traits)` runs only the layers needed |
 | [`model-graphql`](https://github.com/badetitou/Model/tree/main/crates/model-graphql) | GraphQL server with GraphiQL; [schema](https://github.com/badetitou/Model/blob/main/crates/model-graphql/schema.graphql) |
 
 Grammar crates sit behind Cargo features (`java`, `typescript`, `python`;

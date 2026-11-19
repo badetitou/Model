@@ -13,11 +13,17 @@
 //! kind also has a single-item `…ByKey(key: String!)` field, the shape
 //! introspection-driven clients use as a concept's by-id lookup.
 //!
+//! `OnDemand` serves the same schema without building a model up front: each
+//! request's selection set is mapped to the traits it needs and a
+//! `model_session::Session` runs only the layers (and scope files) they
+//! require; a query on `methods { name }` starts no indexer.
+//!
 //! Introspection is enabled by default (GraphiQL needs it). Browser clients on
 //! another origin need CORS: `router_with_origins` adds it for the origins
 //! passed by `--allow-origin`; plain `router` keeps the default same-origin
 //! behaviour.
 
+mod ondemand;
 mod schema;
 
 use std::sync::Arc;
@@ -33,6 +39,7 @@ use axum::routing::get;
 use model_core::Model;
 use tower_http::cors::{Any, CorsLayer};
 
+pub use ondemand::{OnDemand, requirement_of};
 pub use schema::{
     Class, Constant, Constructor, DEFAULT_PAGE, Entity, EntityKind, Enum, Field, File, Function,
     Interface, MAX_PAGE, Method, Namespace, Property, Provenance, Query, Range, Relation, Stats,
@@ -72,8 +79,21 @@ pub fn router(schema: ModelSchema) -> Router {
 /// preflight, with any request header: this is meant for local development,
 /// not as a security boundary.
 pub fn router_with_origins(schema: ModelSchema, origins: &[String]) -> anyhow::Result<Router> {
+    with_origins(router(schema), origins)
+}
+
+/// [`OnDemand::router`] with CORS enabled for `origins`, as
+/// [`router_with_origins`].
+pub fn on_demand_router_with_origins(
+    on_demand: std::sync::Arc<OnDemand>,
+    origins: &[String],
+) -> anyhow::Result<Router> {
+    with_origins(on_demand.router(), origins)
+}
+
+fn with_origins(router: Router, origins: &[String]) -> anyhow::Result<Router> {
     if origins.is_empty() {
-        return Ok(router(schema));
+        return Ok(router);
     }
     let mut cors = CorsLayer::new()
         .allow_methods([HttpMethod::GET, HttpMethod::POST])
@@ -93,7 +113,7 @@ pub fn router_with_origins(schema: ModelSchema, origins: &[String]) -> anyhow::R
             .collect::<anyhow::Result<_>>()?;
         cors.allow_origin(allowed)
     };
-    Ok(router(schema).layer(cors))
+    Ok(router.layer(cors))
 }
 
 #[cfg(test)]

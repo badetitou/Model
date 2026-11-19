@@ -1,0 +1,22 @@
+[package]
+name = "model-session"
+description = "Demand-driven model import: require(scope, traits) runs only the layers (structure, resolution, derived) the traits need"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+readme = "../../README.md"
+keywords = ["code-analysis", "static-analysis", "tree-sitter", "scip", "code-model"]
+categories = ["development-tools"]
+
+[dependencies]
+model-core.workspace = true
+model-factory.workspace = true
+model-traits.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+protobuf.workspace = true
+scip.workspace = true

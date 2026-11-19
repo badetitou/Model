@@ -54,6 +54,9 @@ model-core         metamodel + builder + navigation API      (serde only)
   model-factory       `model_factory::build(root, &BuildOptions, progress)` ✅
     (facade)       detect → index → extract → link
         ^
+        ^
+  model-session    `require(scope, traits)`: only the layers needed ✅
+        ^
   model-cli        `model detect|build|query <path>`             ⏳
   model-graphql    GraphQL plugin (part 2)                      ✅
 ```
@@ -287,6 +290,71 @@ The "file level" column is the limit of SCIP alone: scip-java gives the
 extent of 97% of its definitions, the scip-typescript version used gives it
 for 9–12%, so most TypeScript references can only be attributed to their
 file. Tree-sitter extents (§5) fix that: they are what `Lift` links onto.
+
+### 4.1 Demand-driven import (`model-session`)
+
+`model_factory::build` computes everything. `model-session` computes what a
+request needs: `Session::require(&Scope, &Requirement)`.
+
+```
+traits ──► layers      Named, WithMembers, Modifiers, Annotations ► structure  (L0: tree-sitter, cached fragments, direct frontends)
+                       Invocation, Access, WithInheritances       ► resolution (L1: SCIP index; may run an indexer)
+                       named analyses (`interface-calls`)         ► derived    (L2: over the frozen model)
+scope  ──► files       All | Files | Package(dir) | GitDiff { base }
+```
+
+- Layers are data (`LAYERS`: name, `requires`, what they `provide`). A trait
+  goes to the resolution layer exactly when the trait data of `model-traits`
+  says it carries relations; the rest come from structure. Dependencies are
+  closed transitively (derived ⇒ resolution ⇒ structure).
+- The scope reaches the factory as `BuildOptions::scope`: tree-sitter parses
+  (or loads the cached fragment of) only those files, and SCIP documents
+  elsewhere are dropped, so symbols they define become externals. Pharo is
+  still read whole.
+- A session remembers what it computed per scope. Same or fewer traits: the
+  stored model comes back (`layers_run` empty). More traits: rebuilt with the
+  union, so nothing is lost. Only analyses missing: applied to the existing
+  model (`ModelBuilder::from_model` re-opens a frozen model, ids unchanged).
+- Every call returns a `Report`: layers run and held, files, fragment reuse,
+  indexing events, indexes linked, indexers actually started.
+- GraphQL (`model-graphql --on-demand [--package <dir> | --diff <base>]`,
+  `OnDemand`): the selection set of each query is walked (fragments
+  followed, a literal `kind: "calls"` narrows the relation traits to those
+  carrying `calls`) and mapped to a `Requirement`; fields not in the table
+  are assumed to need every trait. `{ methods { nodes { name } } }` needs
+  structure only: no index is read, no indexer started (end-to-end test in
+  `crates/model-graphql/tests/ondemand.rs`).
+
+Measured with `cargo run --release -p model-session --example measure --
+<root> --package <dir>`, median of 7, existing `index.scip` only (never an
+indexer), no cache, fresh session per row. `factory::build` is the same run's
+reference; the older `docs/baseline.md` numbers predate the Java entities of
+#7 (jpetstore had 978 entities, now 2651) and a faster machine state, so they
+are not comparable with these.
+
+| | jpetstore-6 (Java, 46 files) | angular-realworld (TS, 50 files) |
+|---|---|---|
+| `factory::build` (all) | 30 ms | 62 ms |
+| structure, all files | 20.5 ms (-32 %) | 55.4 ms (-11 %) |
+| structure + resolution, all files | 30.0 ms (= build) | 62.4 ms (= build) |
+| structure, one package (3 / 14 files) | 15.4 ms (-49 %) | 53.6 ms (-14 %) |
+| structure + resolution, same package | 21.4 ms (-29 %) | 59.4 ms (-5 %) |
+
+What this does and does not show:
+
+- Skipping the resolution layer saves the SCIP load and link (a third of the
+  Java build) and, above all, **starts no indexer** — the cost that matters
+  when the index is absent or stale: an indexer run is seconds to minutes,
+  measured here only as "0 indexing events".
+- Skipping files saves little on these fixtures, because the time is not in
+  parsing: compiling the grammar queries costs about 28 ms per request
+  (measured for the three grammars together; a build compiles only the
+  detected ones) and detection 3–4 ms, whatever the scope. Cached fragments
+  do not change that (§5.1: a warm cache did not speed up a full build
+  either). Compiling the queries once per process, which a long-lived
+  session could do, is the next lever; it is not done here.
+- A growing session pays again: asking for relations after structure rebuilds
+  (the structure is composed again, not kept in memory).
 
 ## 5. Generic tree-sitter extraction
 
@@ -542,6 +610,8 @@ On vscode (450k entities, 2.1M relations, 4.2M sites, served from 197 MiB),
 queries answer in 1–8 ms: a `nameContains` search over every entity, all
 `calls` relations counted, or a class with its 157 methods and their caller
 counts (4 ms).
+
+`--on-demand` serves the same schema without a model built up front (§4.1).
 
 Next: expose registered analyses as `analysis(name, args)` fields now that
 `model-analysis` exists, plus subscriptions for incremental rebuilds.

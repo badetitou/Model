@@ -48,10 +48,15 @@ Structure (`../Structure`), its first client.
   for indexed languages) → link (`Lift`, or `Create` without grammar).
   `examples/build.rs`: defaults to `--reindex never`; never run indexers or
   builds on fixtures (the user does).
+- `crates/model-session` — `Session::require(&Scope, &Requirement)`: traits →
+  layers (`layers.rs`: structure / resolution / derived, declarative, a trait
+  needs resolution iff it carries relations), scope → files
+  (`All|Files|Package|GitDiff`), per-scope memo, `Report` (layers run,
+  indexing events). Uses `BuildOptions::scope`. `examples/measure.rs`.
 - `crates/model-graphql` — `schema.rs` (async-graphql objects holding
   `Arc<Model>` + id; forward connections via `page`), `lib.rs` (`schema`,
   `router`: GraphiQL `/`, API `/graphql`), `main.rs` (bin: build or load
-  JSON, serve; `--no-cache` on fixtures). `schema.graphql` is checked by a
+  JSON, serve; `--no-cache` on fixtures). `ondemand.rs` (`OnDemand`, `requirement_of`: selection set → traits → session; `--on-demand`). `schema.graphql` is checked by a
   test: regenerate with `UPDATE_SCHEMA=1 cargo test -p model-graphql`.
 - `crates/model-fm3` — `Metamodel::from_json_str|from_path`: typed reader for
   Moose FM3 metamodel JSON (packages, classes, traits, properties, `Ref`);

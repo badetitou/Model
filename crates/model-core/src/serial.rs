@@ -313,6 +313,25 @@ mod tests {
     }
 
     #[test]
+    fn from_model_keeps_ids_and_accepts_new_facts() {
+        use crate::{ModelBuilder, Provenance, RelationKind};
+        let m = sample();
+        assert_eq!(
+            snapshot(&ModelBuilder::from_model(&m).build()),
+            snapshot(&m)
+        );
+        let mut b = ModelBuilder::from_model(&m);
+        let (x, y) = (
+            m.entities().next().unwrap().id(),
+            m.entities().last().unwrap().id(),
+        );
+        b.relate(&RelationKind::Calls, x, y, Provenance::Derived);
+        let more = b.build();
+        assert_eq!(more.entity_count(), m.entity_count());
+        assert_eq!(more.relation_count(), m.relation_count() + 1);
+    }
+
+    #[test]
     fn fine_kinds_round_trip() {
         use crate::{EntityKind, ModelBuilder, TraitMask};
         let mut b = ModelBuilder::new();

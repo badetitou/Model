@@ -11,5 +11,6 @@ CRATES=(
   model-treesitter
   model-index
   model-factory
+  model-session
   model-graphql
 )

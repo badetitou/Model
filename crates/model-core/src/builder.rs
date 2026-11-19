@@ -38,6 +38,44 @@ impl ModelBuilder {
         Self::default()
     }
 
+    /// A builder holding everything `model` holds, entity ids unchanged:
+    /// derived facts (analyses) can be added to a frozen model and the
+    /// result frozen again.
+    pub fn from_model(model: &Model) -> Self {
+        let mut b = ModelBuilder::new();
+        for (_, k) in model.metamodel().iter().skip(EntityKind::ALL.len()) {
+            b.define_kind(&k.name, k.archetype, k.traits, k.fm3.as_deref());
+        }
+        for e in model.entities() {
+            // Kinds are defined in the same order, so ids carry over.
+            let id = b.entity_of_kind(e.key(), e.kind_id(), e.name());
+            if let Some(l) = e.language() {
+                b.set_language(id, l);
+            }
+            b.set_external(id, e.external());
+            if let (Some(f), Some(r)) = (e.file(), e.range()) {
+                b.set_source(id, f, r, e.name_range());
+            }
+            if !e.props().is_empty() {
+                *b.props_mut(id) = e.props().clone();
+            }
+        }
+        for e in model.entities() {
+            if let Some(p) = e.parent() {
+                b.set_parent(e.id(), Some(p.id()));
+            }
+        }
+        for r in model.relations() {
+            if r.sites().is_empty() {
+                b.relate(r.kind(), r.from().id(), r.to().id(), r.provenance());
+            }
+            for &site in r.sites() {
+                b.occurrence(r.kind(), r.from().id(), r.to().id(), r.provenance(), site);
+            }
+        }
+        b
+    }
+
     /// Entity with `key`, created with `kind` and `name` if absent. An
     /// existing entity keeps its kind and name.
     pub fn entity(&mut self, key: &str, kind: EntityKind, name: &str) -> EntityId {

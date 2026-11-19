@@ -914,7 +914,11 @@ dependencies = [
  "model-core",
  "model-factory",
  "model-lang-pharo",
+ "model-session",
+ "model-traits",
  "model-treesitter",
+ "protobuf",
+ "scip",
  "serde_json",
  "tokio",
  "tower-http",
@@ -961,6 +965,18 @@ dependencies = [
  "model-core",
  "protobuf",
  "rayon",
+ "scip",
+]
+
+[[package]]
+name = "model-session"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "model-core",
+ "model-factory",
+ "model-traits",
+ "protobuf",
  "scip",
 ]
 

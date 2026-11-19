@@ -4,6 +4,17 @@
 
 ### Added
 
+- `model-session`: new crate, demand-driven import. `Session::require(scope,
+  requirement)` runs only the layers the traits need (structure, resolution,
+  derived; declared in `LAYERS`, a trait needs resolution when it carries
+  relations) on the scope's files (`Scope::{All, Files, Package, GitDiff}`),
+  remembers per scope what it computed, and reports it (`Report`).
+- `model-factory`: `BuildOptions::scope` and `syntactic_relations`;
+  `in_scope`, `extract_fragments_in`.
+- `model-core`: `ModelBuilder::from_model` re-opens a frozen model.
+- `model-graphql`: `OnDemand` and `requirement_of` (selection set to traits),
+  `--on-demand [--package <dir> | --diff <base>]`: a query on
+  `methods { name }` starts no indexer.
 - `model-traits`: new crate, traits as data (Named, WithMembers,
   WithInheritances, Invocation, Access, Modifiers, Annotations: typed props,
   relations, relation kinds carried, containment rules) generated from the
