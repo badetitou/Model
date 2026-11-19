@@ -295,6 +295,9 @@ Implemented in `model-treesitter`; captures, rules and measurements are in
   `@reference.type` and `@prop.<key>`; plain `tags.scm` files work as is
   (Python uses its grammar's, unchanged).
 - **Containment is inferred from extent nesting**, so queries stay flat.
+- Entities below members (parameters, locals, type parameters, annotation
+  instances, comments) are `@definition.parameter|local_variable|type_parameter|annotation|comment`,
+  fine kinds of archetype `Variable`; keying is in the README.
 - Keys are SCIP-like, with the indexer's constructor names and overload
   numbering, so that keys stay comparable with SCIP's.
 - Relations are resolved by name, best effort (`TreeSitter` provenance).

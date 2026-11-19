@@ -19,13 +19,34 @@ baseline. Model adds a few captures.
 
 | Capture | Meaning |
 |---|---|
-| `@definition.<kind>` + `@name` | an entity; `<kind>`: `class`, `interface`, `trait`/`mixin`, `enum`, `struct`/`union`, `type`/`type_alias`, `method`, `constructor`, `function`/`macro`, `field`, `property`, `constant`, `variable`, `namespace`/`module`; fine kinds refining an archetype: `record` (class), `annotation_type` (interface), `enum_constant` (constant) |
+| `@definition.<kind>` + `@name` | an entity; `<kind>`: `class`, `interface`, `trait`/`mixin`, `enum`, `struct`/`union`, `type`/`type_alias`, `method`, `constructor`, `function`/`macro`, `field`, `property`, `constant`, `variable`, `namespace`/`module`; fine kinds refining an archetype: `record` (class), `annotation_type` (interface), `enum_constant` (constant), and the attached kinds below |
 | `@namespace` + `@name` | the file's declared namespace (`package a.b;`) |
 | `@relation.inherits` / `@relation.implements` + `@name` | supertype of the enclosing definition (tags: `@reference.implementation`) |
 | `@relation.imports` + `@name` | imported qualified name, from the file |
 | `@reference.call` + `@name` | call by name |
 | `@reference.type` + `@name` | use of a type by name, e.g. `new X()` (tags: `@reference.class`) |
 | `@prop.<key>` | the captured text is added to the `<key>` list prop of the innermost enclosing definition(s) |
+
+Attached kinds, all of archetype `Variable` and keyed under the innermost
+definition containing them (a top-level one under its file):
+
+| Capture | Fine kind | Key descriptor | Java node |
+|---|---|---|---|
+| `@definition.parameter` + `@name` | `parameter` | `owner().(x)` | formal, spread, catch and lambda parameters |
+| `@definition.local_variable` + `@name` | `local_variable` | `owner().x.` | locals, `for` variables, try resources |
+| `@definition.type_parameter` + `@name` | `type_parameter` | `Owner#[T]` | `<T extends X>` on types and methods |
+| `@definition.annotation` + `@name` | `annotation` | `Owner#Entity:` | each `@Annotation` instance |
+| `@definition.comment` + `@name` | `comment` | `Owner#L12C4:` | line and block comments; name = first line (80 chars max), text = source range |
+
+Keys: scip-java names parameters and type parameters structurally
+(`m().(x)`, `C#[T]`), so those keys match. It names locals `local N`
+(file-unique), which cannot be a builder key across files, so locals use
+`m().x.` and Model-only `Meta` descriptors name annotations and comments.
+Same-named siblings are numbered in declaration order (`a.`, `a+1.`).
+These entities are leaves of the model: relations and `@prop.*` of nodes
+inside them belong to the enclosing member, they are not resolution
+targets, and a local never parents what its initializer holds (lambda
+locals belong to the method).
 
 Other captures (`@doc`, `@_x`...) are ignored; text predicates (`#eq?`,
 `#match?`...) apply.

@@ -10,7 +10,7 @@ use crate::grammars::Grammar;
 pub(crate) struct Def {
     pub kind: EntityKind,
     /// Fine kind refining `kind` (`record`...); `None` = the archetype's own.
-    pub fine: Option<&'static str>,
+    pub fine: Option<&'static Fine>,
     pub name: String,
     pub range: Range,
     pub name_range: Range,
@@ -57,6 +57,72 @@ pub(crate) struct FileFacts {
     pub has_errors: bool,
 }
 
+/// How a descriptor is written for a fine kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Desc {
+    /// The archetype's own descriptor (`for_kind`).
+    Archetype,
+    /// `(name)`
+    Parameter,
+    /// `[name]`
+    TypeParameter,
+    /// `name:`; repeated names are numbered (`Entity:`, `Entity+1:`).
+    Meta,
+    /// `L<line>C<col>:`, from the definition's position; for entities that
+    /// have no name of their own (comments).
+    Site,
+    /// `name.`; repeated names are numbered (`x.`, `x+1.`).
+    Term,
+}
+
+/// A fine kind a capture can name: `@definition.<name>`.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Fine {
+    pub name: &'static str,
+    pub archetype: EntityKind,
+    pub desc: Desc,
+    /// Never the parent of another definition (a local's initializer may
+    /// hold lambdas whose locals belong to the method).
+    pub leaf: bool,
+}
+
+const fn fine(name: &'static str, archetype: EntityKind, desc: Desc, leaf: bool) -> Fine {
+    Fine {
+        name,
+        archetype,
+        desc,
+        leaf,
+    }
+}
+
+/// Fine kinds by capture suffix. Entities that are not members of a type
+/// (parameters, locals, comments...) use the `Variable` archetype.
+static FINE: [Fine; 8] = [
+    fine("record", EntityKind::Class, Desc::Archetype, false),
+    fine(
+        "annotation_type",
+        EntityKind::Interface,
+        Desc::Archetype,
+        false,
+    ),
+    fine(
+        "enum_constant",
+        EntityKind::Constant,
+        Desc::Archetype,
+        false,
+    ),
+    fine("parameter", EntityKind::Variable, Desc::Parameter, false),
+    fine("local_variable", EntityKind::Variable, Desc::Term, true),
+    fine(
+        "type_parameter",
+        EntityKind::Variable,
+        Desc::TypeParameter,
+        false,
+    ),
+    fine("annotation", EntityKind::Variable, Desc::Meta, false),
+    fine("comment", EntityKind::Variable, Desc::Site, true),
+];
+
 /// Role of a capture name. Accepts the tree-sitter tags convention
 /// (`definition.*`, `reference.call|class|implementation`, `name`) plus
 /// Model's own (`namespace`, `relation.*`, `reference.type`, `prop.*`).
@@ -64,7 +130,7 @@ pub(crate) struct FileFacts {
 pub(crate) enum Role {
     Name,
     Namespace,
-    Def(EntityKind, Option<&'static str>),
+    Def(EntityKind, Option<&'static Fine>),
     Use(UseKind),
     Prop(String),
     Ignored,
@@ -82,10 +148,10 @@ pub(crate) fn role(capture: &str) -> Role {
         return Role::Prop(key.to_string());
     }
     if let Some(kind) = capture.strip_prefix("definition.") {
+        if let Some(fine) = FINE.iter().find(|f| f.name == kind) {
+            return Role::Def(fine.archetype, Some(fine));
+        }
         let k = match kind {
-            "record" => return Role::Def(K::Class, Some("record")),
-            "annotation_type" => return Role::Def(K::Interface, Some("annotation_type")),
-            "enum_constant" => return Role::Def(K::Constant, Some("enum_constant")),
             "class" => K::Class,
             "interface" => K::Interface,
             "trait" | "mixin" => K::Trait,
@@ -121,6 +187,16 @@ pub(crate) fn range(n: Node) -> Range {
 
 fn text(n: Node, src: &[u8]) -> String {
     String::from_utf8_lossy(&src[n.byte_range()]).into_owned()
+}
+
+/// Longest name kept; a comment's name is its first line, cut here.
+const MAX_NAME: usize = 80;
+
+/// Text of a definition's name node: first line, at most `MAX_NAME` chars.
+fn label(n: Node, src: &[u8]) -> String {
+    let t = text(n, src);
+    let line = t.lines().next().unwrap_or("").trim();
+    line.chars().take(MAX_NAME).collect()
 }
 
 fn strictly_contains(outer: &Range, inner: &Range) -> bool {
@@ -164,7 +240,7 @@ pub(crate) fn read(
                     defs.push(Def {
                         kind: *kind,
                         fine: *fine,
-                        name: text(n, src),
+                        name: label(n, src),
                         range: range(c.node),
                         name_range: range(n),
                         parent: None,
@@ -202,7 +278,9 @@ pub(crate) fn read(
     let mut stack: Vec<usize> = Vec::new();
     for i in 0..defs.len() {
         while let Some(&top) = stack.last() {
-            if strictly_contains(&defs[top].range, &defs[i].range) {
+            if strictly_contains(&defs[top].range, &defs[i].range)
+                && !defs[top].fine.is_some_and(|f| f.leaf)
+            {
                 break;
             }
             stack.pop();
@@ -210,6 +288,7 @@ pub(crate) fn read(
         defs[i].parent = stack.last().copied();
         // A function directly in a type is a method (Python's tags.scm).
         if defs[i].kind == EntityKind::Function
+            && defs[i].fine.is_none()
             && defs[i].parent.is_some_and(|p| defs[p].kind.is_type())
         {
             defs[i].kind = EntityKind::Method;
@@ -220,7 +299,12 @@ pub(crate) fn read(
     let owner = |site: Range| -> Option<usize> {
         let p = (site.start_line, site.start_col);
         let end = defs.partition_point(|d| (d.range.start_line, d.range.start_col) <= p);
-        (0..end).rev().find(|&i| defs[i].range.contains(p.0, p.1))
+        // Uses and props belong to a member, not to the parameters, locals,
+        // annotations or comments inside it.
+        (0..end).rev().find(|&i| {
+            defs[i].range.contains(p.0, p.1)
+                && !defs[i].fine.is_some_and(|f| f.desc != Desc::Archetype)
+        })
     };
     let uses = uses
         .into_iter()
