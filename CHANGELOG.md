@@ -4,6 +4,11 @@
 
 ### Added
 
+- `model-moose`: new crate, imports Moose/Famix JSON into a `ModelBuilder`
+  (tolerant streaming reader, FM3 classes to fine kinds, associations to
+  relations with sites from their anchors, `moose.id` kept) with an
+  `ImportReport` of unmapped classes and dangling references, and
+  `diff(left, right)` by FM3 class, archetype and relation.
 - `model-traits`: new crate, traits as data (Named, WithMembers,
   WithInheritances, Invocation, Access, Modifiers, Annotations: typed props,
   relations, relation kinds carried, containment rules) generated from the

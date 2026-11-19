@@ -4,6 +4,7 @@ members = [
     "crates/model-core",
     "crates/model-fm3",
     "crates/model-traits",
+    "crates/model-moose",
     "crates/model-detect",
     "crates/model-scip",
     "crates/model-link",
@@ -27,6 +28,7 @@ publish = true
 model-core = { path = "crates/model-core", version = "0.3.0" }
 model-fm3 = { path = "crates/model-fm3", version = "0.3.0" }
 model-traits = { path = "crates/model-traits", version = "0.3.0" }
+model-moose = { path = "crates/model-moose", version = "0.3.0" }
 model-scip = { path = "crates/model-scip", version = "0.3.0" }
 model-detect = { path = "crates/model-detect", version = "0.3.0" }
 model-link = { path = "crates/model-link", version = "0.3.0" }
