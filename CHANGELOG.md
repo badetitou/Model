@@ -22,6 +22,18 @@
 - `model-graphql`: `OnDemand` and `requirement_of` (selection set to traits),
   `--on-demand [--package <dir> | --diff <base>]`: a query on
   `methods { name }` starts no indexer.
+- `model-moose`: `export_json` / `export_path` write a `Model` as Moose JSON
+  (streaming, `FM3` then `id` first, references only): kinds to FamixJava
+  classes (`KindInfo::fm3`, else a kind-name table), containment through the
+  container property of the (child, parent) pair, relations as reified
+  associations anchored per site (`Invocation`, `Access` with `isWrite`,
+  `Reference`, `Inheritance`, `Implementation`, `Import`), `typing` /
+  `EntityTyping`, `declaredExceptions`, `IndexedFileAnchor` with character
+  offsets read from the sources, stub annotation types, `self` implicit
+  variables, `Parametric*` owners, dotted packages split into a chain.
+  Derived properties, metrics and associations Famix refuses (a reference
+  from a class...) are left out and counted in `ExportReport`. Loads in Moose
+  with `FamixJavaModel new importFromJSONStream:`. `examples/export.rs`.
 - Relations: `declared_type`, `accesses`, `throws`, `overrides`
   (`RelationKind`) and a 1-byte `SiteFlags` column on sites (`READ`, `WRITE`,
   `RECEIVER`; `ModelBuilder::occurrence_flagged`, `RelationRef::site_flags`,
@@ -32,6 +44,12 @@
   `@reference.declared_type|throws`, `@access.*` captures). Cost: +1 B/site
   (42.7 B/site, 203 MiB on 5M sites). `model-traits`: `Typed` and `Exceptions`
   traits, `overrides` / `accesses` carried by Invocation / Access.
+
+- `model-moose`: new crate, imports Moose/Famix JSON into a `ModelBuilder`
+  (tolerant streaming reader, FM3 classes to fine kinds, associations to
+  relations with sites from their anchors, `moose.id` kept) with an
+  `ImportReport` of unmapped classes and dangling references, and
+  `diff(left, right)` by FM3 class, archetype and relation.
 - `model-traits`: new crate, traits as data (Named, WithMembers,
   WithInheritances, Invocation, Access, Modifiers, Annotations: typed props,
   relations, relation kinds carried, containment rules) generated from the
