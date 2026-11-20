@@ -143,6 +143,51 @@ pub fn snake_case(name: &str) -> String {
     out
 }
 
+/// GraphQL concept and root field names of an FM3 class, derived from its
+/// name alone: `Famix-Java-Entities.Record` → (`JavaRecord`, `javaRecords`).
+/// The second segment of the package name (`Java`) prefixes the class name, so
+/// languages never clash with each other or with the archetype types; a
+/// package without that shape uses the bare class name, prefixed `Famix`
+/// when it would shadow an archetype. `None` when no valid name results.
+pub fn concept_names(fm3_class: &str, simple: &str) -> Option<(String, String)> {
+    let package = fm3_class.rsplit_once('.').map_or("", |(p, _)| p);
+    let mut segments = package.split('-');
+    let lang = match (segments.next(), segments.next(), segments.next()) {
+        (Some(_), Some(l), Some(_)) => l,
+        _ => "",
+    };
+    let clean = |s: &str| -> String { s.chars().filter(char::is_ascii_alphanumeric).collect() };
+    let mut ty = format!("{}{}", clean(lang), clean(simple));
+    if ty.is_empty() || ty.starts_with(|c: char| !c.is_ascii_uppercase()) {
+        return None;
+    }
+    if lang.is_empty()
+        && model_core::EntityKind::ALL
+            .iter()
+            .any(|a| a.as_str().replace('_', "").eq_ignore_ascii_case(&ty))
+    {
+        ty = format!("Famix{ty}");
+    }
+    let mut root = ty.clone();
+    root[..1].make_ascii_lowercase();
+    Some((ty, plural(&root)))
+}
+
+fn plural(word: &str) -> String {
+    let consonant_y = word.strip_suffix('y').filter(|stem| {
+        stem.chars()
+            .last()
+            .is_some_and(|c| !"aeiou".contains(c.to_ascii_lowercase()))
+    });
+    if let Some(stem) = consonant_y {
+        format!("{stem}ies")
+    } else if word.ends_with(['s', 'x', 'z']) || word.ends_with("ch") || word.ends_with("sh") {
+        format!("{word}es")
+    } else {
+        format!("{word}s")
+    }
+}
+
 pub fn entity_archetype(simple: &str) -> Option<EntityKind> {
     ENTITIES.iter().find(|(n, _)| *n == simple).map(|(_, a)| *a)
 }
@@ -426,4 +471,40 @@ pub const IMPORT_CLASSES: &[&str] = &[
 
 pub fn is_method(class: &str) -> bool {
     METHODS.contains(&class)
+}
+
+#[cfg(test)]
+mod concept_tests {
+    use super::concept_names;
+
+    #[test]
+    fn names_come_from_the_fm3_class() {
+        let n = |c: &str, s: &str| concept_names(c, s);
+        assert_eq!(
+            n("Famix-Java-Entities.Record", "Record"),
+            Some(("JavaRecord".into(), "javaRecords".into()))
+        );
+        assert_eq!(
+            n("Famix-Java-Entities.Class", "Class"),
+            Some(("JavaClass".into(), "javaClasses".into()))
+        );
+        assert_eq!(
+            n("Famix-Java-Entities.Annotation", "Annotation").map(|x| x.1),
+            Some("javaAnnotations".into())
+        );
+        assert_eq!(
+            n("Famix-Java-Entities.Property", "Property").map(|x| x.1),
+            Some("javaProperties".into())
+        );
+        // No language segment: bare name, prefixed when it shadows an archetype.
+        assert_eq!(
+            n("Pkg.Widget", "Widget"),
+            Some(("Widget".into(), "widgets".into()))
+        );
+        assert_eq!(
+            n("Pkg.Method", "Method"),
+            Some(("FamixMethod".into(), "famixMethods".into()))
+        );
+        assert_eq!(n("Pkg.9", "9"), None);
+    }
 }

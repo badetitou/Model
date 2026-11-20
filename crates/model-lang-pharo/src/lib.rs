@@ -196,6 +196,8 @@ struct PharoKind {
     archetype: EntityKind,
     traits: &'static [&'static str],
     fm3: Option<&'static str>,
+    /// GraphQL concept and root field names.
+    graphql: (&'static str, &'static str),
 }
 
 const CLASS: usize = 0;
@@ -210,18 +212,21 @@ const KINDS: [PharoKind; 4] = [
         archetype: EntityKind::Class,
         traits: &["Named", "WithMembers", "WithInheritances", "Modifiers"],
         fm3: Some("Famix-Smalltalk-Entities.Class"),
+        graphql: ("PharoClass", "pharoClasses"),
     },
     PharoKind {
         name: "pharo.trait",
         archetype: EntityKind::Interface,
         traits: &["Named", "WithMembers", "Modifiers"],
         fm3: Some("Famix-Smalltalk-Entities.Trait"),
+        graphql: ("PharoTrait", "pharoTraits"),
     },
     PharoKind {
         name: "pharo.method",
         archetype: EntityKind::Method,
         traits: &["Named", "Invocation", "Access", "Modifiers"],
         fm3: Some("Famix-Smalltalk-Entities.Method"),
+        graphql: ("PharoMethod", "pharoMethods"),
     },
     // A method defined by another package than its class's (`.extension.st`
     // or a `Foo >> bar` in a foreign file). Famix-Smalltalk has no class for
@@ -231,12 +236,23 @@ const KINDS: [PharoKind; 4] = [
         archetype: EntityKind::Method,
         traits: &["Named", "Invocation", "Access", "Modifiers"],
         fm3: None,
+        graphql: ("PharoExtensionMethod", "pharoExtensionMethods"),
     },
 ];
 
 fn kind(b: &mut ModelBuilder, which: usize) -> KindId {
     let k = &KINDS[which];
-    b.define_kind(k.name, k.archetype, model_traits::mask(k.traits), k.fm3)
+    let id = b.define_kind(k.name, k.archetype, model_traits::mask(k.traits), k.fm3);
+    b.set_kind_concept(id, Some(k.graphql.0), Some(k.graphql.1));
+    id
+}
+
+/// Defines the Pharo kinds (normally defined when first met), see
+/// `model_treesitter::declare_kinds`.
+pub fn declare_kinds(b: &mut ModelBuilder) {
+    for which in [CLASS, TRAIT, METHOD, EXTENSION_METHOD] {
+        kind(b, which);
+    }
 }
 
 fn language() -> LanguageId {

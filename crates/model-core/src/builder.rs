@@ -44,7 +44,8 @@ impl ModelBuilder {
     pub fn from_model(model: &Model) -> Self {
         let mut b = ModelBuilder::new();
         for (_, k) in model.metamodel().iter().skip(EntityKind::ALL.len()) {
-            b.define_kind(&k.name, k.archetype, k.traits, k.fm3.as_deref());
+            let id = b.define_kind(&k.name, k.archetype, k.traits, k.fm3.as_deref());
+            b.set_kind_concept(id, k.graphql_type.as_deref(), k.graphql_root.as_deref());
         }
         for e in model.entities() {
             // Kinds are defined in the same order, so ids carry over.
@@ -199,6 +200,17 @@ impl ModelBuilder {
     /// kind (`KindId::of(EntityKind::Class)`).
     pub fn set_kind_traits(&mut self, kind: KindId, traits: TraitMask) {
         self.metamodel.set_traits(kind, traits);
+    }
+
+    /// Declares the GraphQL concept and root field names of a defined kind;
+    /// see [`Metamodel::set_concept`].
+    pub fn set_kind_concept(
+        &mut self,
+        kind: KindId,
+        graphql_type: Option<&str>,
+        graphql_root: Option<&str>,
+    ) -> bool {
+        self.metamodel.set_concept(kind, graphql_type, graphql_root)
     }
 
     pub fn metamodel(&self) -> &Metamodel {

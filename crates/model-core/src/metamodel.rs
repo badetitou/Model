@@ -49,6 +49,13 @@ pub struct KindInfo {
     pub traits: TraitMask,
     /// FM3 class this kind maps to (`Famix-Java-Entities.Record`...), if any.
     pub fm3: Option<String>,
+    /// Name of the GraphQL concept (object type) of this kind (`Parameter`,
+    /// `TsInterface`...), if its language declares one. Data, not code: the
+    /// GraphQL server builds one type per named concept.
+    pub graphql_type: Option<String>,
+    /// Name of the root field listing this kind (`parameters`); the lookup by
+    /// key is `<singular>ByKey`, derived by the server from `graphql_type`.
+    pub graphql_root: Option<String>,
 }
 
 /// Kinds of a model. Ids `0..15` are the archetypes' default kinds
@@ -68,6 +75,8 @@ impl Default for Metamodel {
                     archetype: a,
                     traits: TraitMask::EMPTY,
                     fm3: None,
+                    graphql_type: None,
+                    graphql_root: None,
                 })
                 .collect(),
         }
@@ -95,6 +104,8 @@ impl Metamodel {
                     archetype,
                     traits,
                     fm3: fm3.map(str::to_string),
+                    graphql_type: None,
+                    graphql_root: None,
                 });
                 KindId(i)
             }
@@ -108,6 +119,28 @@ impl Metamodel {
         match self.kinds.get_mut(id.index()) {
             Some(k) => {
                 k.traits = traits;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Declares the GraphQL concept name and root field of a kind defined
+    /// beyond the archetypes' defaults (those keep the archetype types).
+    /// Returns false for an archetype default or an unknown id.
+    pub fn set_concept(
+        &mut self,
+        id: KindId,
+        graphql_type: Option<&str>,
+        graphql_root: Option<&str>,
+    ) -> bool {
+        if id.index() < EntityKind::ALL.len() {
+            return false;
+        }
+        match self.kinds.get_mut(id.index()) {
+            Some(k) => {
+                k.graphql_type = graphql_type.map(str::to_string);
+                k.graphql_root = graphql_root.map(str::to_string);
                 true
             }
             None => false,

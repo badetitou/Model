@@ -146,6 +146,12 @@ pub(crate) struct Fine {
     /// Names of the traits (`model-traits`) the kind carries.
     #[serde(default)]
     pub traits: Vec<String>,
+    /// GraphQL concept (object type) name of the kind, e.g. `TsInterface`.
+    #[serde(default)]
+    pub graphql_type: Option<String>,
+    /// GraphQL root field listing the kind, e.g. `tsInterfaces`.
+    #[serde(default)]
+    pub graphql_root: Option<String>,
 }
 
 /// Fine kinds by capture suffix. Entities that are not members of a type
