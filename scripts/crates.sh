@@ -3,13 +3,13 @@ CRATES=(
   model-core
   model-fm3
   model-traits
-  model-moose
   model-detect
   model-scip
   model-analysis
   model-lang-pharo
   model-link
   model-treesitter
+  model-moose
   model-index
   model-factory
   model-session
