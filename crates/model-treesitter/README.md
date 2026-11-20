@@ -9,7 +9,7 @@ a grammar crate (behind a Cargo feature), a query, and a row in
 |---|---|---|---|
 | Java | tree-sitter-java 0.23 | `queries/java.scm` | declared (`package`) |
 | TypeScript, TSX | tree-sitter-typescript 0.23 | `queries/typescript.scm` | file path |
-| Python | tree-sitter-python 0.25 | the grammar's own `tags.scm`, unchanged | file path |
+| Python | tree-sitter-python 0.25 | `queries/python.scm` (tags.scm + superclasses, parameters) | file path |
 
 ## Captures
 
@@ -29,6 +29,15 @@ baseline. Model adds a few captures.
 | `@reference.throws` + `@name` | `throws` clause type of the enclosing method |
 | `@access.read` / `.write` / `.read_write` / `.receiver` + `@name` | use of a variable by name: `accesses` with the matching site flags; resolved to a parameter or local of the enclosing member, else a field of an enclosing type, dropped when unknown |
 | `@prop.<key>` | the captured text is added to the `<key>` list prop of the innermost enclosing definition(s) |
+
+## Fine kinds are data
+
+`kinds.json` lists every fine kind: `name` (also the capture suffix, so
+`@definition.ts.interface`), `archetype`, optional `desc`/`leaf`, optional
+`fm3` class name and `traits` (names from `model-traits`). A language adds
+rows and uses them from its query; a grammar row can set `file_kind` (e.g.
+`python.module`) for its file entities. Which traits each language's kinds
+carry: `docs/traits.md`.
 
 Attached kinds, all of archetype `Variable` and keyed under the innermost
 definition containing them (a top-level one under its file):

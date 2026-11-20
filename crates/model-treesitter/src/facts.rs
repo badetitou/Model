@@ -85,19 +85,20 @@ pub struct Fragment {
 /// Version of the fragment layout; part of the cache tag.
 pub(crate) const FORMAT: u32 = 1;
 
-/// A `Fine` kind is stored as its capture name.
+/// A `Fine` kind is stored as its name.
 mod fine_name {
-    use super::{FINE, Fine};
+    use super::{Fine, kinds};
     use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S: Serializer>(f: &Option<&'static Fine>, s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_some(&f.map(|f| f.name))
+        s.serialize_some(&f.map(|f| f.name.as_str()))
     }
 
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<&'static Fine>, D::Error> {
         let name = Option::<String>::deserialize(d)?;
         name.map_or(Ok(None), |n| {
-            FINE.iter()
+            kinds()
+                .iter()
                 .find(|f| f.name == n)
                 .map(Some)
                 .ok_or_else(|| serde::de::Error::custom(format!("unknown fine kind {n}")))
@@ -106,9 +107,11 @@ mod fine_name {
 }
 
 /// How a descriptor is written for a fine kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub(crate) enum Desc {
     /// The archetype's own descriptor (`for_kind`).
+    #[default]
     Archetype,
     /// `(name)`
     Parameter,
@@ -123,53 +126,38 @@ pub(crate) enum Desc {
     Term,
 }
 
-/// A fine kind a capture can name: `@definition.<name>`.
-#[derive(Debug, PartialEq, Eq)]
+/// A fine kind a capture can name: `@definition.<name>`. Declared as data in
+/// `kinds.json`, never in code: a language adds rows, not Rust.
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct Fine {
-    pub name: &'static str,
+    /// Kind name in the metamodel, and capture suffix (`ts.interface`).
+    pub name: String,
     pub archetype: EntityKind,
+    #[serde(default)]
     pub desc: Desc,
     /// Never the parent of another definition (a local's initializer may
     /// hold lambdas whose locals belong to the method).
+    #[serde(default)]
     pub leaf: bool,
-}
-
-const fn fine(name: &'static str, archetype: EntityKind, desc: Desc, leaf: bool) -> Fine {
-    Fine {
-        name,
-        archetype,
-        desc,
-        leaf,
-    }
+    /// FM3 class the kind corresponds to, when a Famix model has one.
+    #[serde(default)]
+    pub fm3: Option<String>,
+    /// Names of the traits (`model-traits`) the kind carries.
+    #[serde(default)]
+    pub traits: Vec<String>,
 }
 
 /// Fine kinds by capture suffix. Entities that are not members of a type
 /// (parameters, locals, comments...) use the `Variable` archetype.
-static FINE: [Fine; 8] = [
-    fine("record", EntityKind::Class, Desc::Archetype, false),
-    fine(
-        "annotation_type",
-        EntityKind::Interface,
-        Desc::Archetype,
-        false,
-    ),
-    fine(
-        "enum_constant",
-        EntityKind::Constant,
-        Desc::Archetype,
-        false,
-    ),
-    fine("parameter", EntityKind::Variable, Desc::Parameter, false),
-    fine("local_variable", EntityKind::Variable, Desc::Term, true),
-    fine(
-        "type_parameter",
-        EntityKind::Variable,
-        Desc::TypeParameter,
-        false,
-    ),
-    fine("annotation", EntityKind::Variable, Desc::Meta, false),
-    fine("comment", EntityKind::Variable, Desc::Site, true),
-];
+pub(crate) fn kinds() -> &'static [Fine] {
+    static KINDS: std::sync::OnceLock<Vec<Fine>> = std::sync::OnceLock::new();
+    KINDS.get_or_init(|| {
+        // The file is checked in and covered by a test: a malformed one is
+        // a build defect, not a runtime condition.
+        serde_json::from_str(include_str!("../kinds.json")).unwrap_or_default()
+    })
+}
 
 /// Role of a capture name. Accepts the tree-sitter tags convention
 /// (`definition.*`, `reference.call|class|implementation`, `name`) plus
@@ -201,7 +189,7 @@ pub(crate) fn role(capture: &str) -> Role {
         return Role::Prop(key.to_string());
     }
     if let Some(kind) = capture.strip_prefix("definition.") {
-        if let Some(fine) = FINE.iter().find(|f| f.name == kind) {
+        if let Some(fine) = kinds().iter().find(|f| f.name == kind) {
             return Role::Def(fine.archetype, Some(fine));
         }
         let k = match kind {

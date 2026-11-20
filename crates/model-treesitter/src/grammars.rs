@@ -23,6 +23,9 @@ pub struct Grammar {
     /// Descriptor name of constructors, as the language's SCIP indexer
     /// writes it (`<init>` for scip-java).
     pub constructor: Option<&'static str>,
+    /// Fine kind (from `kinds.json`) of this language's file entities, e.g.
+    /// `python.module`; `None` = the plain `File` archetype.
+    pub file_kind: Option<&'static str>,
 }
 
 impl std::fmt::Debug for Grammar {
@@ -48,6 +51,7 @@ static JAVA: Grammar = Grammar {
     query: include_str!("../queries/java.scm"),
     namespaces: Namespaces::Declared { separator: "." },
     constructor: Some("<init>"),
+    file_kind: None,
 };
 
 #[cfg(feature = "typescript")]
@@ -58,6 +62,7 @@ static TYPESCRIPT: Grammar = Grammar {
     query: include_str!("../queries/typescript.scm"),
     namespaces: Namespaces::Path,
     constructor: Some("<constructor>"),
+    file_kind: Some("ts.module"),
 };
 
 #[cfg(feature = "typescript")]
@@ -68,18 +73,20 @@ static TSX: Grammar = Grammar {
     query: include_str!("../queries/typescript.scm"),
     namespaces: Namespaces::Path,
     constructor: Some("<constructor>"),
+    file_kind: Some("ts.module"),
 };
 
-/// Python uses the grammar's own `tags.scm`, unchanged: the baseline any
+/// Python's query starts from the grammar's own `tags.scm`, the baseline any
 /// tree-sitter grammar offers.
 #[cfg(feature = "python")]
 static PYTHON: Grammar = Grammar {
     language: "python",
     extensions: &["py"],
     ts_language: || tree_sitter_python::LANGUAGE.into(),
-    query: tree_sitter_python::TAGS_QUERY,
+    query: include_str!("../queries/python.scm"),
     namespaces: Namespaces::Path,
     constructor: None,
+    file_kind: Some("python.module"),
 };
 
 static ALL: &[&Grammar] = &[

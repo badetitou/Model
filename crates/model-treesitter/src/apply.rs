@@ -9,7 +9,7 @@ use model_core::{
 };
 
 use crate::ExtractStats;
-use crate::facts::{Desc, Fragment, UseKind};
+use crate::facts::{Desc, Fine, Fragment, UseKind, kinds};
 use crate::grammars::{Namespaces, grammars};
 
 /// What a file contributes to name resolution.
@@ -56,7 +56,13 @@ pub(crate) fn apply(
 
         let file_key = SymbolKey::for_file(&lang, &f.path);
         let file_name = f.path.rsplit('/').next().unwrap_or(&f.path);
-        let file = b.entity(&file_key.to_string(), EntityKind::File, file_name);
+        let file_kind = g
+            .file_kind
+            .and_then(|n| kinds().iter().find(|f| f.name == n))
+            .map_or(KindId::of(EntityKind::File), |f| {
+                b.define_kind(&f.name, f.archetype, mask_of(f), f.fm3.as_deref())
+            });
+        let file = b.entity_of_kind(&file_key.to_string(), file_kind, file_name);
         if b.file(file).is_none() {
             b.set_source(file, &f.path, f.extent, None);
         }
@@ -136,7 +142,7 @@ pub(crate) fn apply(
                 *n += 1;
             }
             let kind = match d.fine {
-                Some(fine) => b.define_kind(fine.name, d.kind, TraitMask::EMPTY, None),
+                Some(fine) => b.define_kind(&fine.name, d.kind, mask_of(fine), fine.fm3.as_deref()),
                 None => KindId::of(d.kind),
             };
             let id = b.entity_of_kind(&key.to_string(), kind, &d.name);
@@ -147,7 +153,10 @@ pub(crate) fn apply(
                 if attached {
                     // Annotations, comments...: not resolution targets;
                     // parameters and locals are, for accesses only.
-                    if matches!(d.fine.map(|f| f.name), Some("parameter" | "local_variable")) {
+                    if matches!(
+                        d.fine.map(|f| f.name.as_str()),
+                        Some("parameter" | "local_variable")
+                    ) {
                         vars.entry((parent_id, d.name.clone())).or_insert(id);
                     }
                 } else if matches!(
@@ -462,4 +471,9 @@ fn namespace_chain<'a>(
         parent = Some(id);
     }
     parent
+}
+
+/// Trait mask of a fine kind, from the trait names of `kinds.json`.
+fn mask_of(f: &Fine) -> TraitMask {
+    model_traits::mask(&f.traits.iter().map(String::as_str).collect::<Vec<_>>())
 }

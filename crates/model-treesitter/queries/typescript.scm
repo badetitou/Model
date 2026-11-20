@@ -2,19 +2,19 @@
 ; Captures: see crates/model-treesitter/README.md.
 
 (class_declaration name: (type_identifier) @name) @definition.class
-(abstract_class_declaration name: (type_identifier) @name) @definition.class
+(abstract_class_declaration name: (type_identifier) @name) @definition.ts.abstract_class
 ; Decorators of an exported class belong to the export statement: the class
 ; extent starts there (the same identifier keeps the outermost extent).
 (export_statement (decorator)
   declaration: (class_declaration name: (type_identifier) @name)) @definition.class
 (export_statement (decorator)
-  declaration: (abstract_class_declaration name: (type_identifier) @name)) @definition.class
-(interface_declaration name: (type_identifier) @name) @definition.interface
+  declaration: (abstract_class_declaration name: (type_identifier) @name)) @definition.ts.abstract_class
+(interface_declaration name: (type_identifier) @name) @definition.ts.interface
 (enum_declaration name: (identifier) @name) @definition.enum
-(type_alias_declaration name: (type_identifier) @name) @definition.type
+(type_alias_declaration name: (type_identifier) @name) @definition.ts.type_alias
 (function_declaration name: (identifier) @name) @definition.function
 (generator_function_declaration name: (identifier) @name) @definition.function
-(internal_module name: [(identifier) (nested_identifier)] @name) @definition.namespace
+(internal_module name: [(identifier) (nested_identifier)] @name) @definition.ts.namespace
 
 ((method_definition name: (property_identifier) @name) @definition.constructor
   (#eq? @name "constructor"))
@@ -27,9 +27,9 @@
 
 ; Top-level `const f = () => ...`, exported or not.
 (program (lexical_declaration
-  (variable_declarator name: (identifier) @name value: [(arrow_function) (function_expression)])) @definition.function)
+  (variable_declarator name: (identifier) @name value: [(arrow_function) (function_expression)])) @definition.ts.arrow_function)
 (program (export_statement (lexical_declaration
-  (variable_declarator name: (identifier) @name value: [(arrow_function) (function_expression)])) @definition.function))
+  (variable_declarator name: (identifier) @name value: [(arrow_function) (function_expression)])) @definition.ts.arrow_function))
 
 (extends_clause value: [
   (identifier) @name

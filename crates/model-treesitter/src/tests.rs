@@ -591,3 +591,80 @@ class A implements I {
         "{st:?}"
     );
 }
+
+fn kind_of(m: &Model, key: &str) -> (String, K, Option<String>) {
+    let e = m.by_key(key).unwrap_or_else(|| panic!("no {key}"));
+    (
+        e.kind_name().to_string(),
+        e.kind(),
+        e.kind_info().and_then(|k| k.fm3.clone()),
+    )
+}
+
+#[test]
+fn kinds_file_is_valid_and_traits_exist() {
+    let kinds = crate::facts::kinds();
+    assert!(kinds.len() >= 14, "kinds.json did not parse");
+    for k in kinds {
+        for t in &k.traits {
+            assert!(
+                model_traits::trait_def(t).is_some(),
+                "{}: trait {t}",
+                k.name
+            );
+        }
+    }
+}
+
+#[test]
+fn typescript_kinds_are_fine_kinds_with_traits() {
+    let src = "export interface Shape { area(): number }\ntype Id = string;\nnamespace N { export const x = 1 }\nabstract class Base {}\nclass A extends Base implements Shape { area() { return 1 } }\nconst f = () => 1;\nenum E { A }\n";
+    let (m, _) = model(&[("src/a.ts", src)]);
+    let key = |k: &str| format!("model typescript . . src/`a.ts`/{k}");
+    let fm3 = |c: &str| Some(format!("Famix-TypeScript-Entities.{c}"));
+    assert_eq!(
+        kind_of(&m, &key("Shape#")),
+        ("ts.interface".into(), K::Interface, fm3("Interface"))
+    );
+    assert_eq!(
+        kind_of(&m, &key("Id#")),
+        ("ts.type_alias".into(), K::TypeAlias, fm3("TypeAlias"))
+    );
+    assert_eq!(kind_of(&m, &key("Base#")).0, "ts.abstract_class");
+    assert_eq!(kind_of(&m, &key("f().")).0, "ts.arrow_function");
+    assert_eq!(kind_of(&m, &key("A#")), ("class".into(), K::Class, None));
+    assert_eq!(kind_of(&m, &key("E#")).0, "enum");
+    assert_eq!(
+        kind_of(&m, "model typescript . . src/`a.ts`/"),
+        ("ts.module".into(), K::File, fm3("Module"))
+    );
+    // Archetype queries still see the fine kinds.
+    assert_eq!(m.of_kind(K::Interface).count(), 1);
+    let members = model_traits::mask(&["WithMembers", "WithInheritances"]);
+    let mut names: Vec<_> = m.of_trait(members).map(|e| e.name().to_string()).collect();
+    names.sort();
+    assert_eq!(names, ["Base", "Shape"]);
+}
+
+#[test]
+fn python_modules_parameters_and_superclasses() {
+    let src = "class A(B, m.C, metaclass=M):\n    def f(self, x, y=1, *a):\n        return x\n";
+    let (m, _) = model(&[("pkg/a.py", src), ("pkg/b.py", "class B: pass\n")]);
+    let key = |k: &str| format!("model python . . pkg/`a.py`/{k}");
+    assert_eq!(
+        kind_of(&m, "model python . . pkg/`a.py`/").0,
+        "python.module"
+    );
+    assert_eq!(kind_of(&m, &key("A#f().(x)")).0, "parameter");
+    assert_eq!(kind_of(&m, &key("A#f().(y)")).0, "parameter");
+    assert!(m.by_key(&key("A#f().(self)")).is_none());
+    let sup: Vec<_> = edges(&m, R::Inherits).into_iter().map(|e| e.1).collect();
+    assert!(sup.iter().any(|k| k.ends_with("`b.py`/B#")), "{sup:?}");
+    assert_eq!(sup.len(), 2, "{sup:?}");
+    let mods = model_traits::mask(&["Named", "WithMembers"]);
+    assert!(
+        m.by_key("model python . . pkg/`a.py`/")
+            .unwrap()
+            .has_trait(mods)
+    );
+}

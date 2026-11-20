@@ -1,0 +1,17 @@
+[
+  {"name": "record", "archetype": "class"},
+  {"name": "annotation_type", "archetype": "interface"},
+  {"name": "enum_constant", "archetype": "constant"},
+  {"name": "parameter", "archetype": "variable", "desc": "parameter"},
+  {"name": "local_variable", "archetype": "variable", "desc": "term", "leaf": true},
+  {"name": "type_parameter", "archetype": "variable", "desc": "type_parameter"},
+  {"name": "annotation", "archetype": "variable", "desc": "meta"},
+  {"name": "comment", "archetype": "variable", "desc": "site", "leaf": true},
+  {"name": "ts.interface", "archetype": "interface", "fm3": "Famix-TypeScript-Entities.Interface", "traits": ["Named", "WithMembers", "WithInheritances", "Typed"]},
+  {"name": "ts.type_alias", "archetype": "type_alias", "fm3": "Famix-TypeScript-Entities.TypeAlias", "traits": ["Named", "Typed"]},
+  {"name": "ts.namespace", "archetype": "namespace", "fm3": "Famix-TypeScript-Entities.Namespace", "traits": ["Named", "WithMembers"]},
+  {"name": "ts.abstract_class", "archetype": "class", "fm3": "Famix-TypeScript-Entities.Class", "traits": ["Named", "WithMembers", "WithInheritances", "Modifiers", "Annotations"]},
+  {"name": "ts.arrow_function", "archetype": "function", "fm3": "Famix-TypeScript-Entities.ArrowFunction", "traits": ["Named", "Invocation", "Access", "Typed", "Modifiers"]},
+  {"name": "ts.module", "archetype": "file", "fm3": "Famix-TypeScript-Entities.Module", "traits": ["Named", "WithMembers"]},
+  {"name": "python.module", "archetype": "file", "traits": ["Named", "WithMembers"]}
+]
