@@ -259,7 +259,7 @@ detect ──► for each detected language / project root:
    (`LanguageSpec`): adding a language is adding a row.
 2. **Index** (`model-index`, done). For each detected language with an
    indexer, one run per outermost project root (directory holding a build
-   marker; no marker, no run): `scip-java` and `scip-typescript` (versions
+   marker; no marker, no run, unless the user gave a custom command, below): `scip-java` and `scip-typescript` (versions
    pinned as in Structure), `scip-python`, `scip-go`, `rust-analyzer` (from
    `PATH`). Ported from Structure: process runner (progress, timeout, output
    tail, Maven/Gradle hints), staleness (`Reindex::Never|IfMissing|IfStale|Always`),
@@ -277,6 +277,23 @@ detect ──► for each detected language / project root:
      into the same model in 47 ms.
    - Indexes written in a sub-project have their paths prefixed
      (`backend/` + `src/A.java`).
+   - **User-supplied index command** (issue #17), for builds scip-java cannot
+     drive (`make`): `CustomIndex { language, command }` in `IndexOptions`,
+     set by the user only (`--index-command LANGUAGE=COMMAND`,
+     `MODEL_INDEX_COMMAND`, the library field; never read from the analysed
+     repository, which would let it run commands). It replaces the built-in
+     indexer of that language (the indexer's languages, so `java` covers
+     kotlin/scala); other languages are unchanged. It runs as `sh -c` in the
+     project root through `process::run` (timeout, progress, output tail),
+     `{root}`/`{output}` shell-quoted. The analysed root is its project root
+     with or without a build marker, and nested markers do not start the
+     built-in indexer; `Reindex::Never` reuses an existing index there.
+     `Reindex` and staleness are unchanged. The "index records its tool" rule
+     is *not* applied (the command may write any tool's index; the written
+     index is yours to overwrite). Its documents are cached under the tag
+     `custom-<FNV-1a of the command text>`, never mixed with `indexer@version`.
+     Failures (not found, non-zero exit, no output, timeout) are warnings and
+     fall back to tree-sitter like built-in ones.
 3. **Extract** (`model-treesitter`, done). Generic tree-sitter extractor (§5).
 3b. **Frontend** (`model-lang-pharo`, done). A language with neither grammar
     nor indexer is read directly into the same builder. Tonel keys use
@@ -319,6 +336,7 @@ Degraded modes are first class:
 | grammar only | entities + syntactic relations (`TreeSitter`, names resolved best-effort) |
 | indexer only | `model_link::from_scip`: entities from definitions + resolved relations, no syntactic props |
 | frontend only (Pharo) | entities, containment and hand-resolved relations, `Provenance::Frontend` |
+| grammar + failed index command (built-in or custom) | as "grammar only", with a warning |
 
 Indexer-only, measured with
 `cargo run --release -p model-link --example scip_model -- <index.scip>`:

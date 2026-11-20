@@ -5,6 +5,7 @@
 //! Structure's pipeline.
 
 mod cache;
+mod custom;
 mod ensure;
 mod git;
 mod indexers;
@@ -12,6 +13,7 @@ mod process;
 mod progress;
 
 pub use cache::{Coverage, DocumentCache, FragmentCache};
+pub use custom::{CustomIndex, ENV_VAR as INDEX_COMMAND_ENV};
 pub use ensure::{
     DEFAULT_TIMEOUT_SECS, IndexOptions, IndexSource, Reindex, default_timeout, ensure_index,
     newer_sources,

@@ -1,5 +1,5 @@
 //! `model-graphql <root | model.json> [--host 127.0.0.1] [--port 8000]
-//! [--allow-origin <origin>] [--reindex never|if-missing|if-stale|always]
+//! [--allow-origin <origin>] [--reindex never|if-missing|if-stale|always] [--index-command LANGUAGE=COMMAND ...]
 //! [--no-scip] [--no-cache] [--on-demand [--package <dir> | --diff <base>]]
 //! [--schema]`
 //!
@@ -19,7 +19,7 @@ use std::sync::Arc;
 use anyhow::{Context, bail};
 use model_core::Model;
 use model_factory::BuildOptions;
-use model_factory::index::Reindex;
+use model_factory::index::{CustomIndex, Reindex};
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
@@ -33,6 +33,10 @@ fn main() -> anyhow::Result<()> {
     let mut diff: Option<String> = None;
     let mut opts = BuildOptions::default();
     opts.index.reindex = Reindex::Never;
+    // MODEL_INDEX_COMMAND, then --index-command (which wins for its language).
+    if let Some(c) = CustomIndex::from_env().map_err(anyhow::Error::msg)? {
+        opts.index.set_custom(c);
+    }
     while let Some(a) = args.next() {
         match a.as_str() {
             "--host" => host = args.next().context("--host <addr>")?,
@@ -56,6 +60,11 @@ fn main() -> anyhow::Result<()> {
                 }
                 allowed_origins.extend(parsed);
             }
+            "--index-command" => {
+                let spec = args.next().context("--index-command LANGUAGE=COMMAND")?;
+                opts.index
+                    .set_custom(CustomIndex::parse(&spec).map_err(anyhow::Error::msg)?);
+            }
             "--reindex" => {
                 opts.index.reindex = match args.next().as_deref() {
                     Some("never") => Reindex::Never,
@@ -67,7 +76,7 @@ fn main() -> anyhow::Result<()> {
             }
             "-h" | "--help" => {
                 println!(
-                    "model-graphql <root | model.json> [--host 127.0.0.1] [--port 8000] [--allow-origin <origin|*> (repeatable, comma-separated)] [--reindex never|if-missing|if-stale|always] [--no-scip] [--no-cache] [--on-demand [--package <dir> ... | --diff <base>]] [--schema]"
+                    "model-graphql <root | model.json> [--host 127.0.0.1] [--port 8000] [--allow-origin <origin|*> (repeatable, comma-separated)] [--reindex never|if-missing|if-stale|always] [--index-command LANGUAGE=COMMAND ...] [--no-scip] [--no-cache] [--on-demand [--package <dir> ... | --diff <base>]] [--schema]"
                 );
                 return Ok(());
             }

@@ -4,6 +4,15 @@
 
 ### Added
 
+- User-supplied index command (issue #17) for builds `scip-java index` cannot
+  drive (`make`): `model_index::CustomIndex` / `IndexOptions::custom`
+  (`set_custom`), `--index-command LANGUAGE=COMMAND` on `model-graphql` and the
+  `build` example, `MODEL_INDEX_COMMAND`. Run with `sh -c` at the analysed root
+  (`{root}`, `{output}`), never read from the analysed repository; the root is
+  a project root without a build marker; the writer tool is not checked and the
+  document cache uses the tag `custom-<hash>`. `IndexReport::custom`.
+  Breaking: `IndexOptions` is no longer `Copy` and has a `custom` field;
+  `ensure_index` takes the `custom` command.
 - GraphQL typed concepts from data. `KindInfo` has `graphql_type` and
   `graphql_root` (serialised in model JSON; `Metamodel::set_concept`,
   `ModelBuilder::set_kind_concept`), set by `kinds.json` (`graphql_type`,

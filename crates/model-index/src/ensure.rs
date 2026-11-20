@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::custom::CustomIndex;
 use crate::indexers::Indexer;
 use crate::process;
 
@@ -22,11 +23,29 @@ pub enum Reindex {
     Always,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct IndexOptions {
     pub reindex: Reindex,
     /// Indexer wall-clock limit; 0 = none.
     pub timeout_secs: u64,
+    /// User-supplied index commands, replacing the built-in indexer of their
+    /// language. Never taken from the analysed repository.
+    pub custom: Vec<CustomIndex>,
+}
+
+impl IndexOptions {
+    /// Adds a custom command, replacing the one already given for the same language.
+    pub fn set_custom(&mut self, c: CustomIndex) {
+        self.custom.retain(|o| o.language != c.language);
+        self.custom.push(c);
+    }
+
+    /// The custom command replacing `indexer`, if any.
+    pub fn custom_for(&self, indexer: &Indexer) -> Option<&CustomIndex> {
+        self.custom
+            .iter()
+            .find(|c| crate::for_language(&c.language).is_some_and(|i| i.name == indexer.name))
+    }
 }
 
 impl Default for IndexOptions {
@@ -34,6 +53,7 @@ impl Default for IndexOptions {
         IndexOptions {
             reindex: Reindex::default(),
             timeout_secs: default_timeout(),
+            custom: Vec::new(),
         }
     }
 }
@@ -88,18 +108,28 @@ pub fn newer_sources(root: &Path, extensions: &[&str], index: &Path) -> usize {
 
 /// `root/<output>` (e.g. `index.scip`), reused or produced per `opts`;
 /// `None` (with a warning) when there is none to use. An index written by
-/// another tool is neither used nor overwritten.
+/// another tool is neither used nor overwritten, except with a `custom`
+/// command: it is the user's, whatever tool it runs, so the writer is not
+/// checked (the file is reused, or rewritten by the command).
+#[allow(clippy::too_many_arguments)]
 pub fn ensure_index(
     root: &Path,
     indexer: &Indexer,
     extensions: &[&str],
     output: &str,
+    custom: Option<&CustomIndex>,
     opts: &IndexOptions,
     warn: &mut dyn FnMut(String),
     progress: &mut dyn FnMut(u8, String),
 ) -> Option<(PathBuf, IndexSource)> {
     let index = root.join(output);
-    if index.is_file()
+    let name = if custom.is_some() {
+        "the custom index command"
+    } else {
+        indexer.name
+    };
+    if custom.is_none()
+        && index.is_file()
         && let Ok(Some(tool)) = model_scip::tool(&index)
         && tool != indexer.name
     {
@@ -126,30 +156,33 @@ pub fn ensure_index(
     if opts.reindex == Reindex::Never {
         return None;
     }
-    let Some(cmd) = indexer.command(root, output) else {
-        warn(format!(
-            "{}: {} is not installed; using tree-sitter only",
-            root.display(),
-            indexer.name
-        ));
-        return None;
+    let (cmd, hint) = match custom {
+        Some(c) => (c.shell_command(root, output), Some(c.hint(root))),
+        None => {
+            let Some(cmd) = indexer.command(root, output) else {
+                warn(format!(
+                    "{}: {} is not installed; using tree-sitter only",
+                    root.display(),
+                    indexer.name
+                ));
+                return None;
+            };
+            (cmd, indexer.hint(root))
+        }
     };
-    let hint = indexer.hint(root);
     match process::run(root, cmd, opts.timeout_secs, progress, hint.as_deref()) {
         Ok(()) if index.is_file() => Some((index, IndexSource::Indexed)),
         Ok(()) => {
             warn(format!(
-                "{}: {} succeeded but wrote no {output}; using tree-sitter only",
-                root.display(),
-                indexer.name
+                "{}: {name} succeeded but wrote no {output}; in the project root; using tree-sitter only",
+                root.display()
             ));
             None
         }
         Err(e) => {
             warn(format!(
-                "{}: {} failed, using tree-sitter only: {e}",
-                root.display(),
-                indexer.name
+                "{}: {name} failed, using tree-sitter only: {e}",
+                root.display()
             ));
             None
         }
@@ -218,12 +251,14 @@ mod tests {
             let opts = IndexOptions {
                 reindex,
                 timeout_secs: 1,
+                custom: Vec::new(),
             };
             ensure_index(
                 &d,
                 ts(),
                 &["ts"],
                 "index.scip",
+                None,
                 &opts,
                 &mut |w| warnings.borrow_mut().push(w),
                 &mut |_, _| {},

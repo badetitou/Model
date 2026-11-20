@@ -5,7 +5,7 @@ use protobuf::Message;
 use scip::types::{Document, Index, Occurrence};
 
 use model_core::{EntityKind as K, Provenance, RelationKind as R};
-use model_index::{IndexOptions, Reindex};
+use model_index::{CustomIndex, IndexOptions, Reindex};
 use model_link::Unmapped;
 
 use crate::{BuildOptions, IndexOrigin, build, outermost};
@@ -27,6 +27,7 @@ fn offline() -> BuildOptions {
         index: IndexOptions {
             reindex: Reindex::Never,
             timeout_secs: 1,
+            ..IndexOptions::default()
         },
         cache: None,
         ..BuildOptions::default()
@@ -398,4 +399,196 @@ fn cached_fragments_skip_extraction_and_give_the_same_model() {
     assert_eq!(json(&third), json(&fresh));
     assert!(json(&third).contains("o()"));
     let _ = std::fs::remove_dir_all(&root);
+}
+
+// ---- user-supplied index command (a fake `sh` script, no real indexer) ----
+
+/// A SCIP index (bytes) for `A.java`, written by `tool`.
+fn a_java_index_bytes(scratch: &Path, tool: &str) -> PathBuf {
+    let sym = |s: &str| format!("semanticdb maven m 1 app/{s}");
+    let dir = scratch.join("fake-index");
+    std::fs::create_dir_all(&dir).unwrap();
+    write_index_by(
+        &dir,
+        Some(tool),
+        vec![(
+            "src/A.java",
+            vec![
+                occ(&sym("A#"), vec![2, 6, 7], 1),
+                occ(&sym("A#run()."), vec![3, 9, 12], 1),
+                occ(&sym("A#go()."), vec![4, 9, 11], 1),
+                occ(&sym("A#go()."), vec![3, 17, 19], 0),
+            ],
+        )],
+    );
+    dir.join("index.scip")
+}
+
+fn custom_opts(reindex: Reindex, timeout: u64, command: &str) -> BuildOptions {
+    let mut o = offline();
+    o.index.reindex = reindex;
+    o.index.timeout_secs = timeout;
+    o.index.set_custom(CustomIndex::new("java", command));
+    o
+}
+
+/// A markerless Java project (no pom.xml) with a nested marker that the
+/// built-in indexer would have tried to build; the scratch dir (outside the
+/// analysed root) holds the fake index.
+fn markerless(tag: &str) -> (PathBuf, PathBuf) {
+    let d = tree(
+        tag,
+        &[
+            ("src/A.java", A_JAVA),
+            ("third_party/lib/pom.xml", ""),
+            ("third_party/lib/L.java", "class L {}\n"),
+        ],
+    );
+    let scratch =
+        std::env::temp_dir().join(format!("model-build-{tag}-scratch-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::fs::create_dir_all(&scratch).unwrap();
+    (d, scratch)
+}
+
+fn runs(d: &Path) -> usize {
+    std::fs::read_to_string(d.join("runs.log")).map_or(0, |s| s.lines().count())
+}
+
+#[test]
+fn custom_command_runs_at_the_markerless_root_and_is_linked() {
+    let (d, scratch) = markerless("custom-run");
+    let fake = a_java_index_bytes(&scratch, "some-make-wrapper");
+    // Records its working directory and expanded placeholders; the output
+    // file is written where {output} says.
+    let cmd = format!(
+        "pwd > ran-in.txt; echo $MODEL_INDEX_OUTPUT {{output}} {{root}} > args.txt; echo x >> runs.log; cp '{}' {{output}}",
+        fake.display()
+    );
+    let b = build(&d, &custom_opts(Reindex::IfMissing, 20, &cmd), &|_| {}).unwrap();
+    assert!(b.warnings.is_empty(), "{:?}", b.warnings);
+    assert_eq!(b.indexes.len(), 1, "{:?}", b.indexes);
+    let r = &b.indexes[0];
+    assert_eq!(r.root, Path::new(""));
+    assert!(r.custom);
+    assert_eq!(r.origin, IndexOrigin::Indexed);
+    assert_eq!(r.link.mapped, 3);
+    let canon = d.canonicalize().unwrap();
+    let pwd = std::fs::read_to_string(d.join("ran-in.txt")).unwrap();
+    assert_eq!(Path::new(pwd.trim()).canonicalize().unwrap(), canon);
+    let args = std::fs::read_to_string(d.join("args.txt")).unwrap();
+    assert!(args.starts_with("index.scip index.scip "), "{args}");
+    assert!(args.trim_end().ends_with(d.to_str().unwrap()), "{args}");
+    // Java relations come from SCIP; the nested pom.xml triggered nothing.
+    let run = b.model.by_key("semanticdb maven m 1 app/A#run().").unwrap();
+    assert_eq!(
+        run.outgoing()
+            .filter(|r| r.kind() == &R::Calls)
+            .map(|r| r.provenance())
+            .collect::<Vec<_>>(),
+        [Provenance::Scip]
+    );
+    assert_eq!(runs(&d), 1);
+    let _ = std::fs::remove_dir_all(&d);
+    let _ = std::fs::remove_dir_all(&scratch);
+}
+
+#[test]
+fn custom_command_reuse_and_staleness() {
+    let (d, scratch) = markerless("custom-reuse");
+    let fake = a_java_index_bytes(&scratch, "scip-java");
+    let cmd = format!("echo x >> runs.log; cp '{}' {{output}}", fake.display());
+    // Never: a hand-made index at a markerless root is used, nothing runs.
+    std::fs::copy(&fake, d.join("index.scip")).unwrap();
+    let b = build(&d, &custom_opts(Reindex::Never, 20, &cmd), &|_| {}).unwrap();
+    assert_eq!(b.indexes.len(), 1);
+    assert_eq!(b.indexes[0].origin, IndexOrigin::Reused);
+    assert_eq!(runs(&d), 0);
+    // Without the command the same root has no project: nothing is used.
+    let b = build(&d, &offline(), &|_| {}).unwrap();
+    assert!(b.indexes.is_empty());
+    // IfStale: up to date -> reused; a newer source -> the command reruns.
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(100);
+    let set = |p: &Path, t| {
+        std::fs::File::options()
+            .write(true)
+            .open(p)
+            .unwrap()
+            .set_modified(t)
+            .unwrap();
+    };
+    set(
+        &d.join("index.scip"),
+        old + std::time::Duration::from_secs(50),
+    );
+    for f in ["src/A.java", "third_party/lib/L.java"] {
+        set(&d.join(f), old);
+    }
+    let b = build(&d, &custom_opts(Reindex::IfStale, 20, &cmd), &|_| {}).unwrap();
+    assert_eq!(b.indexes[0].origin, IndexOrigin::Reused);
+    assert_eq!(runs(&d), 0);
+    set(&d.join("src/A.java"), std::time::SystemTime::now());
+    let b = build(&d, &custom_opts(Reindex::IfStale, 20, &cmd), &|_| {}).unwrap();
+    assert_eq!(b.indexes[0].origin, IndexOrigin::Indexed);
+    assert_eq!(runs(&d), 1);
+    // The tool that wrote the index is not checked for a custom command.
+    let b = build(&d, &custom_opts(Reindex::Always, 20, &cmd), &|_| {}).unwrap();
+    assert_eq!(b.indexes[0].origin, IndexOrigin::Indexed);
+    assert_eq!(runs(&d), 2);
+    let _ = std::fs::remove_dir_all(&d);
+    let _ = std::fs::remove_dir_all(&scratch);
+}
+
+#[test]
+fn custom_command_failures_fall_back_to_tree_sitter() {
+    let (d, scratch) = markerless("custom-fail");
+    let go = |cmd: &str, timeout: u64| {
+        let b = build(&d, &custom_opts(Reindex::Always, timeout, cmd), &|_| {}).unwrap();
+        assert!(b.indexes.is_empty(), "{:?}", b.indexes);
+        // Tree-sitter still gives entities and name-resolved relations.
+        assert!(b.model.by_key("model java . . app/A#run().").is_some());
+        assert!(b.extracted.iter().any(|e| e.1));
+        b.warnings
+    };
+    let w = go("echo compiling; echo 'boom: no rule' >&2; exit 2", 20);
+    assert!(
+        w.len() == 1
+            && w[0].contains("custom index command failed")
+            && w[0].contains("boom: no rule"),
+        "{w:?}"
+    );
+    assert!(w[0].contains("run it there by hand"), "{w:?}");
+    let w = go("definitely-not-a-program-xyz", 20);
+    assert!(
+        w[0].contains("failed") && w[0].contains("exit 127"),
+        "{w:?}"
+    );
+    let w = go("true", 20);
+    assert!(w[0].contains("succeeded but wrote no index.scip"), "{w:?}");
+    let t = std::time::Instant::now();
+    let w = go("sleep 30", 1);
+    assert!(w[0].contains("timed out after 1 s"), "{w:?}");
+    assert!(t.elapsed() < std::time::Duration::from_secs(15));
+    let _ = std::fs::remove_dir_all(&d);
+    let _ = std::fs::remove_dir_all(&scratch);
+}
+
+#[test]
+fn custom_command_leaves_other_languages_and_cache_tags_apart() {
+    let (d, scratch) = markerless("custom-other");
+    std::fs::create_dir_all(d.join("web/src")).unwrap();
+    std::fs::write(d.join("web/package.json"), "{}").unwrap();
+    std::fs::write(d.join("web/src/app.ts"), APP_TS).unwrap();
+    let fake = a_java_index_bytes(&scratch, "scip-java");
+    std::fs::copy(&fake, d.join("index.scip")).unwrap();
+    let b = build(&d, &custom_opts(Reindex::Never, 20, "false"), &|_| {}).unwrap();
+    // TypeScript keeps its built-in indexer (a root of its own, no index
+    // here), so only the Java job exists.
+    assert_eq!(b.indexes.len(), 1);
+    assert_eq!(b.indexes[0].indexer, "scip-java");
+    let a = CustomIndex::new("java", "make a").cache_tag();
+    assert_ne!(a, model_index::for_language("java").unwrap().cache_tag());
+    assert_ne!(a, CustomIndex::new("java", "make b").cache_tag());
+    let _ = std::fs::remove_dir_all(&d);
+    let _ = std::fs::remove_dir_all(&scratch);
 }

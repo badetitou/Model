@@ -42,7 +42,10 @@ Structure (`../Structure`), its first client.
   heritage and references, hand-resolved sends → `Calls` with
   `Provenance::Frontend`; `PharoStats` reported through `model::build`.
 - `crates/model-index` — `ensure_index` (reuse / staleness / run, only the
-  index's own tool), `process::run` (indexer process), `indexers.rs`
+  index's own tool; none for a custom one), `custom.rs` (`CustomIndex`: user-only
+  `sh -c` index command, never read from the analysed repo; `--index-command
+  LANGUAGE=COMMAND`, `MODEL_INDEX_COMMAND`, cache tag `custom-<hash>`; a custom
+  command makes the analysed root a project root), `process::run` (indexer process), `indexers.rs`
   registry (command per output file, hints), `cache.rs` (`DocumentCache`,
   `FragmentCache`, git-blob keyed), `git.rs`. Port of Structure's `pipeline/{indexer,process,progress,scip_cache}`.
 - `crates/model-factory` (crate `model-factory`) — facade `build(root, opts, progress)`: detect → one index
