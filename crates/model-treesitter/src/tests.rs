@@ -643,7 +643,8 @@ fn typescript_kinds_are_fine_kinds_with_traits() {
     let members = model_traits::mask(&["WithMembers", "WithInheritances"]);
     let mut names: Vec<_> = m.of_trait(members).map(|e| e.name().to_string()).collect();
     names.sort();
-    assert_eq!(names, ["Base", "Shape"]);
+    // Plain classes and enums carry them through their archetype kind too.
+    assert_eq!(names, ["A", "Base", "E", "Shape"]);
 }
 
 #[test]
@@ -667,4 +668,57 @@ fn python_modules_parameters_and_superclasses() {
             .unwrap()
             .has_trait(mods)
     );
+}
+
+#[test]
+fn archetype_traits_file_is_valid() {
+    for (kind, names) in crate::facts::archetype_traits() {
+        assert!(
+            K::ALL.iter().any(|a| a.as_str() == kind),
+            "{kind} is not an archetype"
+        );
+        for t in names {
+            assert!(model_traits::trait_def(t).is_some(), "{kind}: trait {t}");
+        }
+    }
+    assert!(!crate::facts::archetype_traits().is_empty());
+}
+
+#[test]
+fn java_entities_carry_traits() {
+    let src = "package app;\n@interface Tag {}\nrecord P(int x) {}\ninterface I {}\nenum E { A }\npublic class C<T> extends Object implements I {\n  private int f;\n  C(int a) {}\n  // note\n  @Tag public void m(String p) throws Exception { int l = 0; }\n}\n";
+    let (m, _) = model(&[("app/C.java", src)]);
+    let has = |name: &str, ts: &[&str]| {
+        let e = m
+            .entities()
+            .find(|e| e.name() == name)
+            .unwrap_or_else(|| panic!("no entity {name}"));
+        e.has_trait(model_traits::mask(ts))
+    };
+    assert!(has(
+        "C",
+        &["Named", "WithMembers", "WithInheritances", "Modifiers"]
+    ));
+    assert!(has("I", &["WithMembers"]));
+    assert!(has("E", &["WithMembers"]));
+    assert!(has("P", &["WithMembers", "WithInheritances"]));
+    assert!(has("Tag", &["WithMembers"]));
+    assert!(has("m", &["Invocation", "Access", "Typed", "Exceptions"]));
+    assert!(has("f", &["Typed", "Modifiers"]));
+    assert!(has("p", &["Typed"]));
+    assert!(has("l", &["Typed"]));
+    assert!(has("A", &["Named"]));
+    assert!(!has("f", &["WithMembers"]));
+    // Queries by trait.
+    let with_members = model_traits::mask(&["WithMembers"]);
+    let names: Vec<_> = m.of_trait(with_members).map(|e| e.name()).collect();
+    for n in ["app", "C", "I", "E", "P", "Tag"] {
+        assert!(names.contains(&n), "{n} missing from {names:?}");
+    }
+    let exceptions = model_traits::mask(&["Exceptions"]);
+    assert!(
+        m.of_trait(exceptions)
+            .all(|e| e.kind() == K::Method || e.kind() == K::Constructor)
+    );
+    assert!(m.of_trait(exceptions).any(|e| e.name() == "m"));
 }

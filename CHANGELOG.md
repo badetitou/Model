@@ -4,6 +4,12 @@
 
 ### Added
 
+- Traits on tree-sitter kinds: the default kinds of the archetypes
+  (`class`, `method`, `field`...) carry a trait mask from
+  `model-treesitter/archetype_traits.json`, and the Java fine kinds (`record`,
+  `parameter`, `local_variable`, `annotation`...) get theirs in `kinds.json`,
+  so `of_trait` / `has_trait` work on a Java model built without an indexer.
+  `model-core`: `ModelBuilder::set_kind_traits`, `Metamodel::set_traits`.
 - Traits beyond Java (`docs/traits.md`): fine kinds are data
   (`model-treesitter/kinds.json`: archetype, traits, FM3 class), used by query
   files. TypeScript: `ts.interface`, `ts.type_alias`, `ts.namespace`,

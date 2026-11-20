@@ -56,8 +56,22 @@ From a directory (and, with a SCIP index, compiler-grade relations):
 or `model_factory::build(root, &BuildOptions::default(), &|_| {})`.
 
 **Traits.** A kind carries a `TraitMask`; `model_traits::mask(&["WithMembers"])`
-builds one, `Model::of_trait(mask)` / `EntityRef::has_trait(mask)` test it. A
-kind gets its traits from an FM3 class:
+builds one, `Model::of_trait(mask)` / `EntityRef::has_trait(mask)` test it.
+Tree-sitter models carry traits without any indexer: the default kinds of the
+archetypes get theirs from `crates/model-treesitter/archetype_traits.json`
+(class: `Named`, `WithMembers`, `WithInheritances`, `Invocation`, `Modifiers`,
+`Annotations`; method: `Named`, `Invocation`, `Access`, `Modifiers`,
+`Annotations`, `Typed`, `Exceptions`; field, namespace...), and the fine kinds
+(`record`, `parameter`, `local_variable`...) from `kinds.json`. Both are data.
+
+```rust
+let with_members = model_traits::mask(&["WithMembers"]);
+let types: Vec<_> = model.of_trait(with_members).map(|e| e.name()).collect();
+let throwing = model.of_trait(model_traits::mask(&["Exceptions"])); // methods, constructors
+```
+
+A kind can also be defined from an FM3 class (Moose imports do it
+automatically):
 
 ```rust
 let record = b.define_kind(
@@ -67,9 +81,6 @@ let record = b.define_kind(
     Some("Famix-Java-Entities.Record"),
 );
 ```
-
-Kinds imported from Moose JSON get their traits this way automatically. See
-the limit in §8: the plain tree-sitter Java kinds carry **no** trait mask yet.
 
 ## 3. Read the new relations
 
@@ -214,12 +225,11 @@ Without an argument, `generate` reads the trimmed FamixJava subset fixture of
 Taken from the crates' docs and commit messages; nothing here is new
 research.
 
-- **Traits on Java kinds**: tree-sitter Java entities (class, method, field...)
-  use the default archetype kinds with an empty trait mask, so `of_trait` is
-  empty on a tree-sitter-built Java model; traits are populated for Moose
-  imports, for kinds defined with `mask_of_fm3_class`, and for the fine kinds of
-  `crates/model-treesitter/kinds.json` (TypeScript, Python, Pharo). Sessions use
-  traits only to choose layers.
+- **Traits are per archetype, not per language**: `class`, `method`... carry
+  the same Famix-like mask for Java, TypeScript and Python (a TypeScript method
+  has `Exceptions` too). Only the fine kinds are language-specific. The FM3
+  class of those default kinds is not set (it would be Java-only); the Moose
+  export maps them by kind name. Sessions use traits only to choose layers.
 - **Name-based relations** (tree-sitter): receivers and inheritance are
   ignored (`a.save()` resolves only when `save` is unique), overloads are not
   told apart for `overrides`, generics and lambdas are out of scope. Use a SCIP
@@ -242,8 +252,7 @@ research.
   (files, functions, plain variables) are not exported. Class `Exception`
   promotion and `Access.variable` are workarounds learned from a Moose image.
 - **Moose import**: real VerveineJ exports can be invalid strict JSON (raw
-  control characters); the reader is tolerant. The `export` example's header
-  mentions a `--java DIR` input that it does not implement.
+  control characters); the reader is tolerant.
 - **Other languages**: TypeScript/Python/Pharo have few fine kinds;
   FM3 class names for TypeScript and Smalltalk were written from the Famix
   repositories and **not** checked against an export; Pharo trait usage,

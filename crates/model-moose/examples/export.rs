@@ -1,9 +1,8 @@
 //! `cargo run -p model-moose --release --example export -- <input> <output.json> [--root DIR] [--no-sources]`
 //!
 //! `<input>` is a Model JSON (as written by `serde_json::to_writer` on a
-//! `Model`, or the `model-graphql` cache) or, with `--java DIR`, a Java
-//! source tree extracted with tree-sitter. Writes the model as Moose JSON
-//! and prints the export report.
+//! `Model`, or the `model-graphql` cache). Writes the model as Moose JSON and
+//! prints the export report.
 
 use model_core::Model;
 use model_moose::{ExportOptions, export_path};

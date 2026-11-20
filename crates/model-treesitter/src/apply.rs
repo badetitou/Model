@@ -9,7 +9,7 @@ use model_core::{
 };
 
 use crate::ExtractStats;
-use crate::facts::{Desc, Fine, Fragment, UseKind, kinds};
+use crate::facts::{Desc, Fine, Fragment, UseKind, archetype_traits, kinds};
 use crate::grammars::{Namespaces, grammars};
 
 /// What a file contributes to name resolution.
@@ -45,6 +45,14 @@ pub(crate) fn apply(
     // Parameters and locals by (member, name); fields by (type, name).
     let mut vars: HashMap<(EntityId, String), EntityId> = HashMap::new();
     let mut fields: HashMap<(EntityId, String), EntityId> = HashMap::new();
+
+    // The default kinds of the archetypes carry their traits.
+    for a in EntityKind::ALL {
+        if let Some(names) = archetype_traits().get(a.as_str()) {
+            let names: Vec<&str> = names.iter().map(String::as_str).collect();
+            b.set_kind_traits(KindId::of(a), model_traits::mask(&names));
+        }
+    }
 
     for (fi, f) in files.iter().enumerate() {
         let Some(g) = grammars().iter().find(|g| g.language == f.language) else {

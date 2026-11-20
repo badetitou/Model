@@ -1,0 +1,70 @@
+{
+  "namespace": [
+    "Named",
+    "WithMembers"
+  ],
+  "class": [
+    "Named",
+    "WithMembers",
+    "WithInheritances",
+    "Invocation",
+    "Modifiers",
+    "Annotations"
+  ],
+  "interface": [
+    "Named",
+    "WithMembers",
+    "WithInheritances",
+    "Modifiers",
+    "Annotations"
+  ],
+  "trait": [
+    "Named",
+    "WithMembers",
+    "WithInheritances",
+    "Modifiers"
+  ],
+  "enum": [
+    "Named",
+    "WithMembers",
+    "WithInheritances",
+    "Modifiers",
+    "Annotations"
+  ],
+  "method": [
+    "Named",
+    "Invocation",
+    "Access",
+    "Modifiers",
+    "Annotations",
+    "Typed",
+    "Exceptions"
+  ],
+  "constructor": [
+    "Named",
+    "Invocation",
+    "Access",
+    "Modifiers",
+    "Annotations",
+    "Typed",
+    "Exceptions"
+  ],
+  "function": [
+    "Named",
+    "Invocation",
+    "Access",
+    "Typed"
+  ],
+  "field": [
+    "Named",
+    "Modifiers",
+    "Annotations",
+    "Typed"
+  ],
+  "constant": [
+    "Named",
+    "Modifiers",
+    "Annotations",
+    "Typed"
+  ]
+}

@@ -35,9 +35,17 @@ fn query_by_kind_and_trait() -> Result<(), Box<dyn std::error::Error>> {
     let meta = model.metamodel();
     let param = model.of_kind_id(meta.find("parameter").expect("parameter kind"));
     assert_eq!(param.count(), 1);
-    // The tree-sitter Java kinds carry no trait mask: `of_trait` is empty.
+    // Java kinds carry their traits: no indexer, no Moose import needed.
     let members = model_traits::mask(&["WithMembers"]);
-    assert_eq!(model.of_trait(members).count(), 0);
+    let with_members: Vec<_> = model.of_trait(members).map(|e| e.name()).collect();
+    assert!(with_members.contains(&"App") && !with_members.contains(&"count"));
+    let typed = model_traits::mask(&["Typed", "Exceptions"]);
+    assert!(model.of_trait(typed).any(|e| e.name() == "name"));
+    assert!(
+        model
+            .by_key("model java . . app/App#count.")
+            .is_some_and(|f| f.has_trait(model_traits::mask(&["Typed"])))
+    );
     Ok(())
 }
 
@@ -125,5 +133,9 @@ fn export_import_diff() -> Result<(), Box<dyn std::error::Error>> {
     let moose = b.build();
     let d = diff(&moose, &model);
     assert!(d.classes.iter().any(|r| r.matched > 0));
+    // A tree-sitter-built model exports its classes, methods and fields.
+    for class in ["Class", "Method", "Attribute", "Parameter"] {
+        assert!(report.entities.contains_key(class), "{class} not exported");
+    }
     Ok(())
 }

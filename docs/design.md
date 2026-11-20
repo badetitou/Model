@@ -154,6 +154,9 @@ the traits it inherits, so a frontend defines a kind with
 `mask_of_fm3_class("Famix-Java-Entities.Method")`. Derived metrics are not
 stored props; derived relations are kept (they give containment through
 their container opposite).
+Tree-sitter models get their masks from data: `archetype_traits.json` for
+the default kinds of the archetypes, `kinds.json` for the fine kinds
+([usage.md](usage.md) §2).
 
 ### 3.1 Keys
 

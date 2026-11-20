@@ -195,6 +195,12 @@ impl ModelBuilder {
         self.metamodel.define(name, archetype, traits, fm3)
     }
 
+    /// Sets the traits of an existing kind, e.g. of an archetype's default
+    /// kind (`KindId::of(EntityKind::Class)`).
+    pub fn set_kind_traits(&mut self, kind: KindId, traits: TraitMask) {
+        self.metamodel.set_traits(kind, traits);
+    }
+
     pub fn metamodel(&self) -> &Metamodel {
         &self.metamodel
     }

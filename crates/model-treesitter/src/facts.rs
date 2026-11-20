@@ -159,6 +159,17 @@ pub(crate) fn kinds() -> &'static [Fine] {
     })
 }
 
+/// Trait names of the archetypes' default kinds (`class`, `method`...), from
+/// `archetype_traits.json`: what a plain tree-sitter entity can do, whatever
+/// its language. Fine kinds refine them (`kinds.json`).
+pub(crate) fn archetype_traits() -> &'static std::collections::BTreeMap<String, Vec<String>> {
+    static T: std::sync::OnceLock<std::collections::BTreeMap<String, Vec<String>>> =
+        std::sync::OnceLock::new();
+    T.get_or_init(|| {
+        serde_json::from_str(include_str!("../archetype_traits.json")).unwrap_or_default()
+    })
+}
+
 /// Role of a capture name. Accepts the tree-sitter tags convention
 /// (`definition.*`, `reference.call|class|implementation`, `name`) plus
 /// Model's own (`namespace`, `relation.*`, `reference.type`, `prop.*`).

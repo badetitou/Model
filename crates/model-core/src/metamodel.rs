@@ -102,6 +102,18 @@ impl Metamodel {
         }
     }
 
+    /// Sets the trait mask of an existing kind (how a frontend gives the
+    /// default archetype kinds their traits). Returns false for an unknown id.
+    pub fn set_traits(&mut self, id: KindId, traits: TraitMask) -> bool {
+        match self.kinds.get_mut(id.index()) {
+            Some(k) => {
+                k.traits = traits;
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn find(&self, name: &str) -> Option<KindId> {
         self.kinds
             .iter()
