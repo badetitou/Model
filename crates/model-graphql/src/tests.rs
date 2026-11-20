@@ -3,7 +3,11 @@ use std::sync::Arc;
 use model_core::{Model, ModelBuilder};
 use model_treesitter::{ExtractOptions, extract_sources};
 
-use crate::{ModelSchema, router, router_with_origins, schema};
+use crate::{ModelSchema, router, router_with_origins};
+
+fn schema(model: Arc<Model>) -> ModelSchema {
+    crate::schema(model).unwrap()
+}
 
 const A: &str = r#"package app;
 
@@ -298,8 +302,9 @@ async fn per_kind_root_fields_expose_the_concrete_types() {
     ] {
         assert_eq!(d[empty]["totalCount"], 0, "{empty}");
     }
-    // `@Service` is an annotation entity, of archetype Variable.
-    assert_eq!(d["variables"]["totalCount"], 1);
+    // `@Service` is an annotation entity, of archetype Variable, but its kind
+    // has a concept type of its own (`Annotation`): no longer a `Variable`.
+    assert_eq!(d["variables"]["totalCount"], 0);
 }
 
 /// Introspection-driven clients (fluid in particular) only drill into a
@@ -396,7 +401,9 @@ async fn entity_introspection_lists_every_kind_as_a_possible_type() {
         .iter()
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names.len(), 15, "{names:?}");
+    // The 15 archetypes, plus the concept the model's kinds declare.
+    assert_eq!(names.len(), 16, "{names:?}");
+    assert!(names.contains(&"Annotation"), "{names:?}");
     for expected in [
         "Namespace",
         "File",
@@ -458,24 +465,31 @@ async fn pharo_class_can_be_opened_and_its_methods_navigated() {
     let d = run(
         &s,
         r#"{
-            classByKey(key: "model pharo . . OrderService#") {
+            pharoClassByKey(key: "model pharo . . OrderService#") {
                 __typename key name
-                methods { __typename key name }
+                methods { name }
+                children(kind: METHOD) { nodes { __typename key name } }
             }
-            methodByKey(key: "model pharo . . OrderService#`place:`().") {
+            pharoMethodByKey(key: "model pharo . . OrderService#`place:`().") {
                 __typename name parent { name }
             }
-            unknown: methodByKey(key: "model pharo . . OrderService#") { name }
+            unknown: pharoMethodByKey(key: "model pharo . . OrderService#") { name }
+            classByKey(key: "model pharo . . OrderService#") { name }
             entityByKey(key: "model pharo . . OrderService#") { __typename name }
         }"#,
     )
     .await;
-    let class = &d["classByKey"];
-    assert_eq!(class["__typename"], "Class");
+    let class = &d["pharoClassByKey"];
+    assert_eq!(class["__typename"], "PharoClass");
     assert_eq!(class["name"], "OrderService");
-    let methods = class["methods"].as_array().unwrap();
+    // `methods` lists the entities typed `Method`; Pharo methods have their own
+    // concept type, reached through `children`.
+    assert_eq!(class["methods"], serde_json::json!([]));
+    // A `PharoClass` is not a `Class`.
+    assert_eq!(d["classByKey"], serde_json::json!(null));
+    let methods = class["children"]["nodes"].as_array().unwrap();
     assert_eq!(methods.len(), 3, "{methods:?}");
-    assert!(methods.iter().all(|m| m["__typename"] == "Method"));
+    assert!(methods.iter().all(|m| m["__typename"] == "PharoMethod"));
     let names: Vec<&str> = methods
         .iter()
         .map(|m| m["name"].as_str().unwrap())
@@ -484,21 +498,21 @@ async fn pharo_class_can_be_opened_and_its_methods_navigated() {
     assert!(names.contains(&"total"), "{names:?}");
     assert!(names.contains(&"new"), "{names:?}");
 
-    let method = &d["methodByKey"];
-    assert_eq!(method["__typename"], "Method");
+    let method = &d["pharoMethodByKey"];
+    assert_eq!(method["__typename"], "PharoMethod");
     assert_eq!(method["name"], "place:");
     assert_eq!(method["parent"]["name"], "OrderService");
     assert_eq!(d["unknown"], serde_json::json!(null));
     assert_eq!(
         d["entityByKey"],
-        serde_json::json!({"__typename": "Class", "name": "OrderService"})
+        serde_json::json!({"__typename": "PharoClass", "name": "OrderService"})
     );
 }
 
 /// `schema.graphql` documents the API; regenerate with `UPDATE_SCHEMA=1`.
 #[test]
 fn schema_file_is_up_to_date() {
-    let sdl = schema(Arc::new(ModelBuilder::new().build())).sdl();
+    let sdl = schema(Arc::new(model_factory::default_model())).sdl();
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("schema.graphql");
     if std::env::var_os("UPDATE_SCHEMA").is_some() {
         std::fs::write(&path, &sdl).unwrap();
@@ -671,7 +685,7 @@ fn names(d: &serde_json::Value, field: &str) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn fine_kind_is_exposed_and_typename_stays_the_archetype() {
+async fn fine_kind_with_a_concept_is_typed_by_it() {
     let s = schema(famix_model());
     let d = run(
         &s,
@@ -680,7 +694,7 @@ async fn fine_kind_is_exposed_and_typename_stays_the_archetype() {
     .await;
     let n = &d["entities"]["edges"][0]["node"];
     assert_eq!(n["name"], "Point");
-    assert_eq!(n["__typename"], "Class");
+    assert_eq!(n["__typename"], "Record");
     assert_eq!(n["fineKind"], "record");
     assert_eq!(n["kind"], "CLASS");
 }
@@ -774,4 +788,164 @@ async fn fine_kinds_survive_a_json_round_trip() {
     assert_eq!(d["r"]["totalCount"], 1);
     assert_eq!(d["l"]["totalCount"], 1);
     assert!(d["entities"]["totalCount"].as_u64().unwrap() > 0);
+}
+
+// ---- concepts from data -------------------------------------------------
+
+/// A kind no Rust file mentions, declared the way a language's data does it.
+fn frobnicator_model() -> Arc<Model> {
+    let mut b = ModelBuilder::new();
+    let k = b.define_kind(
+        "zorblax.frobnicator",
+        model_core::EntityKind::Function,
+        model_core::TraitMask::EMPTY,
+        None,
+    );
+    assert!(b.set_kind_concept(k, Some("Frobnicator"), Some("frobnicators")));
+    b.entity_of_kind("zorblax f1", k, "f1");
+    b.entity_of_kind("zorblax f2", k, "f2");
+    b.entity("zorblax g", model_core::EntityKind::Function, "g");
+    Arc::new(b.build())
+}
+
+const FROBNICATOR_QUERY: &str = r#"{
+    frobnicators { totalCount nodes { __typename name fineKind kind } }
+    frobnicatorByKey(key: "zorblax f1") { __typename name parent { name } }
+    other: frobnicatorByKey(key: "zorblax g") { name }
+    functions { totalCount nodes { __typename name } }
+    functionByKey(key: "zorblax f1") { name }
+    all: entities(kind: FUNCTION) { totalCount nodes { __typename name } }
+    typed: entities(kind: FUNCTION) { nodes { ... on Frobnicator { name } ... on Function { fine: name } } }
+    __type(name: "Frobnicator") { kind interfaces { name } }
+}"#;
+
+fn check_frobnicators(d: &serde_json::Value) {
+    assert_eq!(d["frobnicators"]["totalCount"], 2);
+    assert_eq!(
+        d["frobnicators"]["nodes"][0],
+        serde_json::json!({"__typename": "Frobnicator", "name": "f1",
+                           "fineKind": "zorblax.frobnicator", "kind": "FUNCTION"})
+    );
+    assert_eq!(d["frobnicatorByKey"]["__typename"], "Frobnicator");
+    assert_eq!(d["other"], serde_json::json!(null));
+    // The archetype lists and `... on Function` hold what has no concept type.
+    assert_eq!(d["functions"]["totalCount"], 1);
+    assert_eq!(d["functions"]["nodes"][0]["name"], "g");
+    assert_eq!(d["functionByKey"], serde_json::json!(null));
+    // The archetype filter still matches every function.
+    assert_eq!(d["all"]["totalCount"], 3);
+    let typed = d["typed"]["nodes"].as_array().unwrap();
+    assert_eq!(typed[0], serde_json::json!({"name": "f1"}));
+    assert_eq!(typed[2], serde_json::json!({"fine": "g"}));
+    assert_eq!(d["__type"]["kind"], "OBJECT");
+    assert_eq!(d["__type"]["interfaces"][0]["name"], "Entity");
+}
+
+#[tokio::test]
+async fn a_kind_added_by_data_becomes_a_type_and_root_fields() {
+    let s = schema(frobnicator_model());
+    check_frobnicators(&run(&s, FROBNICATOR_QUERY).await);
+    let sdl = s.sdl();
+    assert!(sdl.contains("type Frobnicator implements Entity"), "{sdl}");
+    assert!(sdl.contains("frobnicators(first: Int, after: String): FrobnicatorConnection!"));
+    assert!(sdl.contains("frobnicatorByKey(key: String!): Frobnicator"));
+    // Without the declaration, nothing of it exists.
+    let plain = schema(model());
+    assert!(!plain.sdl().contains("Frobnicator"));
+}
+
+#[tokio::test]
+async fn concept_names_travel_with_a_saved_model() {
+    let json = serde_json::to_string(&*frobnicator_model()).unwrap();
+    assert!(json.contains(r#""graphql_type":"Frobnicator""#), "{json}");
+    let back = Arc::new(serde_json::from_str::<Model>(&json).unwrap());
+    check_frobnicators(&run(&schema(back), FROBNICATOR_QUERY).await);
+}
+
+#[tokio::test]
+async fn unusable_concept_names_fall_back_to_the_archetype_type() {
+    let mut b = ModelBuilder::new();
+    let mut kind = |name: &str, ty: Option<&str>, root: Option<&str>| {
+        let k = b.define_kind(
+            name,
+            model_core::EntityKind::Function,
+            model_core::TraitMask::EMPTY,
+            None,
+        );
+        b.set_kind_concept(k, ty, root);
+        b.entity_of_kind(&format!("k {name}"), k, name);
+    };
+    kind("bad.name", Some("not a name"), Some("bads"));
+    kind("clash.type", Some("Class"), Some("clashes"));
+    kind("clash.root", Some("ClashRoot"), Some("classes"));
+    kind("no.type", None, Some("noTypes"));
+    kind("good", Some("Good"), Some("goods"));
+    kind("good.again", Some("Good"), Some("goodAgain"));
+    kind("no.root", Some("NoRoot"), None);
+    let s = schema(Arc::new(b.build()));
+    let d = run(
+        &s,
+        r#"{ entities(kind: FUNCTION) { nodes { name __typename } }
+             goods { totalCount }
+             noRootByKey(key: "k no.root") { name } }"#,
+    )
+    .await;
+    let typename = |n: &str| -> String {
+        d["entities"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["name"] == n)
+            .unwrap()["__typename"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    for archetype_typed in ["bad.name", "clash.type", "no.type", "good.again"] {
+        assert_eq!(typename(archetype_typed), "Function", "{archetype_typed}");
+    }
+    assert_eq!(typename("good"), "Good");
+    // A root field name already taken only drops the list field.
+    assert_eq!(typename("clash.root"), "ClashRoot");
+    assert!(!s.sdl().contains("clashes"));
+    assert_eq!(typename("no.root"), "NoRoot");
+    assert_eq!(d["goods"]["totalCount"], 1);
+    // A type without a root field keeps its by-key lookup.
+    assert_eq!(d["noRootByKey"]["name"], "no.root");
+    let sdl = s.sdl();
+    assert!(!sdl.contains("bads") && !sdl.contains("noTypes") && !sdl.contains("goodAgain"));
+}
+
+/// `model-graphql` is generic: language and kind names live in data.
+#[test]
+fn the_crate_source_names_no_language_and_no_kind() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let words = [
+        "java",
+        "typescript",
+        "python",
+        "pharo",
+        "smalltalk",
+        "moose",
+        "famix",
+        "parameter",
+        "record",
+    ];
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.file_name().is_some_and(|n| n == "tests.rs") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap().to_lowercase();
+        for w in words {
+            assert!(!text.contains(w), "{} mentions {w}", path.display());
+        }
+    }
+}
+
+#[test]
+fn the_archetype_table_covers_every_entity_kind() {
+    for k in model_core::EntityKind::ALL {
+        assert_eq!(super::schema::archetype_kind_check(k), k);
+    }
 }

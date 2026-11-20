@@ -7,11 +7,14 @@
 //! relations with their kind, provenance and every occurrence site.
 //! Lists are forward-paginated connections (`first`, `after`, `totalCount`).
 //!
-//! `Entity` is an interface with one concrete object per entity kind
-//! (`Class`, `Method`, ...); navigation fields return the interface, and
-//! `Query` has one list field per kind so clients can enumerate them. Each
-//! kind also has a single-item `…ByKey(key: String!)` field, the shape
-//! introspection-driven clients use as a concept's by-id lookup.
+//! `Entity` is an interface with one concrete object per archetype
+//! (`Class`, `Method`, ...) and one per *concept* the model's metamodel names
+//! (`Widget`...; declared as data by each language, see
+//! `schema.rs`); navigation fields return the interface, and `Query` has one
+//! list field per type so clients can enumerate them. Each type also has a
+//! single-item `…ByKey(key: String!)` field, the shape introspection-driven
+//! clients use as a concept's by-id lookup. The schema is built from the
+//! model, so `model-graphql --schema` prints the one of a given model.
 //!
 //! `OnDemand` serves the same schema without building a model up front: each
 //! request's selection set is mapped to the traits it needs and a
@@ -29,8 +32,8 @@ mod schema;
 use std::sync::Arc;
 
 use anyhow::Context;
+use async_graphql::dynamic::{Schema, SchemaError};
 use async_graphql::http::GraphiQLSource;
-use async_graphql::{EmptyMutation, EmptySubscription, Schema};
 use async_graphql_axum::GraphQL;
 use axum::Router;
 use axum::http::{HeaderValue, Method as HttpMethod};
@@ -40,25 +43,23 @@ use model_core::Model;
 use tower_http::cors::{Any, CorsLayer};
 
 pub use ondemand::{OnDemand, requirement_of};
-pub use schema::{
-    Class, Constant, Constructor, DEFAULT_PAGE, Entity, EntityKind, Enum, Field, File, Function,
-    Interface, MAX_PAGE, Method, Namespace, Property, Provenance, Query, Range, Relation, Stats,
-    Struct, Trait, TypeAlias, Variable,
-};
+pub use schema::{DEFAULT_PAGE, MAX_PAGE};
 
-pub type ModelSchema = Schema<Query, EmptyMutation, EmptySubscription>;
+/// The executable schema of one model (async-graphql's dynamic schema: its
+/// types depend on the model's metamodel).
+pub type ModelSchema = Schema;
 
 /// Deepest query accepted: deep enough for `entity → outgoing → edges →
 /// node → to → ancestors → name`, not for unbounded traversals.
 pub const MAX_DEPTH: usize = 16;
 
-pub fn schema(model: Arc<Model>) -> ModelSchema {
-    Schema::build(Query { model }, EmptyMutation, EmptySubscription)
-        .limit_depth(MAX_DEPTH)
-        // The interface is reachable from Query, but registering it explicitly
-        // guarantees every possible type appears in introspection.
-        .register_output_type::<Entity>()
-        .finish()
+/// Builds the schema of `model`: the archetype types (`Class`, `Method`...)
+/// and one concrete type, list field and `...ByKey` field per GraphQL concept
+/// the model's metamodel names (`KindInfo::graphql_type`). Fails only when the
+/// schema is inconsistent, which concept names cannot cause: a declaration
+/// with an invalid or clashing name is dropped.
+pub fn schema(model: Arc<Model>) -> Result<ModelSchema, SchemaError> {
+    schema::build(model, MAX_DEPTH)
 }
 
 /// GraphiQL on `GET /`, the API on `/graphql` (GET and POST).

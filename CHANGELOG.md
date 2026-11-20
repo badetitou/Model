@@ -4,6 +4,19 @@
 
 ### Added
 
+- GraphQL typed concepts from data. `KindInfo` has `graphql_type` and
+  `graphql_root` (serialised in model JSON; `Metamodel::set_concept`,
+  `ModelBuilder::set_kind_concept`), set by `kinds.json` (`graphql_type`,
+  `graphql_root`), `model-lang-pharo` and Moose imports (from the FM3 class).
+  `model-graphql` builds its schema from the model (async-graphql dynamic API):
+  the archetype types are unchanged, each named concept adds an object type
+  implementing `Entity`, a root list and `…ByKey`. `model_factory::default_model`,
+  `model_treesitter::declare_kinds`, `model_lang_pharo::declare_kinds`;
+  `model-graphql --schema [<root | model.json>]`.
+  Breaking: `model_graphql::schema` returns a `Result`, `ModelSchema` is the
+  dynamic `Schema`, and the Rust object types (`Class`...) are gone;
+  `__typename` is the concept type when the kind has one, so `... on Class` and
+  `classes` no longer hold entities with their own concept type.
 - Traits on tree-sitter kinds: the default kinds of the archetypes
   (`class`, `method`, `field`...) carry a trait mask from
   `model-treesitter/archetype_traits.json`, and the Java fine kinds (`record`,

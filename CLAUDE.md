@@ -17,7 +17,9 @@ Structure (`../Structure`), its first client.
   every occurrence site kept), `model` (frozen compact `Model`: interned
   strings, fixed rows, CSR relations/sites; views `EntityRef`/`RelationRef`),
   `serial` (JSON, loaded through the builder), `strings` (interner).
-  `examples/memory.rs` measures the storage cost (design §3.2).
+  `examples/memory.rs` measures the storage cost (design §3.2). `KindInfo` also
+  carries optional `graphql_type`/`graphql_root` (concept names, set by the
+  languages' data, serialised in the metamodel).
 - `crates/model-scip` — `load(index.scip)` → `ScipIndex` (interned symbols,
   per-document definitions with enclosing range / references with import
   role, symbol infos with `EntityKind`); raw-document helpers for caching.
@@ -53,11 +55,19 @@ Structure (`../Structure`), its first client.
   needs resolution iff it carries relations), scope → files
   (`All|Files|Package|GitDiff`), per-scope memo, `Report` (layers run,
   indexing events). Uses `BuildOptions::scope`. `examples/measure.rs`.
-- `crates/model-graphql` — `schema.rs` (async-graphql objects holding
-  `Arc<Model>` + id; forward connections via `page`), `lib.rs` (`schema`,
-  `router`: GraphiQL `/`, API `/graphql`), `main.rs` (bin: build or load
-  JSON, serve; `--no-cache` on fixtures). `ondemand.rs` (`OnDemand`, `requirement_of`: selection set → traits → session; `--on-demand`). generic `fineKind`/`traits` fields and `entities(fineKind, trait)` filters; no language-specific types (typed concepts from data: issue #16). `schema.graphql` is checked by a
-  test: regenerate with `UPDATE_SCHEMA=1 cargo test -p model-graphql`.
+- `crates/model-graphql` — `schema.rs` (async-graphql *dynamic* schema built
+  from the model: `ARCHETYPES` table, `Entity` interface from `ENTITY_SPECS`,
+  one object type + root list + `…ByKey` per kind whose `KindInfo` names a
+  `graphql_type`/`graphql_root`; invalid or clashing names fall back to the
+  archetype type), `lib.rs` (`schema(model)`, `router`: GraphiQL `/`, API
+  `/graphql`), `main.rs` (bin: build or load JSON, serve; `--schema [input]`;
+  `--no-cache` on fixtures). `ondemand.rs` (`OnDemand`, `requirement_of`:
+  selection set → traits → session; an unknown root field is a typed concept,
+  structure layer only; `--on-demand`). No language or kind name in `src/` (a
+  test checks): concepts come from data, `kinds.json`/`define_kind` (issue #16).
+  `schema.graphql` is checked by a test (bundled language data via
+  `model_factory::default_model`): regenerate with
+  `UPDATE_SCHEMA=1 cargo test -p model-graphql`.
 - `crates/model-fm3` — `Metamodel::from_json_str|from_path`: typed reader for
   Moose FM3 metamodel JSON (packages, classes, traits, properties, `Ref`);
   fixture `tests/fixtures/famixjava-subset.json` (real export, trimmed).
