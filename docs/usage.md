@@ -113,6 +113,10 @@ rest come from tree-sitter, by name (`Provenance::TreeSitter`).
 
 ## 4. Sessions and GraphQL
 
+This section is the quick start; the full guide to on-demand import (what
+triggers which layer, scopes, caching, limits, troubleshooting) is
+[on-demand.md](on-demand.md).
+
 ```rust
 use model_session::{Requirement, Scope, Session};
 

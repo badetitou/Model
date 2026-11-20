@@ -336,6 +336,8 @@ file. Tree-sitter extents (§5) fix that: they are what `Lift` links onto.
 
 ### 4.1 Demand-driven import (`model-session`)
 
+User guide: [on-demand.md](on-demand.md).
+
 `model_factory::build` computes everything. `model-session` computes what a
 request needs: `Session::require(&Scope, &Requirement)`.
 

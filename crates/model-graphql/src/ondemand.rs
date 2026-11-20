@@ -11,9 +11,8 @@
 //! field can cost performance until it is listed, never correctness. One
 //! exception, a rule rather than a list: a root field (directly under the
 //! operation) the tables do not know is the list field of a typed concept
-//! (`widgets`...: their names come from the model's
-//! metamodel, which does not exist yet), and typed concepts are entities, so
-//! it needs the structure layer only. A name the schema does not have fails at
+//! (`widgets`...: their names come from the model's metamodel), and typed
+//! concepts are entities, so it needs the structure layer only. A name the schema does not have fails at
 //! execution anyway.
 
 use std::collections::HashSet;

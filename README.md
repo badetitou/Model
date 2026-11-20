@@ -44,7 +44,8 @@ Namespace ⊃ Class ⊃ Method
 <a href="#numbers">Numbers</a> ·
 <a href="#graphql-in-action">GraphQL</a> ·
 <a href="#development">Development</a> ·
-<a href="docs/usage.md">Usage guide</a>
+<a href="docs/usage.md">Usage guide</a> ·
+<a href="docs/on-demand.md">On-demand import</a>
 </sub></p>
 
 ## Highlights
