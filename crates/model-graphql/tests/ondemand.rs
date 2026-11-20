@@ -180,3 +180,37 @@ async fn errors_are_reported_not_raised() {
     assert!(!r.errors.is_empty());
     let _ = std::fs::remove_dir_all(&d);
 }
+
+#[test]
+fn fine_kind_fields_need_the_structure_layer_only() {
+    use Layer::*;
+    for q in [
+        "{ parameters { nodes { name traits fineKind } } }",
+        "{ localVariables { totalCount } records { nodes { name } } }",
+        r#"{ parameterByKey(key: "k") { name traits } }"#,
+        r#"{ entities(fineKind: "parameter", trait: "Typed") { nodes { name } } }"#,
+        "{ pharoClasses { totalCount } tsInterfaces { totalCount } }",
+    ] {
+        assert_eq!(layers(q), [Structure], "{q}");
+    }
+}
+
+#[tokio::test]
+async fn fine_kind_queries_start_no_indexer() {
+    let d = project("fine");
+    let od = od(&d, Scope::All);
+    let data = ask(
+        &od,
+        r#"{ methods { nodes { traits } } localVariables { totalCount }
+             inv: entities(trait: "Invocation") { totalCount } }"#,
+    )
+    .await;
+    assert_eq!(data["localVariables"]["totalCount"], 0);
+    assert!(data["inv"]["totalCount"].as_u64().unwrap() >= 3);
+    let traits = data["methods"]["nodes"][0]["traits"].as_array().unwrap();
+    assert!(traits.iter().any(|t| t == "Invocation"));
+    let r = od.last_report().unwrap();
+    assert_eq!(r.layers_run, [Layer::Structure]);
+    assert_eq!(r.indexing_events, 0);
+    let _ = std::fs::remove_dir_all(&d);
+}

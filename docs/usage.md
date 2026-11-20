@@ -143,6 +143,45 @@ cargo run --release -p model-graphql -- path/to/repo --on-demand --diff origin/m
 `outgoing(kind: "calls")` does. `OnDemand` and `requirement_of` (selection → traits) are in
 `crates/model-graphql/src/ondemand.rs`. Use `--no-cache` on fixtures.
 
+### Famix-like concepts in GraphQL
+
+Fine kinds are first-class in the schema. Besides the 15 archetype types
+(`Class`, `Method`, `Variable`, ...), there is one concrete type per fine kind
+of the default kind tables, each implementing `Entity`, with a root list field
+and a `...ByKey(key: String!)` lookup:
+
+| Java | TypeScript / Python | Pharo |
+| --- | --- | --- |
+| `Parameter` (`parameters`, `parameterByKey`) | `TsInterface` (`tsInterfaces`) | `PharoClass` (`pharoClasses`) |
+| `LocalVariable` (`localVariables`) | `TsTypeAlias`, `TsNamespace`, `TsAbstractClass` | `PharoTrait` (`pharoTraits`) |
+| `TypeParameter` (`typeParameters`) | `TsArrowFunction`, `TsModule` | `PharoMethod` (`pharoMethods`) |
+| `Annotation`, `AnnotationType` (`annotations`, `annotationTypes`) | `PythonModule` (`pythonModules`) | `PharoExtensionMethod` |
+| `Record` (`records`), `EnumConstant` (`enumConstants`), `Comment` (`comments`) | | |
+
+- `__typename` of an entity is its fine kind's type when the kind is in that
+  list (a parameter is a `Parameter`, a record a `Record`, a Pharo class a
+  `PharoClass`), otherwise its archetype's type. Kinds defined elsewhere
+  (user `kinds.json`, Moose imports) keep the archetype type; `fineKind`
+  always gives the exact name. So `... on Class` no longer matches records or
+  Pharo classes: use `... on Record` or filter on `kind: CLASS`, which still
+  matches every class-archetype entity. `kind`, `classByKey`, `classes` ... keep
+  working on the archetype.
+- `Entity.traits: [String!]!` lists the trait names of the entity's kind
+  (`Named`, `Typed`, `Invocation` ...).
+- `entities(fineKind: "parameter", trait: "Invocation", ...)`: exact fine kind
+  name, and trait by name (an unknown trait is an error listing the known
+  ones). They combine with the other filters.
+- A fine-kind root field is empty when the model defines no such kind.
+- `--on-demand`: these fields need only the structure layer; no indexer runs.
+
+```graphql
+{
+  parameters(first: 5) { totalCount nodes { name traits parent { name } } }
+  records { nodes { name } }
+  entities(trait: "Invocation", fineKind: "pharo.method", first: 3) { nodes { __typename name } }
+}
+```
+
 ## 5. Fragments and incremental rebuild
 
 Each source file yields a `Fragment` (JSON-serialisable) keyed by its git
