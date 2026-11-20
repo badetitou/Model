@@ -34,7 +34,8 @@ use std::collections::HashMap;
 use model_core::ModelBuilder;
 use model_detect::Detection;
 use model_index::{
-    Coverage, DocumentCache, FragmentCache, IndexOptions, IndexSource, Indexer, Reindex,
+    Coverage, CustomIndex, DocumentCache, FragmentCache, IndexOptions, IndexSource, Indexer,
+    Reindex,
 };
 use model_link::{LinkOptions, LinkStats, Unmapped};
 use model_scip::ScipIndex;
@@ -122,6 +123,8 @@ pub struct IndexReport {
     /// Project root, relative to the analysed root (`""` = itself).
     pub root: PathBuf,
     pub indexer: &'static str,
+    /// Produced by a user-supplied index command instead of `indexer`.
+    pub custom: bool,
     pub origin: IndexOrigin,
     /// `Lift` onto tree-sitter entities, or `Create` (no grammar).
     pub unmapped: Unmapped,
@@ -147,6 +150,8 @@ pub struct Build {
 struct Job {
     indexer: &'static Indexer,
     root: PathBuf,
+    /// A user-supplied command replacing the indexer.
+    custom: Option<CustomIndex>,
 }
 
 /// Roots not inside another one (`""` contains everything).
@@ -164,9 +169,12 @@ fn outermost(mut roots: Vec<PathBuf>) -> Vec<PathBuf> {
 
 /// File the job's index is in: `index.scip`, unless another indexer of
 /// this build also runs in its root, or wrote the `index.scip` there.
-fn output_for(abs: &Path, indexer: &Indexer, shared_root: bool) -> String {
+fn output_for(abs: &Path, indexer: &Indexer, custom: bool, shared_root: bool) -> String {
     let default = abs.join("index.scip");
-    let ours = if default.is_file() {
+    let ours = if custom {
+        // The user's command may write any tool's index.
+        !shared_root
+    } else if default.is_file() {
         match model_scip::tool(&default) {
             Ok(Some(tool)) => tool == indexer.name,
             _ => !shared_root,
@@ -243,13 +251,28 @@ pub fn build(
             let Some(indexer) = model_index::for_language(l.language.as_str()) else {
                 continue;
             };
-            // Without a build marker there is no project to index.
-            for r in outermost(l.project_roots.clone()) {
+            if jobs.iter().any(|j| j.indexer.name == indexer.name)
+                && opts.index.custom_for(indexer).is_some()
+            {
+                continue;
+            }
+            // A custom command makes the analysed root itself the project
+            // root, marker or not; nested markers do not trigger the
+            // built-in indexer. Otherwise: no build marker, no project.
+            let roots = match opts.index.custom_for(indexer) {
+                Some(_) => vec![PathBuf::new()],
+                None => outermost(l.project_roots.clone()),
+            };
+            for r in roots {
                 if !jobs
                     .iter()
                     .any(|j| j.indexer.name == indexer.name && j.root == r)
                 {
-                    jobs.push(Job { indexer, root: r });
+                    jobs.push(Job {
+                        indexer,
+                        root: r,
+                        custom: opts.index.custom_for(indexer).cloned(),
+                    });
                 }
             }
         }
@@ -265,14 +288,23 @@ pub fn build(
         let base = 5 + (i * 55 / n) as u8;
         let span = (55 / n) as u8;
         let abs = root.join(&job.root);
-        let detail = format!("{} in {}", job.indexer.name, shown(&job.root));
+        let tool = if job.custom.is_some() {
+            "custom index command"
+        } else {
+            job.indexer.name
+        };
+        let detail = format!("{tool} in {}", shown(&job.root));
         step("indexing", base, Some(detail.clone()));
         let exts = extensions(job.indexer);
-        let output = output_for(&abs, job.indexer, shared[i]);
+        let output = output_for(&abs, job.indexer, job.custom.is_some(), shared[i]);
+        let tag = job
+            .custom
+            .as_ref()
+            .map_or_else(|| job.indexer.cache_tag(), CustomIndex::cache_tag);
         let cache = opts
             .cache
             .as_deref()
-            .and_then(|app| DocumentCache::for_repo(&abs, app, &job.indexer.cache_tag()));
+            .and_then(|app| DocumentCache::for_repo(&abs, app, &tag));
 
         let mut got: Option<(ScipIndex, IndexOrigin)> = None;
         let compose = opts.from_cache
@@ -294,6 +326,7 @@ pub fn build(
                 job.indexer,
                 &exts,
                 &output,
+                job.custom.as_ref(),
                 &opts.index,
                 &mut |w| warnings.push(w),
                 &mut |pct, d| {
@@ -406,6 +439,7 @@ pub fn build(
         reports.push(IndexReport {
             root: job.root,
             indexer: job.indexer.name,
+            custom: job.custom.is_some(),
             origin,
             unmapped,
             link,

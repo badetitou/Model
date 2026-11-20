@@ -112,6 +112,13 @@ missing or older than a source file. The GraphQL server and the `measure`
 example set `Never` explicitly. For a path that must never pay for an indexer,
 use `Session::with_options` with `Reindex::Never`.
 
+For a project the built-in indexers cannot build (`make`), the user can replace
+the indexer of a language with `opts.index.set_custom(CustomIndex::new("java",
+"<shell command>"))`; the resolution layer then runs that command (same
+policy, timeout and report) in the analysed root. It is never read from the
+analysed repository. See usage guide, "Indexing a project the built-in
+indexers cannot build".
+
 ### Caching rules
 
 The session keeps **one entry per distinct scope**:
@@ -172,6 +179,10 @@ Notes on the flags:
 - The indexer policy defaults to `--reindex never`: the resolution layer
   **uses an existing `index.scip`** and never starts a process. Add
   `--reindex if-stale` (or `if-missing`, `always`) to allow it.
+  `--index-command LANGUAGE=COMMAND` (or `MODEL_INDEX_COMMAND`) replaces the
+  indexer of that language with your own shell command, run at the analysed
+  root (`{root}`, `{output}` placeholders); with `--reindex never` an existing
+  index is used and the command never runs.
 - Each request logs one line on stderr:
   `require: ran [Structure] of [Structure] in 38ms (46 files, 0 indexing events)`.
   `ran` is what this request paid, `of` is what the model now holds. A repeated

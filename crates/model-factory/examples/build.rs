@@ -1,4 +1,4 @@
-//! `cargo run --release -p model-factory --example build -- <root> [--reindex never|if-missing|if-stale|always] [--no-scip] [--no-cache] [--from-cache] [--fragment-cache <dir>] [--json <file>]`
+//! `cargo run --release -p model-factory --example build -- <root> [--reindex never|if-missing|if-stale|always] [--index-command LANGUAGE=COMMAND ...] [--no-scip] [--no-cache] [--from-cache] [--fragment-cache <dir>] [--json <file>]`
 //!
 //! Builds the model of `<root>` and prints what it holds. Defaults to
 //! `--reindex never`: only existing `index.scip` files are used.
@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, bail};
-use model_factory::index::Reindex;
+use model_factory::index::{CustomIndex, Reindex};
 use model_factory::{BuildOptions, IndexOrigin, Progress};
 
 /// A project root for messages: `.` for the analysed root itself.
@@ -34,6 +34,10 @@ fn main() -> anyhow::Result<()> {
     let mut json: Option<PathBuf> = None;
     let mut opts = BuildOptions::default();
     opts.index.reindex = Reindex::Never;
+    // MODEL_INDEX_COMMAND, then --index-command (which wins for its language).
+    if let Some(c) = CustomIndex::from_env().map_err(anyhow::Error::msg)? {
+        opts.index.set_custom(c);
+    }
     while let Some(a) = args.next() {
         match a.as_str() {
             "--no-scip" => opts.scip = false,
@@ -45,6 +49,11 @@ fn main() -> anyhow::Result<()> {
                     Some(args.next().context("--fragment-cache <dir>")?.into())
             }
             "--json" => json = Some(args.next().context("--json <file>")?.into()),
+            "--index-command" => {
+                let spec = args.next().context("--index-command LANGUAGE=COMMAND")?;
+                opts.index
+                    .set_custom(CustomIndex::parse(&spec).map_err(anyhow::Error::msg)?);
+            }
             "--reindex" => {
                 opts.index.reindex = match args.next().as_deref() {
                     Some("never") => Reindex::Never,

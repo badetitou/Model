@@ -219,6 +219,94 @@ model JSON, so a saved model keeps its concepts.
 Archetype default kinds cannot carry a concept (`set_kind_concept` returns
 false): they already have their archetype type.
 
+### Indexing a project the built-in indexers cannot build
+
+`scip-java index` only drives Gradle, Maven and Bazel, and a project root needs
+a build marker to be indexed at all. For a `make`-built project (or any custom
+pipeline) say yourself how its index is produced:
+
+```bash
+# flag (repeatable, one per language) or environment variable
+cargo run --release -p model-graphql -- path/to/repo \
+  --reindex if-stale --index-command 'java=./tools/make-index.sh {root} {output}'
+MODEL_INDEX_COMMAND='java=make -C {root} scip' cargo run --release -p model-factory --example build -- path/to/repo
+```
+
+```rust
+let mut opts = BuildOptions::default();
+opts.index.set_custom(CustomIndex::new("java", "./tools/make-index.sh {root} {output}"));
+```
+
+- **Only you can set it.** The command comes from the flag, `MODEL_INDEX_COMMAND`
+  or `IndexOptions::custom`; it is **never read from a file of the analysed
+  repository**, so a repository cannot run commands on whoever analyses it.
+  Do not forward untrusted text into it.
+- **`LANGUAGE=COMMAND`.** The language (a `model-detect` id with a SCIP indexer:
+  `java`, `typescript`, `python`, `go`, `rust`...) is required, there is no
+  implicit default: it names the indexer being replaced, so `java=` also
+  replaces scip-java for `kotlin` and `scala`. Other languages keep their normal
+  indexers. A flag replaces the environment variable for the same language.
+- **How it runs.** `sh -c <command>` in the project root with the usual timeout
+  (`MODEL_INDEXER_TIMEOUT`, default 600 s, killed on expiry), progress from its
+  output and the tail of its output on failure. `{root}` is the absolute project
+  root (also the working directory) and `{output}` the file name the index must
+  have in it (`index.scip`, or `index.scip-java.scip` when another indexer shares
+  the root). Both are replaced by **shell-quoted** values: write them bare, not
+  inside quotes (`"{root}"` would nest quotes). Scripts can read the same values
+  from `$MODEL_INDEX_ROOT` and `$MODEL_INDEX_OUTPUT`. It needs `sh` (no Windows
+  without a POSIX shell).
+- **Roots.** The analysed root itself is the project root for that language,
+  with or without a build marker, and nested markers do not start the built-in
+  indexer in that run. With `--reindex never` an existing `{output}` there is
+  used and nothing runs.
+- **Reuse and staleness** are unchanged: `never`, `if-missing`, `if-stale`
+  (default for the library: stale = a source file of the language, outside
+  `build/`, `target/`, `node_modules/`..., newer than the index) and `always`.
+- **Which tool wrote the index** is *not* checked for a custom command: it is
+  yours and may legitimately be scip-java's, or another tool's. (Built-in
+  indexers still refuse an index written by another tool.) Document cache keys
+  use a distinct stable tag `custom-<hash of the command text>`, so they are
+  never mixed with `scip-java-0.12.3` documents; changing the command string
+  starts a new cache.
+- **Failures** are warnings and the language falls back to tree-sitter:
+  program not found (exit 127, shown with the command), non-zero exit (tail of
+  the output), exit 0 but no `{output}` written, timeout (`MODEL_INDEXER_TIMEOUT`).
+
+**Recipe for a `make`-built Java project — UNTESTED on the OpenJDK.** scip-java
+can index an arbitrary build by hand: add its javac plugin to every `javac`
+call (`-Xplugin:scip -sourceroot:<root> -targetroot:<dir>`, plus whatever
+`--add-exports` flags the plugin needs), then run `scip-java aggregate
+<targetroot>` to write `index.scip`. Write that in
+your own script, for example `tools/make-index.sh`:
+
+```sh
+#!/bin/sh
+# usage: make-index.sh <root> <output>      (run by you, adapt to your build)
+root=$1; output=$2; target=$root/.scip-targetroot
+rm -rf "$target"; mkdir -p "$target"
+# 1. rebuild with the semanticdb javac plugin injected (build-specific!)
+make -C "$root" JAVAC_EXTRA_FLAGS="-Xplugin:scip -sourceroot:$root -targetroot:$target" || exit 1
+# 2. turn the SemanticDB files into the index
+scip-java aggregate --output "$root/$output" "$target"
+```
+
+```bash
+cargo run --release -p model-graphql -- ~/jdk --reindex if-missing \
+  --index-command 'java=./tools/make-index.sh {root} {output}'
+# or build the index once yourself, then only reuse it:
+cargo run --release -p model-graphql -- ~/jdk --reindex never
+```
+
+Caveats: not tried on the OpenJDK. Its build runs its own `javac` invocations
+per module (the bootstrap `javac` and interim compilers, which may not accept
+the plugin), the flag name for extra options above is a placeholder, and the
+scip-java manual-configuration guide describes a newer scip-java than the one
+pinned here (`SCIP_JAVA_VERSION`, 0.12.3): check the plugin and
+subcommand names (`-Xplugin:scip` or `-Xplugin:semanticdb`, `aggregate` or
+`index-semanticdb`) against `scip-java --help` of the version you use. Safer alternatives: `--no-scip` (tree-sitter entities and name-resolved
+relations, nothing to run), or `--on-demand --package <dir>` to model only part
+of the tree.
+
 ## 5. Fragments and incremental rebuild
 
 Each source file yields a `Fragment` (JSON-serialisable) keyed by its git
