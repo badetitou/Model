@@ -1,109 +1,145 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-20
+
+Famix-like models. Model now builds models at the level of FamixJava from
+tree-sitter and SCIP: fine-grained kinds, traits generated from the FM3
+description of FamixJava, new relations, per-file fragments, demand-driven
+import, typed GraphQL concepts, and a separate crate that exports a `Model` as
+Moose JSON (and imports Moose JSON to diff against VerveineJ). The workspace
+goes from ten to fourteen crates; the new ones are `model-fm3`, `model-traits`,
+`model-moose` and `model-session`. Tracked in issue #1.
+
+### Breaking
+
+- `model-core`: `RelationKind` gains `DeclaredType`, `Accesses`, `Throws` and
+  `Overrides`; exhaustive matches must handle them. Sites carry one more byte
+  (`SiteFlags`), 42.7 B/site instead of 41.7.
+- `model-index`: `IndexOptions` is no longer `Copy` and has a `custom` field;
+  `ensure_index` takes the `custom` command; `IndexReport` has `custom: bool`.
+- `model-graphql`: `schema` returns a `Result` and `ModelSchema` is the dynamic
+  `Schema`; the Rust object types (`Class`, `Method`...) are gone. The schema
+  is built from the model: the 15 archetype types are unchanged, every kind
+  that names a GraphQL concept adds a type. `__typename` is that concept type
+  when the kind has one, so `... on Class` and `classes` no longer hold
+  entities with their own concept type (a Java `record` is a `Record`);
+  `entities(kind: CLASS)` still matches all of them. `methods` on a container
+  lists only entities typed `Method`; use `children(kind: METHOD)` for every
+  kind of method.
 
 ### Added
 
-- User-supplied index command (issue #17) for builds `scip-java index` cannot
-  drive (`make`): `model_index::CustomIndex` / `IndexOptions::custom`
+#### Metamodel and storage (`model-core`)
+
+- Fine-grained kinds: `KindId` (1 byte in the entity row) and a `Metamodel`
+  table (kind -> archetype, `TraitMask`, optional FM3 class, optional GraphQL
+  concept names) carried by the `Model`; `EntityKind` stays the archetype.
+  Builder: `define_kind`, `entity_of_kind`, `set_kind_id`, `kind_id`,
+  `set_kind_traits`, `set_kind_concept`; views: `EntityRef::{kind_id,
+  kind_name, kind_info}`, `Model::{metamodel, of_kind_id}`. JSON gains
+  optional `fine_kind` and a top-level `metamodel`.
+- Traits on kinds: `Model::of_trait` and `EntityRef::has_trait`.
+- Relations `declared_type`, `accesses`, `throws`, `overrides` and a 1-byte
+  `SiteFlags` column on sites (`READ`, `WRITE`, `RECEIVER`;
+  `ModelBuilder::occurrence_flagged`, `RelationRef::site_flags`, JSON `flags`).
+- `ModelBuilder::from_model` re-opens a frozen model.
+
+#### Extraction and linking
+
+- `model-treesitter`: Java `record`, `annotation_type` and `enum_constant` are
+  distinct kinds; Java parameters, locals, type parameters, annotation
+  instances and comments are entities (fine kinds `parameter`,
+  `local_variable`, `type_parameter`, `annotation`, `comment`), keyed SCIP-like
+  under their enclosing definition. All four new relations are produced by name
+  for Java (`@typed`, `@reference.declared_type|throws`, `@access.*`).
+- Fine kinds are data (`model-treesitter/kinds.json`: archetype, traits, FM3
+  class, GraphQL concept) and the default kinds of the archetypes carry their
+  traits from `archetype_traits.json`, so `of_trait` / `has_trait` work on a
+  model built without an indexer. TypeScript: `ts.interface`, `ts.type_alias`,
+  `ts.namespace`, `ts.abstract_class`, `ts.arrow_function`, `ts.module`.
+  Python: its own query (superclasses, parameters), `python.module`. See
+  `docs/traits.md`.
+- Per-file fragments: a serialisable `Fragment` per source file (entities,
+  intra-file facts, unresolved references), cached by git blob
+  (`FragmentCache`), and a model composed from the set (`FragmentSet::{insert,
+  remove, compose}`, `Extractor`, `load_fragments`, `extract_fragments`).
+  Models built from fragments are byte-identical to direct builds on the
+  fixtures; a changed file only recomputes its own fragment.
+- `model-scip` exposes the read/write roles of references; `model-link`
+  produces `accesses`, `declared_type` and `overrides` from SCIP.
+- `model-lang-pharo`: kinds against Famix-Smalltalk (`pharo.class`,
+  `pharo.trait`, `pharo.method`, `pharo.extension_method`).
+
+#### New crates
+
+- `model-fm3`: reads a Moose FM3 metamodel exported as JSON (packages, classes,
+  traits, properties with type, multivalued, container, derived, opposite).
+- `model-traits`: traits as data (Named, WithMembers, WithInheritances,
+  Invocation, Access, Modifiers, Annotations, Typed, Exceptions: typed props,
+  relations carried, containment rules) generated from the FamixJava FM3
+  export (`cargo run -p model-traits --example generate`), plus a
+  per-FM3-class trait table to fill kinds' `TraitMask`.
+- `model-session`: demand-driven import. `Session::require(scope,
+  requirement)` runs only the layers the traits need (structure, resolution,
+  derived; a trait needs resolution when it carries relations) on the scope's
+  files (`Scope::{All, Files, Package, GitDiff}`), remembers per scope what it
+  computed and reports it (`Report`). Guide: `docs/on-demand.md`.
+- `model-moose`: imports Moose JSON into a `ModelBuilder` (tolerant streaming
+  reader, FM3 classes to fine kinds, associations to relations with sites,
+  `moose.id` kept) with an `ImportReport`, `diff(left, right)` by FM3 class,
+  archetype and relation, and `export_json` / `export_path`, which write a
+  `Model` as Moose JSON (streaming, `FM3` then `id` first, references only):
+  kinds to FamixJava classes, containment through the container property of
+  the (child, parent) pair, relations as reified associations anchored per
+  site (`Invocation`, `Access` with `isWrite`, `Reference`, `Inheritance`,
+  `Implementation`, `Import`), `EntityTyping`, `declaredExceptions`,
+  `IndexedFileAnchor` with character offsets read from the sources. Derived
+  properties, metrics and associations Famix refuses are left out and counted
+  in `ExportReport`. Loads in Moose with `FamixJavaModel new
+  importFromJSONStream:`. Examples `export` and `import`.
+
+#### Facade, index, GraphQL
+
+- `model-factory`: `BuildOptions::{scope, syntactic_relations,
+  fragment_cache_dir}`, `in_scope`, `extract_fragments_in`, `default_model`
+  (the bundled language data).
+- `model-index`: user-supplied index command for builds `scip-java index`
+  cannot drive (`make`), issue #17: `CustomIndex` / `IndexOptions::custom`
   (`set_custom`), `--index-command LANGUAGE=COMMAND` on `model-graphql` and the
   `build` example, `MODEL_INDEX_COMMAND`. Run with `sh -c` at the analysed root
   (`{root}`, `{output}`), never read from the analysed repository; the root is
   a project root without a build marker; the writer tool is not checked and the
-  document cache uses the tag `custom-<hash>`. `IndexReport::custom`.
-  Breaking: `IndexOptions` is no longer `Copy` and has a `custom` field;
-  `ensure_index` takes the `custom` command.
-- GraphQL typed concepts from data. `KindInfo` has `graphql_type` and
-  `graphql_root` (serialised in model JSON; `Metamodel::set_concept`,
-  `ModelBuilder::set_kind_concept`), set by `kinds.json` (`graphql_type`,
-  `graphql_root`), `model-lang-pharo` and Moose imports (from the FM3 class).
-  `model-graphql` builds its schema from the model (async-graphql dynamic API):
-  the archetype types are unchanged, each named concept adds an object type
-  implementing `Entity`, a root list and `…ByKey`. `model_factory::default_model`,
-  `model_treesitter::declare_kinds`, `model_lang_pharo::declare_kinds`;
-  `model-graphql --schema [<root | model.json>]`.
-  Breaking: `model_graphql::schema` returns a `Result`, `ModelSchema` is the
-  dynamic `Schema`, and the Rust object types (`Class`...) are gone;
-  `__typename` is the concept type when the kind has one, so `... on Class` and
-  `classes` no longer hold entities with their own concept type.
-- Traits on tree-sitter kinds: the default kinds of the archetypes
-  (`class`, `method`, `field`...) carry a trait mask from
-  `model-treesitter/archetype_traits.json`, and the Java fine kinds (`record`,
-  `parameter`, `local_variable`, `annotation`...) get theirs in `kinds.json`,
-  so `of_trait` / `has_trait` work on a Java model built without an indexer.
-  `model-core`: `ModelBuilder::set_kind_traits`, `Metamodel::set_traits`.
-- Traits beyond Java (`docs/traits.md`): fine kinds are data
-  (`model-treesitter/kinds.json`: archetype, traits, FM3 class), used by query
-  files. TypeScript: `ts.interface`, `ts.type_alias`, `ts.namespace`,
-  `ts.abstract_class`, `ts.arrow_function`, `ts.module`. Python: own query
-  (superclasses, parameters), `python.module`. Pharo (`model-lang-pharo`):
-  `pharo.class`, `pharo.trait`, `pharo.method`, `pharo.extension_method`
-  against Famix-Smalltalk.
-- `model-session`: new crate, demand-driven import. `Session::require(scope,
-  requirement)` runs only the layers the traits need (structure, resolution,
-  derived; declared in `LAYERS`, a trait needs resolution when it carries
-  relations) on the scope's files (`Scope::{All, Files, Package, GitDiff}`),
-  remembers per scope what it computed, and reports it (`Report`).
-- `model-factory`: `BuildOptions::scope` and `syntactic_relations`;
-  `in_scope`, `extract_fragments_in`.
-- `model-core`: `ModelBuilder::from_model` re-opens a frozen model.
-- `model-graphql`: `OnDemand` and `requirement_of` (selection set to traits),
-  `--on-demand [--package <dir> | --diff <base>]`: a query on
-  `methods { name }` starts no indexer.
-- `model-moose`: `export_json` / `export_path` write a `Model` as Moose JSON
-  (streaming, `FM3` then `id` first, references only): kinds to FamixJava
-  classes (`KindInfo::fm3`, else a kind-name table), containment through the
-  container property of the (child, parent) pair, relations as reified
-  associations anchored per site (`Invocation`, `Access` with `isWrite`,
-  `Reference`, `Inheritance`, `Implementation`, `Import`), `typing` /
-  `EntityTyping`, `declaredExceptions`, `IndexedFileAnchor` with character
-  offsets read from the sources, stub annotation types, `self` implicit
-  variables, `Parametric*` owners, dotted packages split into a chain.
-  Derived properties, metrics and associations Famix refuses (a reference
-  from a class...) are left out and counted in `ExportReport`. Loads in Moose
-  with `FamixJavaModel new importFromJSONStream:`. `examples/export.rs`.
-- Relations: `declared_type`, `accesses`, `throws`, `overrides`
-  (`RelationKind`) and a 1-byte `SiteFlags` column on sites (`READ`, `WRITE`,
-  `RECEIVER`; `ModelBuilder::occurrence_flagged`, `RelationRef::site_flags`,
-  JSON `flags`, GraphQL `Relation.flaggedSites`). `model-scip` exposes the
-  read/write roles of references; `model-link` produces `accesses`,
-  `declared_type` (type definitions) and `overrides` from SCIP;
-  `model-treesitter` produces all four by name for Java (`@typed`,
-  `@reference.declared_type|throws`, `@access.*` captures). Cost: +1 B/site
-  (42.7 B/site, 203 MiB on 5M sites). `model-traits`: `Typed` and `Exceptions`
-  traits, `overrides` / `accesses` carried by Invocation / Access.
+  document cache uses the tag `custom-<hash>`.
+- `model-graphql`: `fineKind`, `fm3Class` and `traits` on every entity;
+  `fineKind` and `trait` filters on `entities(...)`; `Relation.flaggedSites`;
+  typed concepts from data (`KindInfo::graphql_type|graphql_root`, set by
+  `kinds.json`, `model-lang-pharo` and Moose imports): each named concept adds
+  an object type implementing `Entity`, a root list and `…ByKey`;
+  `--schema [<root | model.json>]`; `--on-demand [--package <dir> | --diff
+  <base>]` (`OnDemand`, `requirement_of`): a query on `methods { name }`
+  starts no indexer.
 
-- `model-moose`: new crate, imports Moose/Famix JSON into a `ModelBuilder`
-  (tolerant streaming reader, FM3 classes to fine kinds, associations to
-  relations with sites from their anchors, `moose.id` kept) with an
-  `ImportReport` of unmapped classes and dangling references, and
-  `diff(left, right)` by FM3 class, archetype and relation.
-- `model-traits`: new crate, traits as data (Named, WithMembers,
-  WithInheritances, Invocation, Access, Modifiers, Annotations: typed props,
-  relations, relation kinds carried, containment rules) generated from the
-  FamixJava FM3 export (`cargo run -p model-traits --example generate`),
-  plus a per-FM3-class trait table to fill kinds' `TraitMask`.
-- `model-core`: `Model::of_trait` and `EntityRef::has_trait` query a kind's
-  `TraitMask`.
-- `model-core`: fine-grained kinds. `KindId` (1 byte in the entity row) and a
-  `Metamodel` table (kind -> archetype, `TraitMask`, optional FM3 class name)
-  carried by the `Model`; `EntityKind` stays the archetype. Builder:
-  `define_kind`, `entity_of_kind`, `set_kind_id`, `kind_id`; views:
-  `EntityRef::{kind_id, kind_name, kind_info}`, `Model::{metamodel, of_kind_id}`.
-  JSON gains optional `fine_kind` and a top-level `metamodel`.
-- `model-treesitter`: Java `record`, `annotation_type` and `enum_constant` are
-  distinct kinds (captures `@definition.record|annotation_type|enum_constant`).
-- `model-treesitter`: Java parameters, locals, type parameters, annotation
-  instances and comments are entities (fine kinds `parameter`, `local_variable`,
-  `type_parameter`, `annotation`, `comment` of archetype `Variable`; captures
-  `@definition.<kind>`), keyed SCIP-like under their enclosing definition.
-- `model-graphql`: `fineKind` and `fm3Class` fields on every entity.
-- `model-fm3`: new crate reading a Moose FM3 metamodel exported as JSON
-  (`FMJSONPrinter`) into typed structs: `Metamodel` with packages, classes,
-  traits and properties (type, multivalued, container, derived, opposite),
-  superclass and trait usage, built-in types as `Ref::Builtin`. Nested
-  entities are accepted; dangling references and duplicate ids are errors.
-  Checked with a subset of the FamixJava metamodel export.
+### Documentation
+
+`docs/usage.md` and `docs/examples.md` (usage and worked examples),
+`docs/on-demand.md`, `docs/traits.md`, `docs/famix.md` (Famix/Fame analysis
+and conformity matrix), `docs/baseline.md` (measurements), and
+`docs/verveinej-comparison.md` (Model's Moose export against VerveineJ on a
+real project, with and without dependencies).
+
+### Known limits
+
+- The Moose export is an approximation: derived properties, metrics,
+  signatures, generic arguments, modifiers and anonymous classes are not
+  exported, and call receivers are kept only for `self`; `docs/verveinej-comparison.md`
+  lists the measured gaps.
+- Relations resolved by name (tree-sitter) ignore receivers and inheritance;
+  a SCIP index is needed for exact relations.
+- Per-file fragments skip parsing but a full rebuild from a warm cache is not
+  faster than a direct build on very large repositories (vscode); the gain is
+  skipping layers and files on demand.
+- The `make` recipe for indexing a project that `scip-java index` cannot drive
+  is documented but untested on the OpenJDK.
 
 ## 0.3.0 — 2026-11-18
 
