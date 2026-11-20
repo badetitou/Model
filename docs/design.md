@@ -602,7 +602,7 @@ type Query {
   entityByKey(key: String!): Entity
   file(path: String!): Entity
   entities(kind, language, name, nameContains, external, filePrefix, roots,
-           first, after): EntityConnection!
+           fineKind, trait, first, after): EntityConnection!
   relations(kind: String, provenance: Provenance, first, after): RelationConnection!
   classes methods interfaces namespaces files ... (first, after): <Kind>Connection!
   classByKey(key: String!): Class   # one per kind: methodByKey, traitByKey, ...
@@ -629,6 +629,14 @@ type Relation { id kind from to provenance siteCount sites(first, after): RangeC
   use that shape as the by-id query of a concept, which is what makes their
   auto-generated tables clickable and their detail columns possible.
   Containers additionally expose `methods: [Method!]!` as a typed relation.
+- Fine kinds are first-class too: one concrete type per kind of the default
+  kind tables (`Parameter`, `LocalVariable`, `Record`, `AnnotationType`,
+  `EnumConstant`, `TsInterface`, `PharoClass`, ...; `FINE_KIND_TYPES`), each
+  an `Entity` with a root list field and a `...ByKey`. `__typename` is the
+  fine kind's type when it has one, else the archetype's (kinds from user
+  tables or Moose imports stay archetype-typed, `fineKind` tells them apart).
+  `Entity.traits` lists the kind's trait names; `entities` also filters by
+  `fineKind` and `trait`.
 - Resolvers hold an `Arc<Model>` and an id and map onto §6; nothing is
   copied. Relation kinds are strings (`calls`, ..., or custom like `http`).
   Breaking change: `__typename` on an entity is now `Class`, `Method`, …,
