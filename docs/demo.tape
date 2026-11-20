@@ -1,7 +1,7 @@
 # Model — demo.
 #
 # Regenerate from the repository root:
-#   cargo build --release -p model --example build   # so the run below is instant
+#   cargo build --release -p model-factory --example build   # so the run below is instant
 #   vhs docs/demo.tape
 #
 # The project shown is Structure's jpetstore-6 fixture (46 Java files, already
@@ -22,7 +22,7 @@ Set TypingSpeed 25ms
 Set Framerate 24
 
 Sleep 500ms
-Type "cargo run --release --quiet -p model --example build -- ../Structure/fixtures/jpetstore-6"
+Type "cargo run --release --quiet -p model-factory --example build -- ../Structure/fixtures/jpetstore-6"
 Sleep 250ms
 Enter
 Sleep 4s

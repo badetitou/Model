@@ -44,7 +44,9 @@ Namespace ⊃ Class ⊃ Method
 <a href="#numbers">Numbers</a> ·
 <a href="#graphql-in-action">GraphQL</a> ·
 <a href="#development">Development</a> ·
+<a href="#documentation">Documentation</a> ·
 <a href="docs/usage.md">Usage guide</a> ·
+<a href="docs/examples.md">Examples</a> ·
 <a href="docs/on-demand.md">On-demand import</a>
 </sub></p>
 
@@ -116,7 +118,18 @@ scip-java. Regenerate the recording with <code>vhs docs/demo.tape</code>.
 
 ```sh
 git clone https://github.com/badetitou/Model && cd Model
+# to build exactly the 0.4.0 release: git checkout v0.4.0
 ```
+
+**Try it on the bundled sample** (8 Java files, no indexer needed — the other
+scenarios of [docs/examples.md](docs/examples.md) use the same project):
+
+```sh
+cargo run -p model-factory --example tour
+```
+
+It builds the model of [`docs/examples/shop`](docs/examples/shop), queries it by
+kind and relation, runs the analyses and rebuilds incrementally.
 
 **Build the model of any project** — and see what it holds:
 
@@ -142,6 +155,8 @@ Useful flags:
 | `--no-scip` | tree-sitter only: entities + best-effort relations |
 | `--from-cache` | compose the index from cached documents instead of running the indexer |
 | `--no-cache` | do not read or write the document cache |
+| `--fragment-cache <dir>` | keep the per-file fragment cache in `<dir>` instead of the repository |
+| `--index-command LANGUAGE=COMMAND` | your own command produces the index of a language (also `MODEL_INDEX_COMMAND`); see [usage](docs/usage.md) |
 | `--json model.json` | export the model |
 
 **Explore it over GraphQL** (GraphiQL included):
@@ -151,8 +166,10 @@ cargo run --release -p model-graphql -- ../Structure --reindex if-stale
 # GraphiQL on http://127.0.0.1:8000/ , API on /graphql
 ```
 
-The server also accepts an exported `model.json` instead of a source root, and
-`--schema` prints the SDL. Introspection is enabled (GraphiQL uses it). For a
+The server also accepts an exported `model.json` instead of a source root,
+`--schema` prints the SDL of the model it would serve, and `--on-demand`
+(with `--package <dir>` or `--diff <base>`) builds nothing up front: each query
+decides which layers run ([on-demand import](docs/on-demand.md)). Introspection is enabled (GraphiQL uses it). For a
 browser client on another origin — e.g. Fluid on `http://localhost:5173` —
 allow it explicitly:
 
@@ -168,7 +185,7 @@ any origin. Without it, no CORS header is sent.
 
 ```toml
 [dependencies]
-model-factory = "0.3.0"
+model-factory = "0.4.0"
 ```
 
 ```rust
@@ -204,10 +221,12 @@ let model = builder.build();
 ### Navigating a model
 
 `Model` exposes `entity(id)`, `by_key(key)`, `entities()`, `of_kind(kind)`,
-`roots()`, `relations()`, `languages()` and `memory()`.
-`EntityRef` gives `key`, `kind`, `name`, `language`, `external`, `file`,
-`range`, `props`, `parent`, `ancestors`, `children`, `outgoing`, `incoming` and
-`targets(kind)`. Lookups return `Option` or iterators; nothing panics.
+`of_kind_id(id)`, `of_trait(mask)`, `metamodel()`, `roots()`, `relations()`,
+`languages()` and `memory()`.
+`EntityRef` gives `key`, `kind`, `kind_id`, `kind_name`, `has_trait`, `name`,
+`language`, `external`, `file`, `range`, `props`, `parent`, `ancestors`,
+`children`, `outgoing`, `incoming` and `targets(kind)`; `RelationRef` gives
+`kind`, `from`, `to`, `provenance`, `sites` and `site_flags`. Lookups return `Option` or iterators; nothing panics.
 
 ```rust
 use model_factory::{EntityKind, Model, RelationKind};
@@ -235,7 +254,10 @@ Entity
   key         stable identity: SCIP symbol or SCIP-like key
   kind        Namespace | File | Class | Interface | Trait | Enum | Struct
               | TypeAlias | Method | Constructor | Function
-              | Field | Property | Constant | Variable
+              | Field | Property | Constant | Variable   (the 15 archetypes)
+  kind_id     fine kind, a row of the model's Metamodel: `record`, `parameter`,
+              `local_variable`, `ts.interface`... with its archetype, traits
+              and optional GraphQL concept names
   name        simple name
   parent      containment (Namespace ⊃ Type ⊃ Method …)
   language    open id: "java", "typescript", "python"…
@@ -244,13 +266,15 @@ Entity
   props       open map: "java.annotations", "visibility", "http.endpoints"…
 
 Relation
-  kind        Calls | References | Inherits | Implements | Imports | Other(String)
+  kind        Calls | References | Inherits | Implements | Imports
+              | DeclaredType | Accesses | Throws | Overrides | Other(String)
   from, to    entities
   provenance  TreeSitter | Scip | Frontend | Derived
-  sites       every occurrence range, in from's file
+  sites       every occurrence range, in from's file, each with a flag byte
+              (READ / WRITE / RECEIVER for `accesses`)
 ```
 
-The contract is deliberately small: **closed entity kinds, open everything
+The contract is deliberately small: **closed entity archetypes, open everything
 else.** Analyses can match `EntityKind` exhaustively; language-specific facts
 go into `props`, and plugins can add relations under their own name.
 
@@ -329,7 +353,7 @@ relations and sites, binary-search key lookup. Run
 object (`Class`, `Method`, `Interface`, …), so `__typename` returns the real
 kind and clients can use fragments. Navigation fields (`parent`, `children`,
 `from`, `to`, …) still return the interface, so queries using only the common
-fields keep working. Each kind also has a root field (`classes`, `methods`,
+fields keep working. Each archetype also has a root field (`classes`, `methods`,
 `interfaces`, …) to enumerate its instances:
 
 ```graphql
@@ -343,7 +367,7 @@ kinds are strings so plugins can introduce their own, and the model is
 immutable while served. `__typename` on an entity used to be `Entity`; it is
 now the concrete type name — clients matching on it must be updated.
 
-Each kind also has a single-item lookup with one required `key` argument
+Each archetype also has a single-item lookup with one required `key` argument
 (`classByKey`, `methodByKey`, `traitByKey`, …), and containers expose a typed
 `methods` list. Introspection-driven clients such as fluid need both: the
 list/by-key pair makes their generated tables clickable, and `methods` is the
@@ -355,6 +379,27 @@ relation a class detail view can show without hand-written queries:
     methods { key name }
 } }
 ```
+
+Fine kinds the language data names get a **typed concept** of their own — an
+object type, a list root and a by-key lookup (`records`, `parameters`,
+`annotationTypes`, `tsInterfaces`…) — and every entity exposes `fineKind` and
+`traits`, filterable with `entities(fineKind: …, trait: …)`. The new relations
+(`declared_type`, `accesses` with read/write/receiver flags, `throws`,
+`overrides`) are reached through `outgoing(kind: "…")`. Worked queries:
+[docs/examples.md](docs/examples.md) (scenario b).
+
+## Documentation
+
+| Document | For |
+|---|---|
+| [Usage guide](docs/usage.md) | the APIs of the 0.4.0 release, with a "which document for what" table |
+| [Examples](docs/examples.md) | nine end-to-end scenarios on a bundled sample project, all runnable |
+| [On-demand import](docs/on-demand.md) | demand-driven layers, scopes, caching |
+| [Traits](docs/traits.md) | the traits of each language's kinds |
+| [Famix](docs/famix.md) | Famix/Fame analysis and conformity matrix |
+| [Design](docs/design.md) | storage, pipeline, measurements |
+| [Baseline](docs/baseline.md) | measurements before epic #1 |
+| [VerveineJ comparison](docs/verveinej-comparison.md) | Model's Moose export measured against VerveineJ |
 
 ## Development
 
@@ -379,10 +424,11 @@ The demo GIF is recorded from [`docs/demo.tape`](https://github.com/badetitou/Mo
 ## Roadmap
 
 `model-analysis` is available as a generic socle (metrics, fan-in/fan-out,
-cycles, unused entities, quotient, propagation, derived relations) and Pharo is
-modelled by a direct frontend. Next: a `model-cli`
-(`model detect|build|query <path>`), GraphQL analysis fields, a persisted binary
-format for very large models, and incremental rebuilds of changed files. See
+cycles, unused entities, quotient, propagation, derived relations), Pharo is
+modelled by a direct frontend, and rebuilds are incremental through the
+per-file fragment cache. Next: a `model-cli`
+(`model detect|build|query <path>`), GraphQL analysis fields, and a persisted
+binary format for very large models. See
 [`docs/design.md`](https://github.com/badetitou/Model/blob/main/docs/design.md).
 
 ## License

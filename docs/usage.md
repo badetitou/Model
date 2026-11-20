@@ -1,14 +1,34 @@
-# Usage guide: FamixJava-level models
+# Usage guide
 
-A short, practical tour of what epic [#1](https://github.com/badetitou/Model/issues/1)
-added. Deep references: [design.md](design.md) (storage, layers, numbers),
-[famix.md](famix.md) (Famix/Fame analysis and conformity matrix),
-[traits.md](traits.md) (traits beyond Java), [baseline.md](baseline.md)
-(measurements before the epic).
+The reference for the APIs and the servers of the 0.4.0 release: what each
+layer gives you, how to call it, and its limits. For worked scenarios with
+output you can reproduce, see [examples.md](examples.md).
+
+## Which document for what
+
+| Document | Read it to... |
+|---|---|
+| [README](../README.md) | understand what Model is, build a first model, see the crates |
+| **usage.md** (this page) | look up an API: kinds, traits, relations, sessions, GraphQL, fragments, Moose, index command |
+| [examples.md](examples.md) | follow nine end-to-end scenarios on a sample project (`docs/examples/shop`), with commands, output and pitfalls |
+| [on-demand.md](on-demand.md) | understand on-demand import: which query costs which layer, scopes, caching, troubleshooting |
+| [traits.md](traits.md) | see which traits the kinds of each language carry |
+| [famix.md](famix.md) | compare Model with FamixJava / Fame (analysis written before epic #1: its "Gap" tables are history) |
+| [design.md](design.md) | storage layout, pipeline, measurements, design decisions |
+| [baseline.md](baseline.md) | the measurements taken before epic #1 |
+| [verveinej-comparison.md](verveinej-comparison.md) | the measured comparison of Model's Moose export with VerveineJ's, on VerveineJ's own sources |
 
 The Rust snippets below are kept compiling by
-`crates/model-moose/tests/usage.rs` and `crates/model-session/tests/usage.rs`
-(`cargo test --workspace` runs them).
+`crates/model-moose/tests/usage.rs` and `crates/model-session/tests/usage.rs`;
+the runnable versions are the examples of [examples.md](examples.md)
+(`cargo test --workspace` runs them all).
+
+**Defaults to know.** The command-line tools (`build`, `model-graphql`) default
+to `--reindex never`: they use an existing `index.scip` and never start an
+indexer. The *library* default (`BuildOptions::default()`,
+`IndexOptions::default()`) is `Reindex::IfStale`: a project root with a build
+marker and no up-to-date index **will** start its indexer. Set
+`opts.index.reindex = Reindex::Never` when embedding Model in a service.
 
 ## 1. Overview
 
@@ -106,7 +126,8 @@ let typed = field.targets(&RelationKind::DeclaredType);           // typed entit
 | `overrides` | method → overridden/implemented method | none | none |
 
 `sites()` and `site_flags()` are parallel slices. In GraphQL,
-`Relation.flaggedSites` returns each occurrence with its flags. Provenance
+`Relation.flaggedSites` returns each occurrence with its flags
+(`flags: ["read","write"]`, `read`, `write`, `receiver`). Provenance
 matters: SCIP gives `accesses` (when the indexer reports read/write roles),
 `declared_type` and `overrides`; `throws`, parameters/locals accesses and the
 rest come from tree-sitter, by name (`Provenance::TreeSitter`).
@@ -129,6 +150,10 @@ println!("{} entities, layers run: {:?}", p.model.entity_count(), p.report.layer
 let p = s.require(&Scope::All, &Requirement::traits(&["Invocation"]))?;
 ```
 
+To check that no indexer ran: `p.report.indexing_events == 0` (the indexing
+step never looked for an index) and `p.report.indexers_started == 0`
+(processes actually spawned). Runnable: `cargo run -p model-session --example sessions`.
+
 Scopes: `All`, `Files(..)`, `Package(dir)`, `GitDiff { base }`. A session
 remembers what it computed per scope: the same or fewer traits return the
 stored model (`report.layers_run` is empty), more traits rebuild with the
@@ -144,7 +169,9 @@ cargo run --release -p model-graphql -- path/to/repo --on-demand --diff origin/m
 ```
 
 `{ methods { nodes { name } } }` starts no indexer; following
-`outgoing(kind: "calls")` does. `OnDemand` and `requirement_of` (selection → traits) are in
+`outgoing(kind: "calls")` adds the resolution layer, which *uses* an existing
+`index.scip` and starts an indexer only with `--reindex if-stale|if-missing|always`
+(the server defaults to `never`). `OnDemand` and `requirement_of` (selection → traits) are in
 `crates/model-graphql/src/ondemand.rs`. Use `--no-cache` on fixtures.
 
 ### Fine kinds, traits and typed concepts in GraphQL
@@ -182,7 +209,8 @@ implementing `Entity`, with a list field and a lookup by key:
   `Entity.fineKind: String!` (exact kind name, `record`, `parameter`, ...),
   `Entity.traits: [String!]!` (`Named`, `Typed`, `Invocation` ...), and
   `entities(fineKind: "parameter", trait: "Invocation", ...)` (an unknown trait
-  is an error listing the known ones). A kind without a concept name keeps its
+  is an error listing the known ones; an unknown `fineKind` is just an empty
+  list). A kind without a concept name keeps its
   archetype type.
 - `--on-demand`: typed roots and by-key fields need only the structure layer;
   no indexer runs unless the query follows relations.
@@ -220,6 +248,8 @@ Archetype default kinds cannot carry a concept (`set_kind_concept` returns
 false): they already have their archetype type.
 
 ### Indexing a project the built-in indexers cannot build
+
+(Scenario g of [examples.md](examples.md) shows the failure messages.)
 
 `scip-java index` only drives Gradle, Maven and Bazel, and a project root needs
 a build marker to be indexed at all. For a `make`-built project (or any custom
@@ -327,7 +357,10 @@ set.compose(&mut b, true);            // true = relations by name
 
 `BuildOptions::fragment_cache_dir` (or the default under
 `<git-common-dir>/<cache>/fragments`) does the same inside `model_factory::build`
-and `Session`. The root must be in a git repository (blob ids); otherwise
+and `Session`. Blob ids are hashed from the files on disk (uncommitted edits count), and an
+explicit `FragmentCache::at(dir)` works anywhere, git or not. Only the default
+location, `<git-common-dir>/<cache>/fragments`, needs a git repository: outside
+one there is simply no cache. If the blob ids cannot be computed,
 `extract_fragments` returns a warning and parses everything. Lower level:
 `Extractor`, `load_fragments`, `FragmentSet::{insert, remove, compose}`.
 
@@ -351,8 +384,10 @@ model := FamixJavaModel new.
 'out.json' asFileReference readStreamDo: [ :s | model importFromJSONStream: s ].
 ```
 
-(The export was accepted by a Moose image on jpetstore, see the session notes
-in the `12-moose-export` commits; it was not re-run for this integration.)
+(The export of the sample project of [examples.md](examples.md) was loaded in a
+Moose image for the 0.4.0 documentation: 253 objects, equal to the export
+report, 10 classes, 16 methods, 5 invocations, 31 accesses. Earlier, a jpetstore
+export was accepted by a Moose image too.)
 
 **Import and diff.** Import a Moose JSON (e.g. VerveineJ output) and compare it
 with a model built from the same sources:
@@ -364,6 +399,10 @@ let imported = import_json(&mut b, &bytes, &ImportOptions::default());
 let moose = b.build();                     // keys `moose:<id>`, props `moose.*`
 let report = diff(&moose, &model);        // rows by FM3 class, archetype, relation kind
 ```
+
+A real comparison (VerveineJ on its own sources) is in
+[verveinej-comparison.md](verveinej-comparison.md); a reproducible walk-through
+on a small project is scenarios e and f of [examples.md](examples.md).
 
 Command line: `cargo run --release -p model-moose --example import -- moose.json [--root DIR] [--no-sources] [--diff model.json]`.
 `ImportOptions::with_fm3(&fm3_metamodel)` adds the containment properties a
@@ -413,7 +452,7 @@ research.
   `previous`/`next`, signatures (unless imported), generic arguments are not
   written; `overrides` is derived in Famix and omitted; associations Famix
   refuses are skipped (counted in `ExportReport`); kinds with no FM3 class
-  (files, functions, plain variables) are not exported. Class `Exception`
+  (files, comments, functions, plain variables) are not exported. Class `Exception`
   promotion and `Access.variable` are workarounds learned from a Moose image.
 - **Moose import**: real VerveineJ exports can be invalid strict JSON (raw
   control characters); the reader is tolerant.
