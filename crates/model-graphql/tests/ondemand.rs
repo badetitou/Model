@@ -185,11 +185,8 @@ async fn errors_are_reported_not_raised() {
 fn fine_kind_fields_need_the_structure_layer_only() {
     use Layer::*;
     for q in [
-        "{ parameters { nodes { name traits fineKind } } }",
-        "{ localVariables { totalCount } records { nodes { name } } }",
-        r#"{ parameterByKey(key: "k") { name traits } }"#,
-        r#"{ entities(fineKind: "parameter", trait: "Typed") { nodes { name } } }"#,
-        "{ pharoClasses { totalCount } tsInterfaces { totalCount } }",
+        "{ methods { nodes { name traits fineKind } } }",
+        r#"{ entities(fineKind: "parameter", trait: "Typed") { nodes { name traits } } }"#,
     ] {
         assert_eq!(layers(q), [Structure], "{q}");
     }
@@ -201,11 +198,12 @@ async fn fine_kind_queries_start_no_indexer() {
     let od = od(&d, Scope::All);
     let data = ask(
         &od,
-        r#"{ methods { nodes { traits } } localVariables { totalCount }
+        r#"{ methods { nodes { traits } }
+             local: entities(fineKind: "local_variable") { totalCount }
              inv: entities(trait: "Invocation") { totalCount } }"#,
     )
     .await;
-    assert_eq!(data["localVariables"]["totalCount"], 0);
+    assert_eq!(data["local"]["totalCount"], 0);
     assert!(data["inv"]["totalCount"].as_u64().unwrap() >= 3);
     let traits = data["methods"]["nodes"][0]["traits"].as_array().unwrap();
     assert!(traits.iter().any(|t| t == "Invocation"));

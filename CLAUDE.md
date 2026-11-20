@@ -56,7 +56,7 @@ Structure (`../Structure`), its first client.
 - `crates/model-graphql` — `schema.rs` (async-graphql objects holding
   `Arc<Model>` + id; forward connections via `page`), `lib.rs` (`schema`,
   `router`: GraphiQL `/`, API `/graphql`), `main.rs` (bin: build or load
-  JSON, serve; `--no-cache` on fixtures). `ondemand.rs` (`OnDemand`, `requirement_of`: selection set → traits → session; `--on-demand`). fine kinds get their own types (`FINE_KIND_TYPES`, `entities(fineKind, trait)`, `Entity.traits`). `schema.graphql` is checked by a
+  JSON, serve; `--no-cache` on fixtures). `ondemand.rs` (`OnDemand`, `requirement_of`: selection set → traits → session; `--on-demand`). generic `fineKind`/`traits` fields and `entities(fineKind, trait)` filters; no language-specific types (typed concepts from data: issue #16). `schema.graphql` is checked by a
   test: regenerate with `UPDATE_SCHEMA=1 cargo test -p model-graphql`.
 - `crates/model-fm3` — `Metamodel::from_json_str|from_path`: typed reader for
   Moose FM3 metamodel JSON (packages, classes, traits, properties, `Ref`);

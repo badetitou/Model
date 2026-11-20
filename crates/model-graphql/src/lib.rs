@@ -41,12 +41,9 @@ use tower_http::cors::{Any, CorsLayer};
 
 pub use ondemand::{OnDemand, requirement_of};
 pub use schema::{
-    Annotation, AnnotationType, Class, Comment, Constant, Constructor, DEFAULT_PAGE, Entity,
-    EntityKind, Enum, EnumConstant, FINE_KIND_TYPES, Field, File, Function, Interface,
-    LocalVariable, MAX_PAGE, Method, Namespace, Parameter, PharoClass, PharoExtensionMethod,
-    PharoMethod, PharoTrait, Property, Provenance, PythonModule, Query, Range, Record, Relation,
-    Stats, Struct, Trait, TsAbstractClass, TsArrowFunction, TsInterface, TsModule, TsNamespace,
-    TsTypeAlias, TypeAlias, TypeParameter, Variable,
+    Class, Constant, Constructor, DEFAULT_PAGE, Entity, EntityKind, Enum, Field, File, Function,
+    Interface, MAX_PAGE, Method, Namespace, Property, Provenance, Query, Range, Relation, Stats,
+    Struct, Trait, TypeAlias, Variable,
 };
 
 pub type ModelSchema = Schema<Query, EmptyMutation, EmptySubscription>;

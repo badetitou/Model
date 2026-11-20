@@ -396,7 +396,7 @@ async fn entity_introspection_lists_every_kind_as_a_possible_type() {
         .iter()
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names.len(), 15 + crate::FINE_KIND_TYPES.len(), "{names:?}");
+    assert_eq!(names.len(), 15, "{names:?}");
     for expected in [
         "Namespace",
         "File",
@@ -491,7 +491,7 @@ async fn pharo_class_can_be_opened_and_its_methods_navigated() {
     assert_eq!(d["unknown"], serde_json::json!(null));
     assert_eq!(
         d["entityByKey"],
-        serde_json::json!({"__typename": "PharoClass", "name": "OrderService"})
+        serde_json::json!({"__typename": "Class", "name": "OrderService"})
     );
 }
 
@@ -671,66 +671,22 @@ fn names(d: &serde_json::Value, field: &str) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn fine_kinds_have_their_own_types_and_root_fields() {
+async fn fine_kind_is_exposed_and_typename_stays_the_archetype() {
     let s = schema(famix_model());
     let d = run(
         &s,
-        r#"{
-          parameters { totalCount edges { node { __typename name fineKind kind } } }
-          localVariables { edges { node { __typename name } } }
-          records { edges { node { __typename name } } }
-          annotationTypes { edges { node { name } } }
-          enumConstants { edges { node { name } } }
-          typeParameters { edges { node { name } } }
-          comments { totalCount }
-          tsInterfaces { totalCount }
-        }"#,
+        r#"{ entities(fineKind: "record") { edges { node { __typename name fineKind kind } } } }"#,
     )
     .await;
-    let params = names(&d, "parameters");
-    for p in ["scale", "label", "x", "y"] {
-        assert!(params.contains(&p.to_string()), "{params:?}");
-    }
-    let first = &d["parameters"]["edges"][0]["node"];
-    assert_eq!(first["__typename"], "Parameter");
-    assert_eq!(first["fineKind"], "parameter");
-    assert_eq!(first["kind"], "VARIABLE");
-    assert_eq!(names(&d, "localVariables"), ["doubled"]);
-    assert_eq!(
-        d["localVariables"]["edges"][0]["node"]["__typename"],
-        "LocalVariable"
-    );
-    assert_eq!(names(&d, "records"), ["Point"]);
-    assert_eq!(d["records"]["edges"][0]["node"]["__typename"], "Record");
-    assert_eq!(names(&d, "annotationTypes"), ["Marker"]);
-    assert_eq!(names(&d, "enumConstants"), ["RED", "GREEN"]);
-    assert_eq!(names(&d, "typeParameters"), ["T"]);
-    // Defined by no frontend of this model: empty, not an error.
-    assert_eq!(d["tsInterfaces"]["totalCount"], 0);
+    let n = &d["entities"]["edges"][0]["node"];
+    assert_eq!(n["name"], "Point");
+    assert_eq!(n["__typename"], "Class");
+    assert_eq!(n["fineKind"], "record");
+    assert_eq!(n["kind"], "CLASS");
 }
 
 #[tokio::test]
-async fn fine_kind_by_key_lookups_check_the_kind() {
-    let s = schema(famix_model());
-    let d = run(&s, r#"{ records { edges { node { key } } } }"#).await;
-    let key = d["records"]["edges"][0]["node"]["key"].as_str().unwrap();
-    let q = format!(
-        r#"{{ recordByKey(key: "{key}") {{ name __typename traits }}
-             classByKey(key: "{key}") {{ name }}
-             parameterByKey(key: "{key}") {{ name }}
-             e: entityByKey(key: "{key}") {{ __typename fineKind }} }}"#
-    );
-    let d = run(&s, &q).await;
-    assert_eq!(d["recordByKey"]["name"], "Point");
-    assert_eq!(d["recordByKey"]["__typename"], "Record");
-    // A record's archetype is `class` but the entity is not a `Class` object.
-    assert_eq!(d["classByKey"]["name"], "Point");
-    assert!(d["parameterByKey"].is_null());
-    assert_eq!(d["e"]["__typename"], "Record");
-}
-
-#[tokio::test]
-async fn typename_falls_back_to_the_archetype_for_unlisted_kinds() {
+async fn typename_is_the_archetype_for_custom_kinds() {
     let mut b = ModelBuilder::new();
     let k = b.define_kind(
         "moose.thing",
@@ -760,7 +716,7 @@ async fn entities_filter_by_fine_kind_and_trait() {
              l: entities(fineKind: "local_variable") { edges { node { name } } }
              none: entities(fineKind: "nope") { totalCount }
              v: entities(kind: VARIABLE) { totalCount }
-             inv: entities(trait: "Invocation") { edges { node { __typename } } }
+             inv: entities(trait: "Invocation") { totalCount }
              both: entities(trait: "Typed", fineKind: "parameter") { totalCount } }"#,
     )
     .await;
@@ -768,9 +724,6 @@ async fn entities_filter_by_fine_kind_and_trait() {
     assert_eq!(names(&d, "l"), ["doubled"]);
     assert_eq!(d["none"]["totalCount"], 0);
     assert!(d["v"]["totalCount"].as_u64().unwrap() >= 6);
-    assert!(d["inv"]["edges"].as_array().unwrap().iter().all(|e| {
-        e["node"]["__typename"] != "Parameter" && e["node"]["__typename"] != "LocalVariable"
-    }));
     assert_eq!(d["both"]["totalCount"], 4);
     let e = errors(&s, r#"{ entities(trait: "Nope") { totalCount } }"#).await;
     assert!(
@@ -784,8 +737,8 @@ async fn entity_traits_list_the_kind_traits() {
     let s = schema(famix_model());
     let d = run(
         &s,
-        r#"{ parameters { edges { node { traits } } }
-             records { edges { node { traits } } } }"#,
+        r#"{ p: entities(fineKind: "parameter", first: 1) { edges { node { traits } } }
+             r: entities(fineKind: "record") { edges { node { traits } } } }"#,
     )
     .await;
     let t = |v: &serde_json::Value| -> Vec<String> {
@@ -795,13 +748,13 @@ async fn entity_traits_list_the_kind_traits() {
             .map(|x| x.as_str().unwrap().to_string())
             .collect()
     };
-    let p = t(&d["parameters"]["edges"][0]["node"]["traits"]);
+    let p = t(&d["p"]["edges"][0]["node"]["traits"]);
     assert!(
         p.contains(&"Named".into()) && p.contains(&"Typed".into()),
         "{p:?}"
     );
     assert!(!p.contains(&"Invocation".into()));
-    let r = t(&d["records"]["edges"][0]["node"]["traits"]);
+    let r = t(&d["r"]["edges"][0]["node"]["traits"]);
     assert!(r.contains(&"WithMembers".into()) && r.contains(&"Invocation".into()));
 }
 
@@ -813,28 +766,12 @@ async fn fine_kinds_survive_a_json_round_trip() {
     let s = schema(back);
     let d = run(
         &s,
-        r#"{ records { totalCount } localVariables { totalCount }
+        r#"{ r: entities(fineKind: "record") { totalCount }
+             l: entities(fineKind: "local_variable") { totalCount }
              entities(trait: "Typed") { totalCount } }"#,
     )
     .await;
-    assert_eq!(d["records"]["totalCount"], 1);
-    assert_eq!(d["localVariables"]["totalCount"], 1);
+    assert_eq!(d["r"]["totalCount"], 1);
+    assert_eq!(d["l"]["totalCount"], 1);
     assert!(d["entities"]["totalCount"].as_u64().unwrap() > 0);
-}
-
-#[test]
-fn every_fine_kind_type_is_in_the_static_list() {
-    use crate::FINE_KIND_TYPES;
-    // Distinct names, none shadowing an archetype type.
-    let mut seen = std::collections::HashSet::new();
-    for (kind, ty) in FINE_KIND_TYPES {
-        assert!(seen.insert(*kind) && seen.insert(*ty), "{kind} {ty}");
-    }
-    // The default tree-sitter kind table is fully covered.
-    let kinds: serde_json::Value =
-        serde_json::from_str(include_str!("../../model-treesitter/kinds.json")).unwrap();
-    for k in kinds.as_array().unwrap() {
-        let n = k["name"].as_str().unwrap();
-        assert!(FINE_KIND_TYPES.iter().any(|(f, _)| *f == n), "missing {n}");
-    }
 }

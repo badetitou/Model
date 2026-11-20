@@ -170,7 +170,7 @@ impl EntityBase {
         Ok(self.r()?.kind().into())
     }
 
-    /// Fine-grained kind (`record`, `annotation_type`, `enum_constant`...);
+    /// Fine-grained kind name, as defined by the model's metamodel;
     /// the archetype's name when the frontend does not refine it.
     async fn fine_kind(&self) -> Result<&str> {
         Ok(self.r()?.kind_name())
@@ -462,7 +462,7 @@ entity_objects! {
             methods_of(&self.0, first)
         }
     ),
-    (Struct, "A struct or record declaration.",
+    (Struct, "A struct declaration.",
         /// Methods contained in this entity.
         async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
             methods_of(&self.0, first)
@@ -476,25 +476,6 @@ entity_objects! {
     (Property, "A property inside a type."),
     (Constant, "A constant."),
     (Variable, "A local or global variable."),
-    (Parameter, "A method or function parameter."),
-    (LocalVariable, "A local variable."),
-    (TypeParameter, "A generic type parameter."),
-    (Annotation, "An annotation instance."),
-    (AnnotationType, "An annotation type declaration."),
-    (Record, "A record declaration."),
-    (EnumConstant, "An enumeration constant."),
-    (Comment, "A comment."),
-    (TsInterface, "A TypeScript interface."),
-    (TsTypeAlias, "A TypeScript type alias."),
-    (TsNamespace, "A TypeScript namespace."),
-    (TsAbstractClass, "A TypeScript abstract class."),
-    (TsArrowFunction, "A TypeScript arrow function."),
-    (TsModule, "A TypeScript module (file)."),
-    (PythonModule, "A Python module (file)."),
-    (PharoClass, "A Pharo class."),
-    (PharoTrait, "A Pharo trait."),
-    (PharoMethod, "A Pharo method."),
-    (PharoExtensionMethod, "A Pharo method defined outside its class's package."),
 }
 
 /// The common interface implemented by every entity kind. Navigation fields
@@ -591,80 +572,6 @@ pub enum Entity {
     Property(Property),
     Constant(Constant),
     Variable(Variable),
-    Parameter(Parameter),
-    LocalVariable(LocalVariable),
-    TypeParameter(TypeParameter),
-    Annotation(Annotation),
-    AnnotationType(AnnotationType),
-    Record(Record),
-    EnumConstant(EnumConstant),
-    Comment(Comment),
-    TsInterface(TsInterface),
-    TsTypeAlias(TsTypeAlias),
-    TsNamespace(TsNamespace),
-    TsAbstractClass(TsAbstractClass),
-    TsArrowFunction(TsArrowFunction),
-    TsModule(TsModule),
-    PythonModule(PythonModule),
-    PharoClass(PharoClass),
-    PharoTrait(PharoTrait),
-    PharoMethod(PharoMethod),
-    PharoExtensionMethod(PharoExtensionMethod),
-}
-
-/// Fine kinds with their own GraphQL type: the default kind tables of the
-/// frontends (`kinds.json` of model-treesitter, Pharo's table). The set of
-/// kinds is data, so a kind absent from this list (user `kinds.json`, Moose
-/// imports) keeps its archetype type and is visible through `fineKind`.
-/// `(fine kind name, GraphQL type name)`.
-pub const FINE_KIND_TYPES: &[(&str, &str)] = &[
-    ("parameter", "Parameter"),
-    ("local_variable", "LocalVariable"),
-    ("type_parameter", "TypeParameter"),
-    ("annotation", "Annotation"),
-    ("annotation_type", "AnnotationType"),
-    ("record", "Record"),
-    ("enum_constant", "EnumConstant"),
-    ("comment", "Comment"),
-    ("ts.interface", "TsInterface"),
-    ("ts.type_alias", "TsTypeAlias"),
-    ("ts.namespace", "TsNamespace"),
-    ("ts.abstract_class", "TsAbstractClass"),
-    ("ts.arrow_function", "TsArrowFunction"),
-    ("ts.module", "TsModule"),
-    ("python.module", "PythonModule"),
-    ("pharo.class", "PharoClass"),
-    ("pharo.trait", "PharoTrait"),
-    ("pharo.method", "PharoMethod"),
-    ("pharo.extension_method", "PharoExtensionMethod"),
-];
-
-/// The dedicated object for a fine kind, if it has one.
-fn fine_entity(kind_name: &str, base: &EntityBase) -> Option<Entity> {
-    Some(match kind_name {
-        "parameter" => Entity::Parameter(Parameter(base.clone())),
-        "local_variable" => Entity::LocalVariable(LocalVariable(base.clone())),
-        "type_parameter" => Entity::TypeParameter(TypeParameter(base.clone())),
-        "annotation" => Entity::Annotation(Annotation(base.clone())),
-        "annotation_type" => Entity::AnnotationType(AnnotationType(base.clone())),
-        "record" => Entity::Record(Record(base.clone())),
-        "enum_constant" => Entity::EnumConstant(EnumConstant(base.clone())),
-        "comment" => Entity::Comment(Comment(base.clone())),
-        "ts.interface" => Entity::TsInterface(TsInterface(base.clone())),
-        "ts.type_alias" => Entity::TsTypeAlias(TsTypeAlias(base.clone())),
-        "ts.namespace" => Entity::TsNamespace(TsNamespace(base.clone())),
-        "ts.abstract_class" => Entity::TsAbstractClass(TsAbstractClass(base.clone())),
-        "ts.arrow_function" => Entity::TsArrowFunction(TsArrowFunction(base.clone())),
-        "ts.module" => Entity::TsModule(TsModule(base.clone())),
-        "python.module" => Entity::PythonModule(PythonModule(base.clone())),
-        "pharo.class" => Entity::PharoClass(PharoClass(base.clone())),
-        "pharo.trait" => Entity::PharoTrait(PharoTrait(base.clone())),
-        "pharo.method" => Entity::PharoMethod(PharoMethod(base.clone())),
-        "pharo.extension_method" => {
-            Entity::PharoExtensionMethod(PharoExtensionMethod(base.clone()))
-        }
-        _ => return None,
-    })
 }
 
 /// Pick the concrete GraphQL object matching the model kind.
@@ -673,9 +580,6 @@ fn entity_of(model: &Arc<Model>, e: EntityRef<'_>) -> Entity {
         model: model.clone(),
         id: e.id(),
     };
-    if let Some(fine) = fine_entity(e.kind_name(), &base) {
-        return fine;
-    }
     use model_core::EntityKind as K;
     match e.kind() {
         K::Namespace => Entity::Namespace(Namespace(base)),
@@ -804,44 +708,6 @@ impl Query {
                     id: e.id(),
                 })
             })
-    }
-
-    /// Like [`Self::one_of`] for a fine kind, matched by name.
-    fn one_of_fine<T>(&self, kind: &str, key: &str, wrap: fn(EntityBase) -> T) -> Option<T> {
-        self.model
-            .by_key(key)
-            .filter(|e| e.kind_name() == kind)
-            .map(|e| {
-                wrap(EntityBase {
-                    model: self.model.clone(),
-                    id: e.id(),
-                })
-            })
-    }
-
-    /// Like [`Self::list_of`] for a fine kind; empty when the model does not
-    /// define it.
-    fn list_of_fine<T>(
-        &self,
-        kind: &str,
-        wrap: fn(EntityBase) -> T,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<T>>
-    where
-        T: async_graphql::OutputType,
-    {
-        let id = self.model.metamodel().find(kind);
-        let items = id
-            .into_iter()
-            .flat_map(|id| self.model.of_kind_id(id))
-            .map(|e| {
-                wrap(EntityBase {
-                    model: self.model.clone(),
-                    id: e.id(),
-                })
-            });
-        page(items, first, after)
     }
 
     /// Generic list query for a kind: shared by the per-kind root fields.
@@ -999,8 +865,9 @@ impl Query {
             String,
         >,
         #[graphql(desc = "Only entities without parent.")] roots: Option<bool>,
-        #[graphql(desc = "Exact fine kind name (`parameter`, `record`, `ts.interface`...).")]
-        fine_kind: Option<String>,
+        #[graphql(desc = "Exact fine kind name, as returned by `fineKind`.")] fine_kind: Option<
+            String,
+        >,
         #[graphql(
             name = "trait",
             desc = "Only entities whose kind has this trait, by name (`Invocation`, `Annotations`...)."
@@ -1109,7 +976,7 @@ impl Query {
         self.list_of(model_core::EntityKind::Enum, Enum, first, after)
     }
 
-    /// All structs and records.
+    /// All structs.
     async fn structs(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Struct>> {
         self.list_of(model_core::EntityKind::Struct, Struct, first, after)
     }
@@ -1169,263 +1036,5 @@ impl Query {
     /// All local and global variables.
     async fn variables(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Variable>> {
         self.list_of(model_core::EntityKind::Variable, Variable, first, after)
-    }
-
-    /// The `Parameter` with this key.
-    async fn parameter_by_key(&self, key: String) -> Option<Parameter> {
-        self.one_of_fine("parameter", &key, Parameter)
-    }
-
-    /// The `LocalVariable` with this key.
-    async fn local_variable_by_key(&self, key: String) -> Option<LocalVariable> {
-        self.one_of_fine("local_variable", &key, LocalVariable)
-    }
-
-    /// The `TypeParameter` with this key.
-    async fn type_parameter_by_key(&self, key: String) -> Option<TypeParameter> {
-        self.one_of_fine("type_parameter", &key, TypeParameter)
-    }
-
-    /// The `Annotation` with this key.
-    async fn annotation_by_key(&self, key: String) -> Option<Annotation> {
-        self.one_of_fine("annotation", &key, Annotation)
-    }
-
-    /// The `AnnotationType` with this key.
-    async fn annotation_type_by_key(&self, key: String) -> Option<AnnotationType> {
-        self.one_of_fine("annotation_type", &key, AnnotationType)
-    }
-
-    /// The `Record` with this key.
-    async fn record_by_key(&self, key: String) -> Option<Record> {
-        self.one_of_fine("record", &key, Record)
-    }
-
-    /// The `EnumConstant` with this key.
-    async fn enum_constant_by_key(&self, key: String) -> Option<EnumConstant> {
-        self.one_of_fine("enum_constant", &key, EnumConstant)
-    }
-
-    /// The `Comment` with this key.
-    async fn comment_by_key(&self, key: String) -> Option<Comment> {
-        self.one_of_fine("comment", &key, Comment)
-    }
-
-    /// The `TsInterface` with this key.
-    async fn ts_interface_by_key(&self, key: String) -> Option<TsInterface> {
-        self.one_of_fine("ts.interface", &key, TsInterface)
-    }
-
-    /// The `TsTypeAlias` with this key.
-    async fn ts_type_alias_by_key(&self, key: String) -> Option<TsTypeAlias> {
-        self.one_of_fine("ts.type_alias", &key, TsTypeAlias)
-    }
-
-    /// The `TsNamespace` with this key.
-    async fn ts_namespace_by_key(&self, key: String) -> Option<TsNamespace> {
-        self.one_of_fine("ts.namespace", &key, TsNamespace)
-    }
-
-    /// The `TsAbstractClass` with this key.
-    async fn ts_abstract_class_by_key(&self, key: String) -> Option<TsAbstractClass> {
-        self.one_of_fine("ts.abstract_class", &key, TsAbstractClass)
-    }
-
-    /// The `TsArrowFunction` with this key.
-    async fn ts_arrow_function_by_key(&self, key: String) -> Option<TsArrowFunction> {
-        self.one_of_fine("ts.arrow_function", &key, TsArrowFunction)
-    }
-
-    /// The `TsModule` with this key.
-    async fn ts_module_by_key(&self, key: String) -> Option<TsModule> {
-        self.one_of_fine("ts.module", &key, TsModule)
-    }
-
-    /// The `PythonModule` with this key.
-    async fn python_module_by_key(&self, key: String) -> Option<PythonModule> {
-        self.one_of_fine("python.module", &key, PythonModule)
-    }
-
-    /// The `PharoClass` with this key.
-    async fn pharo_class_by_key(&self, key: String) -> Option<PharoClass> {
-        self.one_of_fine("pharo.class", &key, PharoClass)
-    }
-
-    /// The `PharoTrait` with this key.
-    async fn pharo_trait_by_key(&self, key: String) -> Option<PharoTrait> {
-        self.one_of_fine("pharo.trait", &key, PharoTrait)
-    }
-
-    /// The `PharoMethod` with this key.
-    async fn pharo_method_by_key(&self, key: String) -> Option<PharoMethod> {
-        self.one_of_fine("pharo.method", &key, PharoMethod)
-    }
-
-    /// The `PharoExtensionMethod` with this key.
-    async fn pharo_extension_method_by_key(&self, key: String) -> Option<PharoExtensionMethod> {
-        self.one_of_fine("pharo.extension_method", &key, PharoExtensionMethod)
-    }
-
-    /// All method or function parameters (fine kind `parameter`).
-    async fn parameters(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Parameter>> {
-        self.list_of_fine("parameter", Parameter, first, after)
-    }
-
-    /// All local variables (fine kind `local_variable`).
-    async fn local_variables(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<LocalVariable>> {
-        self.list_of_fine("local_variable", LocalVariable, first, after)
-    }
-
-    /// All generic type parameters (fine kind `type_parameter`).
-    async fn type_parameters(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TypeParameter>> {
-        self.list_of_fine("type_parameter", TypeParameter, first, after)
-    }
-
-    /// All An annotation instance.s (fine kind `annotation`).
-    async fn annotations(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Annotation>> {
-        self.list_of_fine("annotation", Annotation, first, after)
-    }
-
-    /// All An annotation type declaration.s (fine kind `annotation_type`).
-    async fn annotation_types(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<AnnotationType>> {
-        self.list_of_fine("annotation_type", AnnotationType, first, after)
-    }
-
-    /// All record declarations (fine kind `record`).
-    async fn records(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Record>> {
-        self.list_of_fine("record", Record, first, after)
-    }
-
-    /// All An enumeration constant.s (fine kind `enum_constant`).
-    async fn enum_constants(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<EnumConstant>> {
-        self.list_of_fine("enum_constant", EnumConstant, first, after)
-    }
-
-    /// All comments (fine kind `comment`).
-    async fn comments(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Comment>> {
-        self.list_of_fine("comment", Comment, first, after)
-    }
-
-    /// All TypeScript interfaces (fine kind `ts.interface`).
-    async fn ts_interfaces(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TsInterface>> {
-        self.list_of_fine("ts.interface", TsInterface, first, after)
-    }
-
-    /// All TypeScript type aliass (fine kind `ts.type_alias`).
-    async fn ts_type_aliases(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TsTypeAlias>> {
-        self.list_of_fine("ts.type_alias", TsTypeAlias, first, after)
-    }
-
-    /// All TypeScript namespaces (fine kind `ts.namespace`).
-    async fn ts_namespaces(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TsNamespace>> {
-        self.list_of_fine("ts.namespace", TsNamespace, first, after)
-    }
-
-    /// All TypeScript abstract classs (fine kind `ts.abstract_class`).
-    async fn ts_abstract_classes(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TsAbstractClass>> {
-        self.list_of_fine("ts.abstract_class", TsAbstractClass, first, after)
-    }
-
-    /// All TypeScript arrow functions (fine kind `ts.arrow_function`).
-    async fn ts_arrow_functions(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TsArrowFunction>> {
-        self.list_of_fine("ts.arrow_function", TsArrowFunction, first, after)
-    }
-
-    /// All TypeScript module (file)s (fine kind `ts.module`).
-    async fn ts_modules(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TsModule>> {
-        self.list_of_fine("ts.module", TsModule, first, after)
-    }
-
-    /// All Python module (file)s (fine kind `python.module`).
-    async fn python_modules(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<PythonModule>> {
-        self.list_of_fine("python.module", PythonModule, first, after)
-    }
-
-    /// All Pharo classs (fine kind `pharo.class`).
-    async fn pharo_classes(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<PharoClass>> {
-        self.list_of_fine("pharo.class", PharoClass, first, after)
-    }
-
-    /// All Pharo traits (fine kind `pharo.trait`).
-    async fn pharo_traits(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<PharoTrait>> {
-        self.list_of_fine("pharo.trait", PharoTrait, first, after)
-    }
-
-    /// All Pharo methods (fine kind `pharo.method`).
-    async fn pharo_methods(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<PharoMethod>> {
-        self.list_of_fine("pharo.method", PharoMethod, first, after)
-    }
-
-    /// All Pharo method defined outside its class's packages (fine kind `pharo.extension_method`).
-    async fn pharo_extension_methods(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<PharoExtensionMethod>> {
-        self.list_of_fine("pharo.extension_method", PharoExtensionMethod, first, after)
     }
 }
