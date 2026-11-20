@@ -15,7 +15,7 @@ that every analysis and plugin can share — whatever the language.
 <p align="center">
   <a href="https://github.com/badetitou/Model/actions/workflows/ci.yml"><img src="https://github.com/badetitou/Model/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://crates.io/crates/model-factory"><img src="https://img.shields.io/crates/v/model-factory.svg?style=flat-square" alt="crates.io"></a>
-  <a href="https://github.com/badetitou/Model/tree/main/crates"><img src="https://img.shields.io/badge/crates-10-6EE7B7?style=flat-square" alt="10 crates"></a>
+  <a href="https://github.com/badetitou/Model/tree/main/crates"><img src="https://img.shields.io/badge/crates-14-6EE7B7?style=flat-square" alt="14 crates"></a>
   <a href="https://github.com/badetitou/Model/blob/main/rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.100%2B-A78BFA?style=flat-square&logo=rust&logoColor=white" alt="Rust 1.100+"></a>
   <a href="https://github.com/badetitou/Model/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B1020?style=flat-square" alt="MIT license"></a>
 </p>
@@ -43,7 +43,8 @@ Namespace ⊃ Class ⊃ Method
 <a href="#languages">Languages</a> ·
 <a href="#numbers">Numbers</a> ·
 <a href="#graphql-in-action">GraphQL</a> ·
-<a href="#development">Development</a>
+<a href="#development">Development</a> ·
+<a href="docs/usage.md">Usage guide</a>
 </sub></p>
 
 ## Highlights
@@ -266,6 +267,9 @@ go into `props`, and plugins can add relations under their own name.
 | [`model-analysis`](https://github.com/badetitou/Model/tree/main/crates/model-analysis) | `Analysis` trait: metrics, degrees, cycles, unused, quotient, impact, derived relations |
 | [`model-factory`](https://github.com/badetitou/Model/tree/main/crates/model-factory) | facade: detect → index → extract → link; `model_factory::analysis` re-export |
 | [`model-session`](https://github.com/badetitou/Model/tree/main/crates/model-session) | demand-driven import: `require(scope, traits)` runs only the layers needed |
+| [`model-fm3`](https://github.com/badetitou/Model/tree/main/crates/model-fm3) | reads Moose FM3 metamodels exported as JSON |
+| [`model-traits`](https://github.com/badetitou/Model/tree/main/crates/model-traits) | traits as data, generated from the FamixJava FM3; `has_trait` / `of_trait` |
+| [`model-moose`](https://github.com/badetitou/Model/tree/main/crates/model-moose) | Moose JSON import, diff report, and export; see the [usage guide](docs/usage.md) |
 | [`model-graphql`](https://github.com/badetitou/Model/tree/main/crates/model-graphql) | GraphQL server with GraphiQL; [schema](https://github.com/badetitou/Model/blob/main/crates/model-graphql/schema.graphql) |
 
 Grammar crates sit behind Cargo features (`java`, `typescript`, `python`;

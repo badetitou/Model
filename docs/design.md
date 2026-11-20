@@ -30,7 +30,8 @@ for Moose and its tooling either, but it aims at **Famix-like models**
 (FamixJava level: parameters, locals, type parameters, annotations, typed
 relations), built on demand, with an export to Moose as JSON in a separate
 crate. The core metamodel stays small and language-neutral; Famix knowledge
-lives in data and in that crate. See §10 and [famix.md](famix.md).
+lives in data and in that crate. See §10, [famix.md](famix.md) and, for a
+practical tour of the new layers, [usage.md](usage.md).
 
 ## 2. Repository and crates
 
