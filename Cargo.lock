@@ -943,6 +943,7 @@ dependencies = [
  "anyhow",
  "ignore",
  "model-core",
+ "model-traits",
 ]
 
 [[package]]
@@ -999,6 +1000,7 @@ dependencies = [
  "model-detect",
  "model-link",
  "model-scip",
+ "model-traits",
  "rayon",
  "serde",
  "serde_json",

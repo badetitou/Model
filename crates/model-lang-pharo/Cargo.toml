@@ -13,5 +13,6 @@ categories = ["development-tools"]
 
 [dependencies]
 model-core.workspace = true
+model-traits.workspace = true
 anyhow.workspace = true
 ignore.workspace = true

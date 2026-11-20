@@ -22,8 +22,8 @@ use std::path::Path;
 
 use anyhow::Context;
 use model_core::{
-    Descriptor, EntityId, EntityKind, LanguageId, ModelBuilder, Provenance, Range, RelationKind,
-    SymbolKey,
+    Descriptor, EntityId, EntityKind, KindId, LanguageId, ModelBuilder, Provenance, Range,
+    RelationKind, SymbolKey,
 };
 
 mod sends;
@@ -188,6 +188,57 @@ pub struct PharoStats {
     pub calls: usize,
 }
 
+/// A fine kind of Pharo, as data: name, archetype, traits (`model-traits`
+/// names) and the Famix-Smalltalk class it corresponds to. See
+/// `docs/traits.md` for what has no trait or no Famix class yet.
+struct PharoKind {
+    name: &'static str,
+    archetype: EntityKind,
+    traits: &'static [&'static str],
+    fm3: Option<&'static str>,
+}
+
+const CLASS: usize = 0;
+const TRAIT: usize = 1;
+const METHOD: usize = 2;
+const EXTENSION_METHOD: usize = 3;
+
+/// Indexed by the constants above.
+const KINDS: [PharoKind; 4] = [
+    PharoKind {
+        name: "pharo.class",
+        archetype: EntityKind::Class,
+        traits: &["Named", "WithMembers", "WithInheritances", "Modifiers"],
+        fm3: Some("Famix-Smalltalk-Entities.Class"),
+    },
+    PharoKind {
+        name: "pharo.trait",
+        archetype: EntityKind::Interface,
+        traits: &["Named", "WithMembers", "Modifiers"],
+        fm3: Some("Famix-Smalltalk-Entities.Trait"),
+    },
+    PharoKind {
+        name: "pharo.method",
+        archetype: EntityKind::Method,
+        traits: &["Named", "Invocation", "Access", "Modifiers"],
+        fm3: Some("Famix-Smalltalk-Entities.Method"),
+    },
+    // A method defined by another package than its class's (`.extension.st`
+    // or a `Foo >> bar` in a foreign file). Famix-Smalltalk has no class for
+    // it: same traits as a method.
+    PharoKind {
+        name: "pharo.extension_method",
+        archetype: EntityKind::Method,
+        traits: &["Named", "Invocation", "Access", "Modifiers"],
+        fm3: None,
+    },
+];
+
+fn kind(b: &mut ModelBuilder, which: usize) -> KindId {
+    let k = &KINDS[which];
+    b.define_kind(k.name, k.archetype, model_traits::mask(k.traits), k.fm3)
+}
+
 fn language() -> LanguageId {
     LanguageId::new("pharo")
 }
@@ -211,13 +262,13 @@ fn method_key(owner: &str, class_side: bool, selector: &str) -> SymbolKey {
 fn ensure(
     b: &mut ModelBuilder,
     key: &SymbolKey,
-    kind: EntityKind,
+    kind: KindId,
     name: &str,
     source: Option<(&str, Range, Option<Range>)>,
     parent: Option<EntityId>,
     external: bool,
 ) -> EntityId {
-    let id = b.entity(&key.to_string(), kind, name);
+    let id = b.entity_of_kind(&key.to_string(), kind, name);
     b.set_language(id, &language());
     if let Some((file, range, name_range)) = source {
         b.set_source(id, file, range, name_range);
@@ -565,11 +616,7 @@ fn parse_source(
         if let Some(s) = sup {
             facts.heritage.push((class_name.to_string(), s.to_string()));
         }
-        let kind = if word == "Trait" {
-            EntityKind::Interface
-        } else {
-            EntityKind::Class
-        };
+        let kind = kind(b, if word == "Trait" { TRAIT } else { CLASS });
         let id = ensure(
             b,
             &type_key(class_name),
@@ -639,10 +686,12 @@ fn parse_source(
             };
             let logical = format!("{owner}#{sel}");
             if seen.insert(logical.clone()) {
+                let extension = word == "Extension" || *cls != class_name;
+                let mk = kind(b, if extension { EXTENSION_METHOD } else { METHOD });
                 let id = ensure(
                     b,
                     &method_key(cls, class_side, &sel),
-                    EntityKind::Method,
+                    mk,
                     &sel,
                     Some((file, lines.range(hstart, stop), Some(lines.range(ns, ne)))),
                     None,
@@ -797,7 +846,7 @@ fn class_target(b: &mut ModelBuilder, classes: &HashMap<String, EntityId>, name:
     ensure(
         b,
         &type_key(name),
-        EntityKind::Class,
+        KindId::of(EntityKind::Class),
         name,
         None,
         None,

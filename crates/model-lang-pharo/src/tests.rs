@@ -734,3 +734,54 @@ fn disk_and_memory_agree() {
         [("Object#dmTotal".into(), "DmItem#price".into())]
     );
 }
+
+#[test]
+fn pharo_kinds_carry_famix_smalltalk_traits() {
+    let (m, _, _) = parse(&[
+        (
+            "Demo/Foo.class.st",
+            "Class { #name : #Foo, #superclass : #Object }\n\n{ #category : #x }\nFoo >> run [ ^ self ]\n\n{ #category : #x }\nFoo class >> make [ ^ self new ]\n",
+        ),
+        ("Demo/TFoo.trait.st", "Trait { #name : #TFoo }\n"),
+        (
+            "Demo/Foo.extension.st",
+            "Extension { #name : #Foo }\n\n{ #category : #'*Demo' }\nFoo >> extra [ ^ 1 ]\n",
+        ),
+    ]);
+    let info = |key: &str| {
+        let e = m.by_key(key).unwrap();
+        (
+            e.kind_name().to_string(),
+            e.kind(),
+            e.kind_info().and_then(|k| k.fm3.clone()),
+        )
+    };
+    assert_eq!(
+        info(&type_key("Foo").to_string()),
+        (
+            "pharo.class".into(),
+            EntityKind::Class,
+            Some("Famix-Smalltalk-Entities.Class".into())
+        )
+    );
+    assert_eq!(info(&type_key("TFoo").to_string()).0, "pharo.trait");
+    assert_eq!(
+        info(&method_key("Foo", false, "run").to_string()).0,
+        "pharo.method"
+    );
+    // Class-side is a property of a method, not a kind.
+    assert_eq!(
+        info(&method_key("Foo", true, "make").to_string()).0,
+        "pharo.method"
+    );
+    assert_eq!(
+        info(&method_key("Foo", false, "extra").to_string()).0,
+        "pharo.extension_method"
+    );
+    let calls = model_traits::mask(&["Invocation", "Access"]);
+    let mut names: Vec<_> = m.of_trait(calls).map(|e| e.name().to_string()).collect();
+    names.sort();
+    assert_eq!(names, ["extra", "make", "run"]);
+    let heritage = model_traits::mask(&["WithInheritances"]);
+    assert_eq!(m.of_trait(heritage).count(), 1);
+}

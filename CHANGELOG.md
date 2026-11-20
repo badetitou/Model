@@ -4,6 +4,13 @@
 
 ### Added
 
+- Traits beyond Java (`docs/traits.md`): fine kinds are data
+  (`model-treesitter/kinds.json`: archetype, traits, FM3 class), used by query
+  files. TypeScript: `ts.interface`, `ts.type_alias`, `ts.namespace`,
+  `ts.abstract_class`, `ts.arrow_function`, `ts.module`. Python: own query
+  (superclasses, parameters), `python.module`. Pharo (`model-lang-pharo`):
+  `pharo.class`, `pharo.trait`, `pharo.method`, `pharo.extension_method`
+  against Famix-Smalltalk.
 - `model-session`: new crate, demand-driven import. `Session::require(scope,
   requirement)` runs only the layers the traits need (structure, resolution,
   derived; declared in `LAYERS`, a trait needs resolution when it carries
