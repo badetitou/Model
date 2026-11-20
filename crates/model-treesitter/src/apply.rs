@@ -67,9 +67,7 @@ pub(crate) fn apply(
         let file_kind = g
             .file_kind
             .and_then(|n| kinds().iter().find(|f| f.name == n))
-            .map_or(KindId::of(EntityKind::File), |f| {
-                b.define_kind(&f.name, f.archetype, mask_of(f), f.fm3.as_deref())
-            });
+            .map_or(KindId::of(EntityKind::File), |f| define(b, f, f.archetype));
         let file = b.entity_of_kind(&file_key.to_string(), file_kind, file_name);
         if b.file(file).is_none() {
             b.set_source(file, &f.path, f.extent, None);
@@ -150,7 +148,7 @@ pub(crate) fn apply(
                 *n += 1;
             }
             let kind = match d.fine {
-                Some(fine) => b.define_kind(&fine.name, d.kind, mask_of(fine), fine.fm3.as_deref()),
+                Some(fine) => define(b, fine, d.kind),
                 None => KindId::of(d.kind),
             };
             let id = b.entity_of_kind(&key.to_string(), kind, &d.name);
@@ -479,6 +477,22 @@ fn namespace_chain<'a>(
         parent = Some(id);
     }
     parent
+}
+
+/// Defines every kind of `kinds.json` (normally they are defined when first
+/// met): lets a consumer see the language's concepts without a model, e.g. to
+/// print the GraphQL schema it would serve.
+pub fn declare_kinds(b: &mut ModelBuilder) {
+    for f in kinds() {
+        define(b, f, f.archetype);
+    }
+}
+
+/// Defines the fine kind with its traits and GraphQL concept names.
+fn define(b: &mut ModelBuilder, f: &Fine, archetype: EntityKind) -> KindId {
+    let id = b.define_kind(&f.name, archetype, mask_of(f), f.fm3.as_deref());
+    b.set_kind_concept(id, f.graphql_type.as_deref(), f.graphql_root.as_deref());
+    id
 }
 
 /// Trait mask of a fine kind, from the trait names of `kinds.json`.

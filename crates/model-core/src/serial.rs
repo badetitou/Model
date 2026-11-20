@@ -14,7 +14,7 @@
 //!
 //! Fine kinds: an entity whose kind refines its archetype adds
 //! `"fine_kind": "record"`, and a top-level `"metamodel"` lists the kinds
-//! beyond the 15 defaults (`{"name","archetype","traits","fm3"}`), in id order.
+//! beyond the 15 defaults (`{"name","archetype","traits","fm3","graphql_type","graphql_root"}`, the last three optional), in id order.
 //!
 //! Loading goes through [`ModelBuilder`], so unknown ids are errors and
 //! indexes are rebuilt.
@@ -71,6 +71,10 @@ struct KindDef {
     traits: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     fm3: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    graphql_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    graphql_root: Option<String>,
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -84,6 +88,8 @@ impl From<&KindInfo> for KindDef {
             archetype: k.archetype,
             traits: k.traits.0,
             fm3: k.fm3.clone(),
+            graphql_type: k.graphql_type.clone(),
+            graphql_root: k.graphql_root.clone(),
         }
     }
 }
@@ -224,7 +230,8 @@ struct RelationIn {
 fn into_model(m: ModelIn) -> Result<Model, String> {
     let mut b = ModelBuilder::new();
     for k in &m.metamodel {
-        b.define_kind(&k.name, k.archetype, TraitMask(k.traits), k.fm3.as_deref());
+        let id = b.define_kind(&k.name, k.archetype, TraitMask(k.traits), k.fm3.as_deref());
+        b.set_kind_concept(id, k.graphql_type.as_deref(), k.graphql_root.as_deref());
     }
     let mut ids: HashMap<u32, EntityId> = HashMap::with_capacity(m.entities.len());
     for e in &m.entities {
@@ -384,6 +391,30 @@ mod tests {
         assert_eq!(snapshot(&back), snapshot(&model));
         let bad = json.replace(r#""flags":[3,2,0]"#, r#""flags":[3]"#);
         assert!(serde_json::from_str::<Model>(&bad).is_err());
+    }
+
+    #[test]
+    fn concept_names_round_trip() {
+        use crate::{EntityKind, KindId, ModelBuilder, TraitMask};
+        let mut b = ModelBuilder::new();
+        let k = b.define_kind("widget", EntityKind::Class, TraitMask::EMPTY, None);
+        assert!(b.set_kind_concept(k, Some("Widget"), Some("widgets")));
+        assert!(!b.set_kind_concept(KindId::of(EntityKind::Class), Some("X"), Some("xs")));
+        b.define_kind("plain", EntityKind::Class, TraitMask::EMPTY, None);
+        b.entity_of_kind("w", k, "W");
+        let m = b.build();
+        let json = serde_json::to_string(&m).unwrap();
+        assert_eq!(json.matches("graphql_type").count(), 1, "{json}");
+        let back: Model = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.metamodel(), m.metamodel());
+        let info = back.metamodel().get(k).unwrap();
+        assert_eq!(info.graphql_type.as_deref(), Some("Widget"));
+        assert_eq!(info.graphql_root.as_deref(), Some("widgets"));
+        let plain = back.metamodel().find("plain").unwrap();
+        assert!(back.metamodel().get(plain).unwrap().graphql_type.is_none());
+        // from_model keeps the concepts
+        let again = ModelBuilder::from_model(&back).build();
+        assert_eq!(again.metamodel(), m.metamodel());
     }
 
     #[test]

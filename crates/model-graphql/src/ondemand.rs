@@ -7,8 +7,14 @@
 //! no SCIP index is read and no indexer is started. One that follows
 //! `outgoing(kind: "calls")` needs resolution.
 //!
-//! Fields not in the table below are assumed to need every trait: a new
-//! field can cost performance until it is listed, never correctness.
+//! Fields not in the tables below are assumed to need every trait: a new
+//! field can cost performance until it is listed, never correctness. One
+//! exception, a rule rather than a list: a root field (directly under the
+//! operation) the tables do not know is the list field of a typed concept
+//! (`widgets`...: their names come from the model's
+//! metamodel, which does not exist yet), and typed concepts are entities, so
+//! it needs the structure layer only. A name the schema does not have fails at
+//! execution anyway.
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
@@ -58,25 +64,6 @@ const ENTITY_FIELDS: &[&str] = &[
     "properties",
     "constants",
     "variables",
-    "parameters",
-    "localVariables",
-    "typeParameters",
-    "annotations",
-    "annotationTypes",
-    "records",
-    "enumConstants",
-    "comments",
-    "tsInterfaces",
-    "tsTypeAliases",
-    "tsNamespaces",
-    "tsAbstractClasses",
-    "tsArrowFunctions",
-    "tsModules",
-    "pythonModules",
-    "pharoClasses",
-    "pharoTraits",
-    "pharoMethods",
-    "pharoExtensionMethods",
 ];
 
 /// Fields walking containment.
@@ -139,25 +126,28 @@ struct Walk<'a> {
 }
 
 impl<'a> Walk<'a> {
-    fn selection_set(&mut self, set: &'a SelectionSet) {
+    /// `root`: the set is the operation's own, not a field's.
+    fn selection_set(&mut self, set: &'a SelectionSet, root: bool) {
         for s in &set.items {
             match &s.node {
-                Selection::Field(f) => self.field(&f.node),
-                Selection::InlineFragment(f) => self.selection_set(&f.node.selection_set.node),
+                Selection::Field(f) => self.field(&f.node, root),
+                Selection::InlineFragment(f) => {
+                    self.selection_set(&f.node.selection_set.node, root)
+                }
                 Selection::FragmentSpread(sp) => {
                     let name = sp.node.fragment_name.node.as_str();
                     if self.seen.insert(name)
                         && let Some(frag) =
                             self.doc.fragments.get(sp.node.fragment_name.node.as_str())
                     {
-                        self.selection_set(&frag.node.selection_set.node);
+                        self.selection_set(&frag.node.selection_set.node, root);
                     }
                 }
             }
         }
     }
 
-    fn field(&mut self, f: &'a Field) {
+    fn field(&mut self, f: &'a Field, root: bool) {
         let name = f.name.node.as_str();
         if name.starts_with("__") {
             // Introspection reads the schema, not the model.
@@ -181,11 +171,14 @@ impl<'a> Walk<'a> {
                         _ => None,
                     });
             relation_traits(kind.as_deref())
+        } else if root {
+            // A typed concept's list field.
+            Requirement::traits(&["Named"])
         } else {
             Requirement::all_traits()
         };
         self.req.union(&extra);
-        self.selection_set(&f.selection_set.node);
+        self.selection_set(&f.selection_set.node, false);
     }
 }
 
@@ -211,7 +204,7 @@ pub fn requirement_of(
         (DocumentOperations::Multiple(m), None) => m.values().collect(),
     };
     for op in ops {
-        w.selection_set(&op.node.selection_set.node);
+        w.selection_set(&op.node.selection_set.node, true);
     }
     Ok(w.req)
 }
@@ -280,7 +273,7 @@ impl OnDemand {
         {
             return Ok(c.schema.clone());
         }
-        let s = schema(model.clone());
+        let s = schema(model.clone())?;
         *c = Some(Cached {
             model,
             schema: s.clone(),

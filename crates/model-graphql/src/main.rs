@@ -5,7 +5,8 @@
 //!
 //! Builds the model of `<root>` (or loads an exported `model.json`) and
 //! serves it: GraphiQL on `/`, the API on `/graphql`. `--schema` prints the
-//! schema and exits. Indexers run only with `--reindex` (default `never`).
+//! schema and exits: the one of the given model (its metamodel's concepts), or,
+//! without input, of the bundled language data. Indexers run only with `--reindex` (default `never`).
 //! `--on-demand` builds nothing up front: each query's selection set decides
 //! which layers run (a query on `methods { name }` starts no indexer), on the
 //! files under `--package <dir>` (repeatable) or changed since `--diff <base>`.
@@ -74,12 +75,16 @@ fn main() -> anyhow::Result<()> {
             _ => bail!("unexpected argument {a}"),
         }
     }
-    if print_schema {
-        let empty = model_core::ModelBuilder::new().build();
-        print!("{}", model_graphql::schema(Arc::new(empty)).sdl());
+    if print_schema && input.is_none() {
+        // No model: the concepts of the bundled language data.
+        let model = Arc::new(model_factory::default_model());
+        print!("{}", model_graphql::schema(model)?.sdl());
         return Ok(());
     }
     let input = input.context("usage: model-graphql <root | model.json> (see --help)")?;
+    if on_demand && print_schema {
+        bail!("--schema needs a built model: drop --on-demand");
+    }
     if on_demand {
         anyhow::ensure!(input.is_dir(), "--on-demand needs a directory");
         let scope = match (diff, packages.len()) {
@@ -113,13 +118,17 @@ fn main() -> anyhow::Result<()> {
         }
         build.model
     };
+    if print_schema {
+        print!("{}", model_graphql::schema(Arc::new(model))?.sdl());
+        return Ok(());
+    }
     let mem = model.memory();
     eprintln!(
         "model: {} entities, {} relations, {} sites",
         mem.entities, mem.relations, mem.sites
     );
     let app = model_graphql::router_with_origins(
-        model_graphql::schema(Arc::new(model)),
+        model_graphql::schema(Arc::new(model))?,
         &allowed_origins,
     )?;
     serve(app, &host, port)

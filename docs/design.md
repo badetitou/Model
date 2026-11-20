@@ -621,7 +621,7 @@ type Relation { id kind from to provenance siteCount sites(first, after): RangeC
 ```
 
 - `Entity` is an interface with one concrete object per `EntityKind` (15 in
-  all). Navigation fields return the interface; each kind also has a root
+  all) plus one per concept (below). Navigation fields return the interface; each kind also has a root
   field (`classes`, `methods`, `interfaces`, …) returning a typed connection,
   so introspection-based clients see the kinds as distinct concepts. Each
   concept also has a single-item lookup (`classByKey`, `methodByKey`, …) taking
@@ -629,14 +629,24 @@ type Relation { id kind from to provenance siteCount sites(first, after): RangeC
   use that shape as the by-id query of a concept, which is what makes their
   auto-generated tables clickable and their detail columns possible.
   Containers additionally expose `methods: [Method!]!` as a typed relation.
-- Fine kinds are first-class too: one concrete type per kind of the default
-  kind tables (`Parameter`, `LocalVariable`, `Record`, `AnnotationType`,
-  `EnumConstant`, `TsInterface`, `PharoClass`, ...; `FINE_KIND_TYPES`), each
-  an `Entity` with a root list field and a `...ByKey`. `__typename` is the
-  fine kind's type when it has one, else the archetype's (kinds from user
-  tables or Moose imports stay archetype-typed, `fineKind` tells them apart).
-  `Entity.traits` lists the kind's trait names; `entities` also filters by
-  `fineKind` and `trait`.
+- Typed concepts come from data. `KindInfo` carries two optional strings, the
+  GraphQL concept name (`Parameter`) and root field (`parameters`), set by each
+  language's own data (`kinds.json`, `define_kind` + `set_concept`, Moose FM3
+  class names) and serialised with the model. `model-graphql` builds its
+  schema at startup from the model's `Metamodel` with async-graphql's dynamic
+  API: the 15 archetype types are fixed, and each kind that names a concept
+  adds an object type implementing `Entity`, a root list connection and
+  `…ByKey`. The crate names no language and no kind (a test enforces it); a
+  kind added to `kinds.json` becomes a type with no Rust change. A kind
+  without a concept name keeps its archetype type. `fineKind`, `traits` and
+  `entities(fineKind, trait)` stay available for every kind.
+- `__typename`: the kind's concept type when it has one, otherwise the
+  archetype type. `... on Class` (and the `classes` list) therefore does not
+  match entities that have their own concept type; `entities(kind: CLASS)`
+  still matches all of them. A concept name that is invalid or already taken
+  is dropped (the kind falls back to the archetype type). Because the schema
+  depends on the model, `schema.graphql` is generated for the bundled language
+  data and `model-graphql --schema [<root | model.json>]` prints a model's.
 - Resolvers hold an `Arc<Model>` and an id and map onto §6; nothing is
   copied. Relation kinds are strings (`calls`, ..., or custom like `http`).
   Breaking change: `__typename` on an entity is now `Class`, `Method`, …,
@@ -662,7 +672,7 @@ queries answer in 1–8 ms: a `nameContains` search over every entity, all
 `calls` relations counted, or a class with its 157 methods and their caller
 counts (4 ms).
 
-`--on-demand` serves the same schema without a model built up front (§4.1).
+`--on-demand` serves the same schema without a model built up front (§4.1): the schema is built per model, and a root field the selection analysis does not know is a typed concept's list, which needs the structure layer only.
 
 Next: expose registered analyses as `analysis(name, args)` fields now that
 `model-analysis` exists, plus subscriptions for incremental rebuilds.

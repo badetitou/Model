@@ -785,3 +785,31 @@ fn pharo_kinds_carry_famix_smalltalk_traits() {
     let heritage = model_traits::mask(&["WithInheritances"]);
     assert_eq!(m.of_trait(heritage).count(), 1);
 }
+
+#[test]
+fn kinds_declare_their_graphql_concepts() {
+    let mut b = model_core::ModelBuilder::new();
+    super::declare_kinds(&mut b);
+    let m = b.build();
+    let concept = |name: &str| {
+        let k = m
+            .metamodel()
+            .get(m.metamodel().find(name).unwrap())
+            .unwrap();
+        (
+            k.graphql_type.clone().unwrap(),
+            k.graphql_root.clone().unwrap(),
+        )
+    };
+    assert_eq!(
+        concept("pharo.class"),
+        ("PharoClass".into(), "pharoClasses".into())
+    );
+    assert_eq!(
+        concept("pharo.extension_method"),
+        (
+            "PharoExtensionMethod".into(),
+            "pharoExtensionMethods".into()
+        )
+    );
+}

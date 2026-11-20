@@ -1,3 +1,6 @@
+"""
+Entities of the kind `annotation`, a refinement of `Variable`.
+"""
 type Annotation implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -83,6 +86,9 @@ type AnnotationEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `annotation_type`, a refinement of `Interface`.
+"""
 type AnnotationType implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -133,6 +139,10 @@ type AnnotationType implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type AnnotationTypeConnection {
@@ -168,6 +178,9 @@ type AnnotationTypeEdge {
 	cursor: String!
 }
 
+"""
+A class declaration.
+"""
 type Class implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -257,6 +270,9 @@ type ClassEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `comment`, a refinement of `Variable`.
+"""
 type Comment implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -342,6 +358,9 @@ type CommentEdge {
 	cursor: String!
 }
 
+"""
+A constant.
+"""
 type Constant implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -427,6 +446,9 @@ type ConstantEdge {
 	cursor: String!
 }
 
+"""
+A constructor.
+"""
 type Constructor implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -513,10 +535,7 @@ type ConstructorEdge {
 }
 
 """
-The common interface implemented by every entity kind. Navigation fields
-return `Entity` so existing queries keep working; `__typename` reveals the
-concrete kind. The interface is registered explicitly in `lib.rs` so all
-possible types are present in introspection.
+The common interface implemented by every entity type: the archetype types and the concept types of the model. Navigation fields return `Entity` so queries written against the common fields work on any model; `__typename` reveals the concrete type.
 """
 interface Entity {
 	"""
@@ -617,6 +636,9 @@ enum EntityKind {
 	VARIABLE
 }
 
+"""
+An enumeration declaration.
+"""
 type Enum implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -692,6 +714,9 @@ type EnumConnection {
 	totalCount: Int!
 }
 
+"""
+Entities of the kind `enum_constant`, a refinement of `Constant`.
+"""
 type EnumConstant implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -791,6 +816,9 @@ type EnumEdge {
 	cursor: String!
 }
 
+"""
+A field inside a type.
+"""
 type Field implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -876,6 +904,9 @@ type FieldEdge {
 	cursor: String!
 }
 
+"""
+A source file.
+"""
 type File implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -965,6 +996,9 @@ type FileEdge {
 	cursor: String!
 }
 
+"""
+A free function.
+"""
 type Function implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -1050,6 +1084,9 @@ type FunctionEdge {
 	cursor: String!
 }
 
+"""
+An interface declaration.
+"""
 type Interface implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -1144,6 +1181,9 @@ A scalar that can represent any JSON value.
 """
 scalar JSON
 
+"""
+Entities of the kind `local_variable`, a refinement of `Variable`.
+"""
 type LocalVariable implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -1229,6 +1269,9 @@ type LocalVariableEdge {
 	cursor: String!
 }
 
+"""
+A method inside a type.
+"""
 type Method implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -1314,6 +1357,9 @@ type MethodEdge {
 	cursor: String!
 }
 
+"""
+A namespace, package or module.
+"""
 type Namespace implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -1403,9 +1449,6 @@ type NamespaceEdge {
 	cursor: String!
 }
 
-"""
-Information about pagination in a connection
-"""
 type PageInfo {
 	"""
 	When paginating backwards, are there more items?
@@ -1425,6 +1468,9 @@ type PageInfo {
 	endCursor: String
 }
 
+"""
+Entities of the kind `parameter`, a refinement of `Variable`.
+"""
 type Parameter implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -1510,6 +1556,9 @@ type ParameterEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `pharo.class`, a refinement of `Class`.
+"""
 type PharoClass implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -1560,6 +1609,10 @@ type PharoClass implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type PharoClassConnection {
@@ -1595,6 +1648,9 @@ type PharoClassEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `pharo.extension_method`, a refinement of `Method`.
+"""
 type PharoExtensionMethod implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -1680,6 +1736,9 @@ type PharoExtensionMethodEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `pharo.method`, a refinement of `Method`.
+"""
 type PharoMethod implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -1765,6 +1824,9 @@ type PharoMethodEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `pharo.trait`, a refinement of `Interface`.
+"""
 type PharoTrait implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -1815,6 +1877,10 @@ type PharoTrait implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type PharoTraitConnection {
@@ -1850,6 +1916,9 @@ type PharoTraitEdge {
 	cursor: String!
 }
 
+"""
+A property inside a type.
+"""
 type Property implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -1954,6 +2023,9 @@ enum Provenance {
 	DERIVED
 }
 
+"""
+Entities of the kind `python.module`, a refinement of `File`.
+"""
 type PythonModule implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -2004,6 +2076,10 @@ type PythonModule implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type PythonModuleConnection {
@@ -2142,7 +2218,7 @@ type Query {
 		"""
 		roots: Boolean,
 		"""
-		Exact fine kind name (`parameter`, `record`, `ts.interface`...).
+		Exact fine kind name, as returned by `fineKind`.
 		"""
 		fineKind: String,
 		"""
@@ -2179,7 +2255,7 @@ type Query {
 	"""
 	enums(first: Int, after: String): EnumConnection!
 	"""
-	All structs and records.
+	All structs.
 	"""
 	structs(first: Int, after: String): StructConnection!
 	"""
@@ -2215,155 +2291,155 @@ type Query {
 	"""
 	variables(first: Int, after: String): VariableConnection!
 	"""
-	The `Parameter` with this key.
+	The `Record` with this key.
 	"""
-	parameterByKey(key: String!): Parameter
+	recordByKey(key: String!): Record
 	"""
-	The `LocalVariable` with this key.
+	All entities of the kind `record`.
 	"""
-	localVariableByKey(key: String!): LocalVariable
-	"""
-	The `TypeParameter` with this key.
-	"""
-	typeParameterByKey(key: String!): TypeParameter
-	"""
-	The `Annotation` with this key.
-	"""
-	annotationByKey(key: String!): Annotation
+	records(first: Int, after: String): RecordConnection!
 	"""
 	The `AnnotationType` with this key.
 	"""
 	annotationTypeByKey(key: String!): AnnotationType
 	"""
-	The `Record` with this key.
+	All entities of the kind `annotation_type`.
 	"""
-	recordByKey(key: String!): Record
+	annotationTypes(first: Int, after: String): AnnotationTypeConnection!
 	"""
 	The `EnumConstant` with this key.
 	"""
 	enumConstantByKey(key: String!): EnumConstant
 	"""
+	All entities of the kind `enum_constant`.
+	"""
+	enumConstants(first: Int, after: String): EnumConstantConnection!
+	"""
+	The `Parameter` with this key.
+	"""
+	parameterByKey(key: String!): Parameter
+	"""
+	All entities of the kind `parameter`.
+	"""
+	parameters(first: Int, after: String): ParameterConnection!
+	"""
+	The `LocalVariable` with this key.
+	"""
+	localVariableByKey(key: String!): LocalVariable
+	"""
+	All entities of the kind `local_variable`.
+	"""
+	localVariables(first: Int, after: String): LocalVariableConnection!
+	"""
+	The `TypeParameter` with this key.
+	"""
+	typeParameterByKey(key: String!): TypeParameter
+	"""
+	All entities of the kind `type_parameter`.
+	"""
+	typeParameters(first: Int, after: String): TypeParameterConnection!
+	"""
+	The `Annotation` with this key.
+	"""
+	annotationByKey(key: String!): Annotation
+	"""
+	All entities of the kind `annotation`.
+	"""
+	annotations(first: Int, after: String): AnnotationConnection!
+	"""
 	The `Comment` with this key.
 	"""
 	commentByKey(key: String!): Comment
+	"""
+	All entities of the kind `comment`.
+	"""
+	comments(first: Int, after: String): CommentConnection!
 	"""
 	The `TsInterface` with this key.
 	"""
 	tsInterfaceByKey(key: String!): TsInterface
 	"""
+	All entities of the kind `ts.interface`.
+	"""
+	tsInterfaces(first: Int, after: String): TsInterfaceConnection!
+	"""
 	The `TsTypeAlias` with this key.
 	"""
 	tsTypeAliasByKey(key: String!): TsTypeAlias
+	"""
+	All entities of the kind `ts.type_alias`.
+	"""
+	tsTypeAliases(first: Int, after: String): TsTypeAliasConnection!
 	"""
 	The `TsNamespace` with this key.
 	"""
 	tsNamespaceByKey(key: String!): TsNamespace
 	"""
+	All entities of the kind `ts.namespace`.
+	"""
+	tsNamespaces(first: Int, after: String): TsNamespaceConnection!
+	"""
 	The `TsAbstractClass` with this key.
 	"""
 	tsAbstractClassByKey(key: String!): TsAbstractClass
+	"""
+	All entities of the kind `ts.abstract_class`.
+	"""
+	tsAbstractClasses(first: Int, after: String): TsAbstractClassConnection!
 	"""
 	The `TsArrowFunction` with this key.
 	"""
 	tsArrowFunctionByKey(key: String!): TsArrowFunction
 	"""
+	All entities of the kind `ts.arrow_function`.
+	"""
+	tsArrowFunctions(first: Int, after: String): TsArrowFunctionConnection!
+	"""
 	The `TsModule` with this key.
 	"""
 	tsModuleByKey(key: String!): TsModule
+	"""
+	All entities of the kind `ts.module`.
+	"""
+	tsModules(first: Int, after: String): TsModuleConnection!
 	"""
 	The `PythonModule` with this key.
 	"""
 	pythonModuleByKey(key: String!): PythonModule
 	"""
+	All entities of the kind `python.module`.
+	"""
+	pythonModules(first: Int, after: String): PythonModuleConnection!
+	"""
 	The `PharoClass` with this key.
 	"""
 	pharoClassByKey(key: String!): PharoClass
+	"""
+	All entities of the kind `pharo.class`.
+	"""
+	pharoClasses(first: Int, after: String): PharoClassConnection!
 	"""
 	The `PharoTrait` with this key.
 	"""
 	pharoTraitByKey(key: String!): PharoTrait
 	"""
+	All entities of the kind `pharo.trait`.
+	"""
+	pharoTraits(first: Int, after: String): PharoTraitConnection!
+	"""
 	The `PharoMethod` with this key.
 	"""
 	pharoMethodByKey(key: String!): PharoMethod
+	"""
+	All entities of the kind `pharo.method`.
+	"""
+	pharoMethods(first: Int, after: String): PharoMethodConnection!
 	"""
 	The `PharoExtensionMethod` with this key.
 	"""
 	pharoExtensionMethodByKey(key: String!): PharoExtensionMethod
 	"""
-	All method or function parameters (fine kind `parameter`).
-	"""
-	parameters(first: Int, after: String): ParameterConnection!
-	"""
-	All local variables (fine kind `local_variable`).
-	"""
-	localVariables(first: Int, after: String): LocalVariableConnection!
-	"""
-	All generic type parameters (fine kind `type_parameter`).
-	"""
-	typeParameters(first: Int, after: String): TypeParameterConnection!
-	"""
-	All An annotation instance.s (fine kind `annotation`).
-	"""
-	annotations(first: Int, after: String): AnnotationConnection!
-	"""
-	All An annotation type declaration.s (fine kind `annotation_type`).
-	"""
-	annotationTypes(first: Int, after: String): AnnotationTypeConnection!
-	"""
-	All record declarations (fine kind `record`).
-	"""
-	records(first: Int, after: String): RecordConnection!
-	"""
-	All An enumeration constant.s (fine kind `enum_constant`).
-	"""
-	enumConstants(first: Int, after: String): EnumConstantConnection!
-	"""
-	All comments (fine kind `comment`).
-	"""
-	comments(first: Int, after: String): CommentConnection!
-	"""
-	All TypeScript interfaces (fine kind `ts.interface`).
-	"""
-	tsInterfaces(first: Int, after: String): TsInterfaceConnection!
-	"""
-	All TypeScript type aliass (fine kind `ts.type_alias`).
-	"""
-	tsTypeAliases(first: Int, after: String): TsTypeAliasConnection!
-	"""
-	All TypeScript namespaces (fine kind `ts.namespace`).
-	"""
-	tsNamespaces(first: Int, after: String): TsNamespaceConnection!
-	"""
-	All TypeScript abstract classs (fine kind `ts.abstract_class`).
-	"""
-	tsAbstractClasses(first: Int, after: String): TsAbstractClassConnection!
-	"""
-	All TypeScript arrow functions (fine kind `ts.arrow_function`).
-	"""
-	tsArrowFunctions(first: Int, after: String): TsArrowFunctionConnection!
-	"""
-	All TypeScript module (file)s (fine kind `ts.module`).
-	"""
-	tsModules(first: Int, after: String): TsModuleConnection!
-	"""
-	All Python module (file)s (fine kind `python.module`).
-	"""
-	pythonModules(first: Int, after: String): PythonModuleConnection!
-	"""
-	All Pharo classs (fine kind `pharo.class`).
-	"""
-	pharoClasses(first: Int, after: String): PharoClassConnection!
-	"""
-	All Pharo traits (fine kind `pharo.trait`).
-	"""
-	pharoTraits(first: Int, after: String): PharoTraitConnection!
-	"""
-	All Pharo methods (fine kind `pharo.method`).
-	"""
-	pharoMethods(first: Int, after: String): PharoMethodConnection!
-	"""
-	All Pharo method defined outside its class's packages (fine kind `pharo.extension_method`).
+	All entities of the kind `pharo.extension_method`.
 	"""
 	pharoExtensionMethods(first: Int, after: String): PharoExtensionMethodConnection!
 }
@@ -2411,6 +2487,9 @@ type RangeEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `record`, a refinement of `Class`.
+"""
 type Record implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -2461,6 +2540,10 @@ type Record implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type RecordConnection {
@@ -2609,6 +2692,9 @@ type Stats {
 	heapBytes: Int!
 }
 
+"""
+A struct declaration.
+"""
 type Struct implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -2698,6 +2784,9 @@ type StructEdge {
 	cursor: String!
 }
 
+"""
+A trait or mixin declaration.
+"""
 type Trait implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -2787,6 +2876,9 @@ type TraitEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `ts.abstract_class`, a refinement of `Class`.
+"""
 type TsAbstractClass implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -2837,6 +2929,10 @@ type TsAbstractClass implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type TsAbstractClassConnection {
@@ -2872,6 +2968,9 @@ type TsAbstractClassEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `ts.arrow_function`, a refinement of `Function`.
+"""
 type TsArrowFunction implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -2957,6 +3056,9 @@ type TsArrowFunctionEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `ts.interface`, a refinement of `Interface`.
+"""
 type TsInterface implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -3007,6 +3109,10 @@ type TsInterface implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type TsInterfaceConnection {
@@ -3042,6 +3148,9 @@ type TsInterfaceEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `ts.module`, a refinement of `File`.
+"""
 type TsModule implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -3092,6 +3201,10 @@ type TsModule implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type TsModuleConnection {
@@ -3127,6 +3240,9 @@ type TsModuleEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `ts.namespace`, a refinement of `Namespace`.
+"""
 type TsNamespace implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -3177,6 +3293,10 @@ type TsNamespace implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
 }
 
 type TsNamespaceConnection {
@@ -3212,6 +3332,9 @@ type TsNamespaceEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `ts.type_alias`, a refinement of `TypeAlias`.
+"""
 type TsTypeAlias implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -3297,6 +3420,9 @@ type TsTypeAliasEdge {
 	cursor: String!
 }
 
+"""
+A type alias.
+"""
 type TypeAlias implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -3382,6 +3508,9 @@ type TypeAliasEdge {
 	cursor: String!
 }
 
+"""
+Entities of the kind `type_parameter`, a refinement of `Variable`.
+"""
 type TypeParameter implements Entity {
 	"""
 	Position in this model; stable only while the model is served.
@@ -3467,6 +3596,9 @@ type TypeParameterEdge {
 	cursor: String!
 }
 
+"""
+A local or global variable.
+"""
 type Variable implements Entity {
 	"""
 	Position in this model; stable only while the model is served.

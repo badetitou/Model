@@ -1,1431 +1,1479 @@
-//! GraphQL types over a [`Model`]. Objects hold an `Arc<Model>` and an id:
-//! resolvers map onto the model's navigation API, nothing is copied.
+//! GraphQL schema over a [`Model`], built at startup with async-graphql's
+//! dynamic API, because its types depend on the model.
 //!
-//! `Entity` is a GraphQL interface: each [`model_core::EntityKind`] has its own
-//! concrete object (`Class`, `Method`, ...). Navigation fields return the
-//! interface, so queries written against the common fields keep working, while
-//! `__typename` and concrete fragments see the real kind.
+//! Resolvers map onto the model's navigation API; nothing is copied.
+//!
+//! `Entity` is a GraphQL interface. Every [`model_core::EntityKind`] (the
+//! archetype) has a concrete object (`Class`, `Method`, ...), and so has every
+//! kind of the model's [`Metamodel`] that names a GraphQL concept
+//! (`KindInfo::graphql_type`): its language declares it as data (`kinds.json`,
+//! `define_kind` + `set_concept`), this module knows no language and no kind.
+//! Navigation fields return the interface, so queries written against the
+//! common fields keep working.
+//!
+//! `__typename` of an entity: its kind's concept type when the kind has one,
+//! otherwise the archetype type. A root list such as `classes` and the
+//! concrete type `Class` therefore hold the entities of that archetype that
+//! have no concept type of their own; `entities(kind: CLASS)` holds them all.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
-use async_graphql::connection::{Connection, Edge};
-use async_graphql::{Error, Json, Object, Result, SimpleObject};
+use async_graphql::dynamic::{
+    Enum, EnumItem, Field, FieldFuture, FieldValue, InputValue, Interface, InterfaceField, Object,
+    ResolverContext, Scalar, Schema, SchemaBuilder, SchemaError, TypeRef,
+};
+use async_graphql::{Error, Name, Result, Value};
 use model_core::{
-    EntityId, EntityRef, Model, Props, RelationId, RelationKind, RelationRef, SiteFlags,
+    EntityId, EntityKind, EntityRef, KindId, Model, Provenance, RelationId, RelationKind, SiteFlags,
 };
 
 pub const DEFAULT_PAGE: usize = 50;
 pub const MAX_PAGE: usize = 1000;
 
-#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
-#[graphql(remote = "model_core::EntityKind")]
-pub enum EntityKind {
-    Namespace,
-    File,
-    Class,
-    Interface,
-    Trait,
-    Enum,
-    Struct,
-    TypeAlias,
-    Method,
-    Constructor,
-    Function,
-    Field,
-    Property,
-    Constant,
-    Variable,
+/// An archetype's GraphQL face: the `EntityKind`s are the model's own
+/// vocabulary, not a language's.
+struct Archetype {
+    kind: EntityKind,
+    ty: &'static str,
+    root: &'static str,
+    desc: &'static str,
+    root_desc: &'static str,
+    /// Carries the `methods` convenience field.
+    methods: bool,
 }
 
-#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
-#[graphql(remote = "model_core::Provenance")]
-pub enum Provenance {
-    /// Syntax only (tree-sitter); names may be unresolved.
-    TreeSitter,
-    /// Resolved by a SCIP indexer.
-    Scip,
-    /// A language-specific frontend.
-    Frontend,
-    /// Computed by an analysis.
-    Derived,
+const ARCHETYPES: [Archetype; 15] = [
+    Archetype {
+        kind: EntityKind::Namespace,
+        ty: "Namespace",
+        root: "namespaces",
+        desc: "A namespace, package or module.",
+        root_desc: "All namespaces, packages and modules.",
+        methods: true,
+    },
+    Archetype {
+        kind: EntityKind::File,
+        ty: "File",
+        root: "files",
+        desc: "A source file.",
+        root_desc: "All source files.",
+        methods: true,
+    },
+    Archetype {
+        kind: EntityKind::Class,
+        ty: "Class",
+        root: "classes",
+        desc: "A class declaration.",
+        root_desc: "All classes.",
+        methods: true,
+    },
+    Archetype {
+        kind: EntityKind::Interface,
+        ty: "Interface",
+        root: "interfaces",
+        desc: "An interface declaration.",
+        root_desc: "All interfaces.",
+        methods: true,
+    },
+    Archetype {
+        kind: EntityKind::Trait,
+        ty: "Trait",
+        root: "traits",
+        desc: "A trait or mixin declaration.",
+        root_desc: "All traits and mixins.",
+        methods: true,
+    },
+    Archetype {
+        kind: EntityKind::Enum,
+        ty: "Enum",
+        root: "enums",
+        desc: "An enumeration declaration.",
+        root_desc: "All enumerations.",
+        methods: true,
+    },
+    Archetype {
+        kind: EntityKind::Struct,
+        ty: "Struct",
+        root: "structs",
+        desc: "A struct declaration.",
+        root_desc: "All structs.",
+        methods: true,
+    },
+    Archetype {
+        kind: EntityKind::TypeAlias,
+        ty: "TypeAlias",
+        root: "typeAliases",
+        desc: "A type alias.",
+        root_desc: "All type aliases.",
+        methods: false,
+    },
+    Archetype {
+        kind: EntityKind::Method,
+        ty: "Method",
+        root: "methods",
+        desc: "A method inside a type.",
+        root_desc: "All methods.",
+        methods: false,
+    },
+    Archetype {
+        kind: EntityKind::Constructor,
+        ty: "Constructor",
+        root: "constructors",
+        desc: "A constructor.",
+        root_desc: "All constructors.",
+        methods: false,
+    },
+    Archetype {
+        kind: EntityKind::Function,
+        ty: "Function",
+        root: "functions",
+        desc: "A free function.",
+        root_desc: "All free functions.",
+        methods: false,
+    },
+    Archetype {
+        kind: EntityKind::Field,
+        ty: "Field",
+        root: "fields",
+        desc: "A field inside a type.",
+        root_desc: "All fields.",
+        methods: false,
+    },
+    Archetype {
+        kind: EntityKind::Property,
+        ty: "Property",
+        root: "properties",
+        desc: "A property inside a type.",
+        root_desc: "All properties.",
+        methods: false,
+    },
+    Archetype {
+        kind: EntityKind::Constant,
+        ty: "Constant",
+        root: "constants",
+        desc: "A constant.",
+        root_desc: "All constants.",
+        methods: false,
+    },
+    Archetype {
+        kind: EntityKind::Variable,
+        ty: "Variable",
+        root: "variables",
+        desc: "A local or global variable.",
+        root_desc: "All local and global variables.",
+        methods: false,
+    },
+];
+
+fn archetype(kind: EntityKind) -> &'static Archetype {
+    // The table covers every `EntityKind` (checked by a test).
+    ARCHETYPES
+        .iter()
+        .find(|a| a.kind == kind)
+        .unwrap_or(&ARCHETYPES[0])
 }
 
-/// 0-based, end exclusive.
-#[derive(SimpleObject, Clone, Copy)]
-pub struct Range {
-    pub start_line: u32,
-    pub start_col: u32,
-    pub end_line: u32,
-    pub end_col: u32,
+#[cfg(test)]
+pub(crate) fn archetype_kind_check(kind: EntityKind) -> EntityKind {
+    archetype(kind).kind
 }
 
-impl From<model_core::Range> for Range {
-    fn from(r: model_core::Range) -> Self {
-        Range {
-            start_line: r.start_line,
-            start_col: r.start_col,
-            end_line: r.end_line,
-            end_col: r.end_col,
+/// Names of the static part of the schema; a concept may not reuse them.
+const RESERVED_TYPES: &[&str] = &[
+    "Query",
+    "Entity",
+    "EntityKind",
+    "Provenance",
+    "Range",
+    "Site",
+    "Stats",
+    "PageInfo",
+    "Relation",
+    "JSON",
+    "Int",
+    "Float",
+    "String",
+    "Boolean",
+    "ID",
+];
+
+const RESERVED_ROOTS: &[&str] = &[
+    "languages",
+    "stats",
+    "entity",
+    "file",
+    "entityByKey",
+    "entities",
+    "relations",
+];
+
+/// A kind of the model with a valid, unclaimed concept name.
+struct Concept {
+    kind: KindId,
+    archetype: EntityKind,
+    ty: String,
+    root: Option<String>,
+    by_key: String,
+    kind_name: String,
+}
+
+fn valid_name(s: &str) -> bool {
+    let mut chars = s.chars();
+    chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && !s.starts_with("__")
+}
+
+fn lower_first(s: &str) -> String {
+    let mut out = s.to_string();
+    if let Some(c) = out.get_mut(..1) {
+        c.make_ascii_lowercase();
+    }
+    out
+}
+
+/// The concepts a metamodel declares. A declaration is dropped (the kind keeps
+/// its archetype type) when a name is invalid or already taken by the static
+/// schema, an archetype, or an earlier kind.
+fn concepts_of(model: &Model) -> Vec<Concept> {
+    let mut types: HashSet<String> = RESERVED_TYPES.iter().map(|s| s.to_string()).collect();
+    let mut roots: HashSet<String> = RESERVED_ROOTS.iter().map(|s| s.to_string()).collect();
+    for a in &ARCHETYPES {
+        types.extend([
+            a.ty.to_string(),
+            format!("{}Connection", a.ty),
+            format!("{}Edge", a.ty),
+        ]);
+        roots.insert(a.root.to_string());
+        roots.insert(format!("{}ByKey", lower_first(a.ty)));
+    }
+    for t in [
+        "Entity", "Range", "Relation", "Site", "Query", "Stats", "PageInfo",
+    ] {
+        types.insert(format!("{t}Connection"));
+        types.insert(format!("{t}Edge"));
+    }
+    let mut out = Vec::new();
+    for (id, k) in model.metamodel().iter().skip(EntityKind::ALL.len()) {
+        let Some(ty) = k.graphql_type.as_deref().filter(|t| valid_name(t)) else {
+            continue;
+        };
+        let by_key = format!("{}ByKey", lower_first(ty));
+        let root = k
+            .graphql_root
+            .as_deref()
+            .filter(|r| valid_name(r) && !roots.contains(*r) && *r != by_key);
+        let names = [
+            ty.to_string(),
+            format!("{ty}Connection"),
+            format!("{ty}Edge"),
+        ];
+        if names.iter().any(|n| types.contains(n)) || roots.contains(&by_key) {
+            continue;
+        }
+        types.extend(names);
+        roots.insert(by_key.clone());
+        if let Some(r) = root {
+            roots.insert(r.to_string());
+        }
+        out.push(Concept {
+            kind: id,
+            archetype: k.archetype,
+            ty: ty.to_string(),
+            root: root.map(str::to_string),
+            by_key,
+            kind_name: k.name.clone(),
+        });
+    }
+    out
+}
+
+/// What resolvers share: the model and, per kind, its concept type.
+pub(crate) struct Shared {
+    pub(crate) model: Arc<Model>,
+    concept: Vec<Option<String>>,
+}
+
+impl Shared {
+    fn has_concept(&self, kind: KindId) -> bool {
+        matches!(self.concept.get(kind.index()), Some(Some(_)))
+    }
+
+    /// The GraphQL type of an entity.
+    fn type_name(&self, e: EntityRef<'_>) -> String {
+        match self.concept.get(e.kind_id().index()) {
+            Some(Some(t)) => t.clone(),
+            _ => archetype(e.kind()).ty.to_string(),
+        }
+    }
+
+    fn entity(&self, id: EntityId) -> FieldValue<'static> {
+        match self.model.entity(id) {
+            Some(e) => FieldValue::owned_any(Ent(id)).with_type(self.type_name(e)),
+            None => FieldValue::NULL,
         }
     }
 }
 
-/// An occurrence with its flags (a relation's `sites` without them).
-#[derive(SimpleObject, Clone)]
-pub struct Site {
-    pub range: Range,
-    /// `read` / `write` (accesses), `receiver`.
-    pub flags: Vec<String>,
-    pub read: bool,
-    pub write: bool,
-    /// The target is the receiver (`x` in `x.f()`).
-    pub receiver: bool,
+/// Payload of every entity object.
+#[derive(Clone, Copy)]
+struct Ent(EntityId);
+
+#[derive(Clone, Copy)]
+struct Rel(RelationId);
+
+#[derive(Clone, Copy)]
+struct RangeVal(model_core::Range);
+
+#[derive(Clone)]
+struct SiteVal {
+    range: model_core::Range,
+    flags: Vec<String>,
+    read: bool,
+    write: bool,
+    receiver: bool,
 }
 
-#[derive(SimpleObject)]
-pub struct Total {
-    /// Items matching the query, over all pages.
-    pub total_count: usize,
+/// One node of a connection.
+#[derive(Clone)]
+enum Item {
+    Entity(EntityId),
+    Relation(RelationId),
+    Range(model_core::Range),
+    Site(SiteVal),
 }
 
-pub type Page<T> = Connection<usize, T, Total>;
-
-/// Forward page of `items`: `first` (default [`DEFAULT_PAGE`], at most
-/// [`MAX_PAGE`]) items after the `after` cursor (an item's position).
-pub(crate) fn page<T: async_graphql::OutputType>(
-    items: impl Iterator<Item = T>,
-    first: Option<i32>,
-    after: Option<String>,
-) -> Result<Page<T>> {
-    let n = match first {
-        None => DEFAULT_PAGE,
-        Some(f) if f < 0 => return Err(Error::new("`first` must not be negative")),
-        Some(f) => (f as usize).min(MAX_PAGE),
-    };
-    let start = match after {
-        None => 0,
-        Some(c) => {
-            c.parse::<usize>()
-                .map_err(|_| Error::new(format!("invalid cursor {c:?}")))?
-                + 1
-        }
-    };
-    let mut total = 0usize;
-    let mut nodes = Vec::with_capacity(n);
-    for (i, item) in items.enumerate() {
-        total += 1;
-        if i >= start && nodes.len() < n {
-            nodes.push((i, item));
+impl Item {
+    /// `typed`: the field's type is an interface, so the value carries the
+    /// name of its concrete type (a field of object type must not).
+    fn value(&self, sh: &Shared, typed: bool) -> FieldValue<'static> {
+        match self {
+            Item::Entity(id) if typed => sh.entity(*id),
+            Item::Entity(id) => FieldValue::owned_any(Ent(*id)),
+            Item::Relation(id) => FieldValue::owned_any(Rel(*id)),
+            Item::Range(r) => FieldValue::owned_any(RangeVal(*r)),
+            Item::Site(s) => FieldValue::owned_any(s.clone()),
         }
     }
-    let mut c = Connection::with_additional_fields(
-        start > 0,
-        start + nodes.len() < total,
-        Total { total_count: total },
-    );
-    c.edges
-        .extend(nodes.into_iter().map(|(i, node)| Edge::new(i, node)));
-    Ok(c)
+}
+
+struct Conn {
+    nodes: Vec<(usize, Item)>,
+    total: usize,
+    has_previous: bool,
+    has_next: bool,
+}
+
+struct PageInfoVal {
+    has_previous: bool,
+    has_next: bool,
+    start: Option<String>,
+    end: Option<String>,
+}
+
+struct EdgeVal {
+    cursor: usize,
+    item: Item,
+}
+
+type Cx<'b, 'a> = &'b ResolverContext<'a>;
+type Out<'a> = Result<Option<FieldValue<'a>>>;
+
+fn shared<'a>(c: Cx<'_, 'a>) -> Result<&'a Arc<Shared>> {
+    c.data::<Arc<Shared>>()
 }
 
 fn missing() -> Error {
     Error::new("entity no longer in the model")
 }
 
+fn ent<'a>(c: Cx<'_, 'a>) -> Result<(&'a Arc<Shared>, EntityRef<'a>)> {
+    let sh = shared(c)?;
+    let Ent(id) = *c.parent_value.try_downcast_ref::<Ent>()?;
+    Ok((sh, sh.model.entity(id).ok_or_else(missing)?))
+}
+
+fn val<'a>(v: impl Into<Value>) -> Out<'a> {
+    Ok(Some(FieldValue::value(v)))
+}
+
+fn opt_val<'a, V: Into<Value>>(v: Option<V>) -> Out<'a> {
+    Ok(v.map(|v| FieldValue::value(v)))
+}
+
+fn arg_int(c: Cx<'_, '_>, name: &str) -> Result<Option<i32>> {
+    match c.args.get(name) {
+        Some(v) if !v.is_null() => {
+            Ok(Some(i32::try_from(v.i64()?).map_err(|_| {
+                Error::new(format!("`{name}` out of range"))
+            })?))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn arg_str(c: Cx<'_, '_>, name: &str) -> Result<Option<String>> {
+    match c.args.get(name) {
+        Some(v) if !v.is_null() => Ok(Some(v.string()?.to_string())),
+        _ => Ok(None),
+    }
+}
+
+fn arg_bool(c: Cx<'_, '_>, name: &str) -> Result<Option<bool>> {
+    match c.args.get(name) {
+        Some(v) if !v.is_null() => Ok(Some(v.boolean()?)),
+        _ => Ok(None),
+    }
+}
+
+fn arg_kind(c: Cx<'_, '_>, name: &str) -> Result<Option<EntityKind>> {
+    match c.args.get(name) {
+        Some(v) if !v.is_null() => {
+            let n = v.enum_name()?;
+            EntityKind::ALL
+                .into_iter()
+                .find(|k| k.as_str().eq_ignore_ascii_case(n))
+                .map(Some)
+                .ok_or_else(|| Error::new(format!("unknown kind {n}")))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn arg_provenance(c: Cx<'_, '_>) -> Result<Option<Provenance>> {
+    match c.args.get("provenance") {
+        Some(v) if !v.is_null() => Ok(Some(match v.enum_name()? {
+            "TREE_SITTER" => Provenance::TreeSitter,
+            "SCIP" => Provenance::Scip,
+            "FRONTEND" => Provenance::Frontend,
+            "DERIVED" => Provenance::Derived,
+            n => return Err(Error::new(format!("unknown provenance {n}"))),
+        })),
+        _ => Ok(None),
+    }
+}
+
+fn page_size(first: Option<i32>) -> Result<usize> {
+    match first {
+        None => Ok(DEFAULT_PAGE),
+        Some(f) if f < 0 => Err(Error::new("`first` must not be negative")),
+        Some(f) => Ok((f as usize).min(MAX_PAGE)),
+    }
+}
+
+/// Forward page of `items`: `first` (default [`DEFAULT_PAGE`], at most
+/// [`MAX_PAGE`]) items after the `after` cursor (an item's position).
+fn page(c: Cx<'_, '_>, items: impl Iterator<Item = Item>) -> Out<'static> {
+    let n = page_size(arg_int(c, "first")?)?;
+    let start = match arg_str(c, "after")? {
+        None => 0,
+        Some(cur) => {
+            cur.parse::<usize>()
+                .map_err(|_| Error::new(format!("invalid cursor {cur:?}")))?
+                + 1
+        }
+    };
+    let mut total = 0usize;
+    let mut nodes = Vec::with_capacity(n.min(256));
+    for (i, item) in items.enumerate() {
+        total += 1;
+        if i >= start && nodes.len() < n {
+            nodes.push((i, item));
+        }
+    }
+    Ok(Some(FieldValue::owned_any(Conn {
+        has_previous: start > 0,
+        has_next: start + nodes.len() < total,
+        total,
+        nodes,
+    })))
+}
+
 fn relation_filter(
     kind: Option<String>,
     provenance: Option<Provenance>,
-) -> impl Fn(&RelationRef<'_>) -> bool {
+) -> impl Fn(&model_core::RelationRef<'_>) -> bool {
     let kind = kind.map(|k| RelationKind::from_name(&k));
-    let provenance = provenance.map(model_core::Provenance::from);
     move |r| {
         kind.as_ref().is_none_or(|k| r.kind() == k)
             && provenance.is_none_or(|p| r.provenance() == p)
     }
 }
 
-/// The state shared by every concrete entity object. Not a GraphQL type: each
-/// `EntityKind` gets its own `#[Object]` wrapper so clients see distinct types.
-#[derive(Clone)]
-pub(crate) struct EntityBase {
-    pub(crate) model: Arc<Model>,
-    pub(crate) id: EntityId,
+fn kind_value(k: EntityKind) -> Value {
+    Value::Enum(Name::new(k.as_str().to_ascii_uppercase()))
 }
 
-impl EntityBase {
-    fn r(&self) -> Result<EntityRef<'_>> {
-        self.model.entity(self.id).ok_or_else(missing)
-    }
+fn provenance_value(p: Provenance) -> Value {
+    Value::Enum(Name::new(match p {
+        Provenance::TreeSitter => "TREE_SITTER",
+        Provenance::Scip => "SCIP",
+        Provenance::Frontend => "FRONTEND",
+        Provenance::Derived => "DERIVED",
+    }))
+}
 
-    async fn id(&self) -> u32 {
-        self.id.index() as u32
-    }
+// ---- entity fields ----------------------------------------------------
 
-    async fn key(&self) -> Result<&str> {
-        Ok(self.r()?.key())
-    }
+type Resolve = for<'b, 'a> fn(Cx<'b, 'a>) -> Out<'a>;
 
-    /// Archetype; see `fineKind` for the finer kind.
-    async fn kind(&self) -> Result<EntityKind> {
-        Ok(self.r()?.kind().into())
-    }
+/// A field of the `Entity` interface, shared by every concrete object.
+struct Spec {
+    name: &'static str,
+    ty: fn() -> TypeRef,
+    args: fn() -> Vec<InputValue>,
+    /// Description on the interface, and on the objects.
+    iface_desc: Option<&'static str>,
+    obj_desc: Option<&'static str>,
+    resolve: Resolve,
+}
 
-    /// Fine-grained kind (`record`, `annotation_type`, `enum_constant`...);
-    /// the archetype's name when the frontend does not refine it.
-    async fn fine_kind(&self) -> Result<&str> {
-        Ok(self.r()?.kind_name())
-    }
+fn first_after() -> Vec<InputValue> {
+    vec![
+        InputValue::new("first", TypeRef::named(TypeRef::INT)),
+        InputValue::new("after", TypeRef::named(TypeRef::STRING)),
+    ]
+}
 
-    /// Names of the traits of this entity's kind (`Named`, `Invocation`...).
-    async fn traits(&self) -> Result<Vec<String>> {
-        Ok(self
-            .r()?
-            .kind_info()
-            .map(|k| {
+fn relation_args() -> Vec<InputValue> {
+    let mut a = vec![
+        InputValue::new("kind", TypeRef::named(TypeRef::STRING)),
+        InputValue::new("provenance", TypeRef::named("Provenance")),
+    ];
+    a.extend(first_after());
+    a
+}
+
+fn no_args() -> Vec<InputValue> {
+    Vec::new()
+}
+
+const ENTITY_SPECS: &[Spec] = &[
+    Spec {
+        name: "id",
+        ty: || TypeRef::named_nn(TypeRef::INT),
+        args: no_args,
+        iface_desc: Some("Position in this model; stable only while the model is served."),
+        obj_desc: Some("Position in this model; stable only while the model is served."),
+        resolve: |c| val(ent(c)?.1.id().index() as u32),
+    },
+    Spec {
+        name: "key",
+        ty: || TypeRef::named_nn(TypeRef::STRING),
+        args: no_args,
+        iface_desc: Some("Stable across builds: the SCIP symbol, or a SCIP-like frontend key."),
+        obj_desc: Some("Stable across builds: the SCIP symbol, or a SCIP-like frontend key."),
+        resolve: |c| val(ent(c)?.1.key()),
+    },
+    Spec {
+        name: "kind",
+        ty: || TypeRef::named_nn("EntityKind"),
+        args: no_args,
+        iface_desc: None,
+        obj_desc: Some("Archetype; see `fineKind` for the finer kind."),
+        resolve: |c| val(kind_value(ent(c)?.1.kind())),
+    },
+    Spec {
+        name: "fineKind",
+        ty: || TypeRef::named_nn(TypeRef::STRING),
+        args: no_args,
+        iface_desc: None,
+        obj_desc: None,
+        resolve: |c| val(ent(c)?.1.kind_name()),
+    },
+    Spec {
+        name: "traits",
+        ty: || TypeRef::named_nn_list_nn(TypeRef::STRING),
+        args: no_args,
+        iface_desc: Some("Names of the traits of this entity's kind."),
+        obj_desc: Some("Names of the traits of this entity's kind."),
+        resolve: |c| {
+            let names = ent(c)?.1.kind_info().map(|k| {
                 model_traits::traits_of(k.traits)
-                    .map(|t| t.name.to_string())
-                    .collect()
-            })
-            .unwrap_or_default())
-    }
-
-    /// FM3 class this kind corresponds to, when the metamodel names one.
-    async fn fm3_class(&self) -> Result<Option<&str>> {
-        Ok(self.r()?.kind_info().and_then(|k| k.fm3.as_deref()))
-    }
-
-    async fn name(&self) -> Result<&str> {
-        Ok(self.r()?.name())
-    }
-
-    async fn language(&self) -> Result<Option<String>> {
-        Ok(self.r()?.language().map(|l| l.as_str().to_string()))
-    }
-
-    async fn external(&self) -> Result<bool> {
-        Ok(self.r()?.external())
-    }
-
-    async fn file(&self) -> Result<Option<String>> {
-        Ok(self.r()?.file().map(str::to_string))
-    }
-
-    async fn range(&self) -> Result<Option<Range>> {
-        Ok(self.r()?.range().map(Into::into))
-    }
-
-    async fn name_range(&self) -> Result<Option<Range>> {
-        Ok(self.r()?.name_range().map(Into::into))
-    }
-
-    async fn props(&self) -> Result<Json<Props>> {
-        Ok(Json(self.r()?.props().clone()))
-    }
-
-    async fn parent(&self) -> Result<Option<Entity>> {
-        Ok(self.r()?.parent().map(|p| entity_of(&self.model, p)))
-    }
-
-    async fn ancestors(&self) -> Result<Vec<Entity>> {
-        Ok(self
-            .r()?
-            .ancestors()
-            .map(|p| entity_of(&self.model, p))
-            .collect())
-    }
-
-    async fn children(
-        &self,
-        kind: Option<EntityKind>,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Entity>> {
-        let kind = kind.map(model_core::EntityKind::from);
-        let items = self
-            .r()?
-            .children()
-            .filter(|c| kind.is_none_or(|k| c.kind() == k))
-            .map(|c| entity_of(&self.model, c));
-        page(items, first, after)
-    }
-
-    async fn outgoing(
-        &self,
-        kind: Option<String>,
-        provenance: Option<Provenance>,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Relation>> {
-        let keep = relation_filter(kind, provenance);
-        let items = self
-            .r()?
-            .outgoing()
-            .filter(|r| keep(r))
-            .map(|r| Relation::of(&self.model, r));
-        page(items, first, after)
-    }
-
-    async fn incoming(
-        &self,
-        kind: Option<String>,
-        provenance: Option<Provenance>,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Relation>> {
-        let keep = relation_filter(kind, provenance);
-        let items = self
-            .r()?
-            .incoming()
-            .filter(|r| keep(r))
-            .map(|r| Relation::of(&self.model, r));
-        page(items, first, after)
-    }
-}
-
-/// Methods contained in an entity, as a plain typed list. `children(kind:
-/// METHOD)` stays available for pagination and returns the `Entity` interface;
-/// this convenience field makes the methods a navigable relation to `Method`
-/// for introspection-driven clients.
-fn methods_of(base: &EntityBase, first: Option<i32>) -> Result<Vec<Method>> {
-    let n = match first {
-        None => DEFAULT_PAGE,
-        Some(f) if f < 0 => return Err(Error::new("`first` must not be negative")),
-        Some(f) => (f as usize).min(MAX_PAGE),
-    };
-    Ok(base
-        .r()?
-        .children()
-        .filter(|c| c.kind() == model_core::EntityKind::Method)
-        .take(n)
-        .map(|c| {
-            Method(EntityBase {
-                model: base.model.clone(),
-                id: c.id(),
-            })
-        })
-        .collect())
-}
-
-/// Generate one GraphQL object per `EntityKind`. All resolvers are identical
-/// and forward to [`EntityBase`]; only the GraphQL type name differs. The
-/// field signatures must match the `Entity` interface below exactly. A type
-/// may add extra fields (`methods` below) as trailing items.
-macro_rules! entity_objects {
-    ($(($name:ident, $desc:literal $(, $extra:item)*)),* $(,)?) => {
-        $(
-            #[doc = $desc]
-            #[derive(Clone)]
-            pub struct $name(EntityBase);
-
-            #[Object]
-            impl $name {
-                /// Position in this model; stable only while the model is served.
-                async fn id(&self) -> u32 {
-                    self.0.id().await
-                }
-
-                /// Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
-                async fn key(&self) -> Result<&str> {
-                    self.0.key().await
-                }
-
-                /// Archetype; see `fineKind` for the finer kind.
-                async fn kind(&self) -> Result<EntityKind> {
-                    self.0.kind().await
-                }
-
-                async fn fine_kind(&self) -> Result<&str> {
-                    self.0.fine_kind().await
-                }
-
-                /// Names of the traits of this entity's kind.
-                async fn traits(&self) -> Result<Vec<String>> {
-                    self.0.traits().await
-                }
-
-                async fn fm3_class(&self) -> Result<Option<&str>> {
-                    self.0.fm3_class().await
-                }
-
-                async fn name(&self) -> Result<&str> {
-                    self.0.name().await
-                }
-
-                async fn language(&self) -> Result<Option<String>> {
-                    self.0.language().await
-                }
-
-                /// Referenced, not defined in the analysed sources (libraries).
-                async fn external(&self) -> Result<bool> {
-                    self.0.external().await
-                }
-
-                /// Path relative to the analysed root.
-                async fn file(&self) -> Result<Option<String>> {
-                    self.0.file().await
-                }
-
-                async fn range(&self) -> Result<Option<Range>> {
-                    self.0.range().await
-                }
-
-                async fn name_range(&self) -> Result<Option<Range>> {
-                    self.0.name_range().await
-                }
-
-                /// Language-specific facts (annotations, decorators...).
-                async fn props(&self) -> Result<Json<Props>> {
-                    self.0.props().await
-                }
-
-                async fn parent(&self) -> Result<Option<Entity>> {
-                    self.0.parent().await
-                }
-
-                /// Enclosing entities, innermost first.
-                async fn ancestors(&self) -> Result<Vec<Entity>> {
-                    self.0.ancestors().await
-                }
-
-                async fn children(
-                    &self,
-                    kind: Option<EntityKind>,
-                    first: Option<i32>,
-                    after: Option<String>,
-                ) -> Result<Page<Entity>> {
-                    self.0.children(kind, first, after).await
-                }
-
-                /// Relations from this entity. `kind`: `calls`, `references`,
-                /// `inherits`, `implements`, `imports`, or a custom kind.
-                async fn outgoing(
-                    &self,
-                    kind: Option<String>,
-                    provenance: Option<Provenance>,
-                    first: Option<i32>,
-                    after: Option<String>,
-                ) -> Result<Page<Relation>> {
-                    self.0.outgoing(kind, provenance, first, after).await
-                }
-
-                /// Relations to this entity.
-                async fn incoming(
-                    &self,
-                    kind: Option<String>,
-                    provenance: Option<Provenance>,
-                    first: Option<i32>,
-                    after: Option<String>,
-                ) -> Result<Page<Relation>> {
-                    self.0.incoming(kind, provenance, first, after).await
-                }
-
-                $($extra)*
-            }
-        )*
-    };
-}
-
-entity_objects! {
-    (Namespace, "A namespace, package or module.",
-        /// Methods contained in this entity.
-        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
-            methods_of(&self.0, first)
-        }
-    ),
-    (File, "A source file.",
-        /// Methods contained in this entity.
-        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
-            methods_of(&self.0, first)
-        }
-    ),
-    (Class, "A class declaration.",
-        /// Methods contained in this entity.
-        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
-            methods_of(&self.0, first)
-        }
-    ),
-    (Interface, "An interface declaration.",
-        /// Methods contained in this entity.
-        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
-            methods_of(&self.0, first)
-        }
-    ),
-    (Trait, "A trait or mixin declaration.",
-        /// Methods contained in this entity.
-        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
-            methods_of(&self.0, first)
-        }
-    ),
-    (Enum, "An enumeration declaration.",
-        /// Methods contained in this entity.
-        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
-            methods_of(&self.0, first)
-        }
-    ),
-    (Struct, "A struct or record declaration.",
-        /// Methods contained in this entity.
-        async fn methods(&self, first: Option<i32>) -> Result<Vec<Method>> {
-            methods_of(&self.0, first)
-        }
-    ),
-    (TypeAlias, "A type alias."),
-    (Method, "A method inside a type."),
-    (Constructor, "A constructor."),
-    (Function, "A free function."),
-    (Field, "A field inside a type."),
-    (Property, "A property inside a type."),
-    (Constant, "A constant."),
-    (Variable, "A local or global variable."),
-    (Parameter, "A method or function parameter."),
-    (LocalVariable, "A local variable."),
-    (TypeParameter, "A generic type parameter."),
-    (Annotation, "An annotation instance."),
-    (AnnotationType, "An annotation type declaration."),
-    (Record, "A record declaration."),
-    (EnumConstant, "An enumeration constant."),
-    (Comment, "A comment."),
-    (TsInterface, "A TypeScript interface."),
-    (TsTypeAlias, "A TypeScript type alias."),
-    (TsNamespace, "A TypeScript namespace."),
-    (TsAbstractClass, "A TypeScript abstract class."),
-    (TsArrowFunction, "A TypeScript arrow function."),
-    (TsModule, "A TypeScript module (file)."),
-    (PythonModule, "A Python module (file)."),
-    (PharoClass, "A Pharo class."),
-    (PharoTrait, "A Pharo trait."),
-    (PharoMethod, "A Pharo method."),
-    (PharoExtensionMethod, "A Pharo method defined outside its class's package."),
-}
-
-/// The common interface implemented by every entity kind. Navigation fields
-/// return `Entity` so existing queries keep working; `__typename` reveals the
-/// concrete kind. The interface is registered explicitly in `lib.rs` so all
-/// possible types are present in introspection.
-// Clippy mistakes repeated `arg(name = ..., ty = ...)` meta items across
-// `field(...)` entries for duplicated attributes; darling reads them fine.
-#[allow(clippy::duplicated_attributes)]
-#[derive(async_graphql::Interface)]
-#[graphql(
-    field(
-        name = "id",
-        ty = "u32",
-        desc = "Position in this model; stable only while the model is served."
-    ),
-    field(
-        name = "key",
-        ty = "String",
-        desc = "Stable across builds: the SCIP symbol, or a SCIP-like frontend key."
-    ),
-    field(name = "kind", ty = "EntityKind"),
-    field(name = "fine_kind", ty = "&str"),
-    field(
-        name = "traits",
-        ty = "Vec<String>",
-        desc = "Names of the traits of this entity's kind."
-    ),
-    field(name = "fm3_class", ty = "Option<&str>"),
-    field(name = "name", ty = "String"),
-    field(name = "language", ty = "Option<String>"),
-    field(
-        name = "external",
-        ty = "bool",
-        desc = "Referenced, not defined in the analysed sources (libraries)."
-    ),
-    field(
-        name = "file",
-        ty = "Option<String>",
-        desc = "Path relative to the analysed root."
-    ),
-    field(name = "range", ty = "Option<Range>"),
-    field(name = "name_range", ty = "Option<Range>"),
-    field(
-        name = "props",
-        ty = "Json<Props>",
-        desc = "Language-specific facts (annotations, decorators...)."
-    ),
-    field(name = "parent", ty = "Option<Entity>"),
-    field(
-        name = "ancestors",
-        ty = "Vec<Entity>",
-        desc = "Enclosing entities, innermost first."
-    ),
-    field(
-        name = "children",
-        ty = "Page<Entity>",
-        arg(name = "kind", ty = "Option<EntityKind>"),
-        arg(name = "first", ty = "Option<i32>"),
-        arg(name = "after", ty = "Option<String>")
-    ),
-    field(
-        name = "outgoing",
-        ty = "Page<Relation>",
-        arg(name = "kind", ty = "Option<String>"),
-        arg(name = "provenance", ty = "Option<Provenance>"),
-        arg(name = "first", ty = "Option<i32>"),
-        arg(name = "after", ty = "Option<String>"),
-        desc = "Relations from this entity."
-    ),
-    field(
-        name = "incoming",
-        ty = "Page<Relation>",
-        arg(name = "kind", ty = "Option<String>"),
-        arg(name = "provenance", ty = "Option<Provenance>"),
-        arg(name = "first", ty = "Option<i32>"),
-        arg(name = "after", ty = "Option<String>"),
-        desc = "Relations to this entity."
-    )
-)]
-pub enum Entity {
-    Namespace(Namespace),
-    File(File),
-    Class(Class),
-    Interface(Interface),
-    Trait(Trait),
-    Enum(Enum),
-    Struct(Struct),
-    TypeAlias(TypeAlias),
-    Method(Method),
-    Constructor(Constructor),
-    Function(Function),
-    Field(Field),
-    Property(Property),
-    Constant(Constant),
-    Variable(Variable),
-    Parameter(Parameter),
-    LocalVariable(LocalVariable),
-    TypeParameter(TypeParameter),
-    Annotation(Annotation),
-    AnnotationType(AnnotationType),
-    Record(Record),
-    EnumConstant(EnumConstant),
-    Comment(Comment),
-    TsInterface(TsInterface),
-    TsTypeAlias(TsTypeAlias),
-    TsNamespace(TsNamespace),
-    TsAbstractClass(TsAbstractClass),
-    TsArrowFunction(TsArrowFunction),
-    TsModule(TsModule),
-    PythonModule(PythonModule),
-    PharoClass(PharoClass),
-    PharoTrait(PharoTrait),
-    PharoMethod(PharoMethod),
-    PharoExtensionMethod(PharoExtensionMethod),
-}
-
-/// Fine kinds with their own GraphQL type: the default kind tables of the
-/// frontends (`kinds.json` of model-treesitter, Pharo's table). The set of
-/// kinds is data, so a kind absent from this list (user `kinds.json`, Moose
-/// imports) keeps its archetype type and is visible through `fineKind`.
-/// `(fine kind name, GraphQL type name)`.
-pub const FINE_KIND_TYPES: &[(&str, &str)] = &[
-    ("parameter", "Parameter"),
-    ("local_variable", "LocalVariable"),
-    ("type_parameter", "TypeParameter"),
-    ("annotation", "Annotation"),
-    ("annotation_type", "AnnotationType"),
-    ("record", "Record"),
-    ("enum_constant", "EnumConstant"),
-    ("comment", "Comment"),
-    ("ts.interface", "TsInterface"),
-    ("ts.type_alias", "TsTypeAlias"),
-    ("ts.namespace", "TsNamespace"),
-    ("ts.abstract_class", "TsAbstractClass"),
-    ("ts.arrow_function", "TsArrowFunction"),
-    ("ts.module", "TsModule"),
-    ("python.module", "PythonModule"),
-    ("pharo.class", "PharoClass"),
-    ("pharo.trait", "PharoTrait"),
-    ("pharo.method", "PharoMethod"),
-    ("pharo.extension_method", "PharoExtensionMethod"),
+                    .map(|t| FieldValue::value(t.name))
+                    .collect::<Vec<_>>()
+            });
+            Ok(Some(FieldValue::list(names.unwrap_or_default())))
+        },
+    },
+    Spec {
+        name: "fm3Class",
+        ty: || TypeRef::named(TypeRef::STRING),
+        args: no_args,
+        iface_desc: None,
+        obj_desc: None,
+        resolve: |c| opt_val(ent(c)?.1.kind_info().and_then(|k| k.fm3.clone())),
+    },
+    Spec {
+        name: "name",
+        ty: || TypeRef::named_nn(TypeRef::STRING),
+        args: no_args,
+        iface_desc: None,
+        obj_desc: None,
+        resolve: |c| val(ent(c)?.1.name()),
+    },
+    Spec {
+        name: "language",
+        ty: || TypeRef::named(TypeRef::STRING),
+        args: no_args,
+        iface_desc: None,
+        obj_desc: None,
+        resolve: |c| opt_val(ent(c)?.1.language().map(|l| l.as_str().to_string())),
+    },
+    Spec {
+        name: "external",
+        ty: || TypeRef::named_nn(TypeRef::BOOLEAN),
+        args: no_args,
+        iface_desc: Some("Referenced, not defined in the analysed sources (libraries)."),
+        obj_desc: Some("Referenced, not defined in the analysed sources (libraries)."),
+        resolve: |c| val(ent(c)?.1.external()),
+    },
+    Spec {
+        name: "file",
+        ty: || TypeRef::named(TypeRef::STRING),
+        args: no_args,
+        iface_desc: Some("Path relative to the analysed root."),
+        obj_desc: Some("Path relative to the analysed root."),
+        resolve: |c| opt_val(ent(c)?.1.file()),
+    },
+    Spec {
+        name: "range",
+        ty: || TypeRef::named("Range"),
+        args: no_args,
+        iface_desc: None,
+        obj_desc: None,
+        resolve: |c| {
+            Ok(ent(c)?
+                .1
+                .range()
+                .map(|r| FieldValue::owned_any(RangeVal(r))))
+        },
+    },
+    Spec {
+        name: "nameRange",
+        ty: || TypeRef::named("Range"),
+        args: no_args,
+        iface_desc: None,
+        obj_desc: None,
+        resolve: |c| {
+            Ok(ent(c)?
+                .1
+                .name_range()
+                .map(|r| FieldValue::owned_any(RangeVal(r))))
+        },
+    },
+    Spec {
+        name: "props",
+        ty: || TypeRef::named_nn("JSON"),
+        args: no_args,
+        iface_desc: Some("Language-specific facts (annotations, decorators...)."),
+        obj_desc: Some("Language-specific facts (annotations, decorators...)."),
+        resolve: |c| {
+            let json =
+                serde_json::to_value(ent(c)?.1.props()).map_err(|e| Error::new(e.to_string()))?;
+            val(Value::from_json(json).map_err(|e| Error::new(e.to_string()))?)
+        },
+    },
+    Spec {
+        name: "parent",
+        ty: || TypeRef::named("Entity"),
+        args: no_args,
+        iface_desc: None,
+        obj_desc: None,
+        resolve: |c| {
+            let (sh, e) = ent(c)?;
+            Ok(e.parent().map(|p| sh.entity(p.id())))
+        },
+    },
+    Spec {
+        name: "ancestors",
+        ty: || TypeRef::named_nn_list_nn("Entity"),
+        args: no_args,
+        iface_desc: Some("Enclosing entities, innermost first."),
+        obj_desc: Some("Enclosing entities, innermost first."),
+        resolve: |c| {
+            let (sh, e) = ent(c)?;
+            Ok(Some(FieldValue::list(
+                e.ancestors().map(|p| sh.entity(p.id())),
+            )))
+        },
+    },
+    Spec {
+        name: "children",
+        ty: || TypeRef::named_nn("EntityConnection"),
+        args: || {
+            let mut a = vec![InputValue::new("kind", TypeRef::named("EntityKind"))];
+            a.extend(first_after());
+            a
+        },
+        iface_desc: None,
+        obj_desc: None,
+        resolve: |c| {
+            let (_, e) = ent(c)?;
+            let kind = arg_kind(c, "kind")?;
+            page(
+                c,
+                e.children()
+                    .filter(|x| kind.is_none_or(|k| x.kind() == k))
+                    .map(|x| Item::Entity(x.id())),
+            )
+        },
+    },
+    Spec {
+        name: "outgoing",
+        ty: || TypeRef::named_nn("RelationConnection"),
+        args: relation_args,
+        iface_desc: Some("Relations from this entity."),
+        obj_desc: Some(
+            "Relations from this entity. `kind`: `calls`, `references`,\n`inherits`, `implements`, `imports`, or a custom kind.",
+        ),
+        resolve: |c| {
+            let (_, e) = ent(c)?;
+            let keep = relation_filter(arg_str(c, "kind")?, arg_provenance(c)?);
+            page(
+                c,
+                e.outgoing()
+                    .filter(|r| keep(r))
+                    .map(|r| Item::Relation(r.id())),
+            )
+        },
+    },
+    Spec {
+        name: "incoming",
+        ty: || TypeRef::named_nn("RelationConnection"),
+        args: relation_args,
+        iface_desc: Some("Relations to this entity."),
+        obj_desc: Some("Relations to this entity."),
+        resolve: |c| {
+            let (_, e) = ent(c)?;
+            let keep = relation_filter(arg_str(c, "kind")?, arg_provenance(c)?);
+            page(
+                c,
+                e.incoming()
+                    .filter(|r| keep(r))
+                    .map(|r| Item::Relation(r.id())),
+            )
+        },
+    },
 ];
 
-/// The dedicated object for a fine kind, if it has one.
-fn fine_entity(kind_name: &str, base: &EntityBase) -> Option<Entity> {
-    Some(match kind_name {
-        "parameter" => Entity::Parameter(Parameter(base.clone())),
-        "local_variable" => Entity::LocalVariable(LocalVariable(base.clone())),
-        "type_parameter" => Entity::TypeParameter(TypeParameter(base.clone())),
-        "annotation" => Entity::Annotation(Annotation(base.clone())),
-        "annotation_type" => Entity::AnnotationType(AnnotationType(base.clone())),
-        "record" => Entity::Record(Record(base.clone())),
-        "enum_constant" => Entity::EnumConstant(EnumConstant(base.clone())),
-        "comment" => Entity::Comment(Comment(base.clone())),
-        "ts.interface" => Entity::TsInterface(TsInterface(base.clone())),
-        "ts.type_alias" => Entity::TsTypeAlias(TsTypeAlias(base.clone())),
-        "ts.namespace" => Entity::TsNamespace(TsNamespace(base.clone())),
-        "ts.abstract_class" => Entity::TsAbstractClass(TsAbstractClass(base.clone())),
-        "ts.arrow_function" => Entity::TsArrowFunction(TsArrowFunction(base.clone())),
-        "ts.module" => Entity::TsModule(TsModule(base.clone())),
-        "python.module" => Entity::PythonModule(PythonModule(base.clone())),
-        "pharo.class" => Entity::PharoClass(PharoClass(base.clone())),
-        "pharo.trait" => Entity::PharoTrait(PharoTrait(base.clone())),
-        "pharo.method" => Entity::PharoMethod(PharoMethod(base.clone())),
-        "pharo.extension_method" => {
-            Entity::PharoExtensionMethod(PharoExtensionMethod(base.clone()))
-        }
-        _ => return None,
+fn spec_field(s: &'static Spec) -> Field {
+    let resolve = s.resolve;
+    let mut f = Field::new(s.name, (s.ty)(), move |ctx| {
+        let r = resolve(&ctx);
+        FieldFuture::new(async move { r })
+    });
+    if let Some(d) = s.obj_desc {
+        f = f.description(d);
+    }
+    for a in (s.args)() {
+        f = f.argument(a);
+    }
+    f
+}
+
+fn spec_interface_field(s: &'static Spec) -> InterfaceField {
+    let mut f = InterfaceField::new(s.name, (s.ty)());
+    if let Some(d) = s.iface_desc {
+        f = f.description(d);
+    }
+    for a in (s.args)() {
+        f = f.argument(a);
+    }
+    f
+}
+
+/// Methods contained in an entity, as a plain typed list: only entities typed
+/// `Method`. `children(kind: METHOD)` returns the interface, with every kind
+/// of method; this field is a navigable relation to `Method` for
+/// introspection-driven clients.
+fn methods_field() -> Field {
+    Field::new("methods", TypeRef::named_nn_list_nn("Method"), |ctx| {
+        let r = (|| -> Out<'_> {
+            let (sh, e) = ent(&ctx)?;
+            let n = page_size(arg_int(&ctx, "first")?)?;
+            Ok(Some(FieldValue::list(
+                e.children()
+                    .filter(|c| c.kind() == EntityKind::Method && !sh.has_concept(c.kind_id()))
+                    .take(n)
+                    .map(|c| sh.entity(c.id())),
+            )))
+        })();
+        FieldFuture::new(async move { r })
+    })
+    .description("Methods contained in this entity.")
+    .argument(InputValue::new("first", TypeRef::named(TypeRef::INT)))
+}
+
+fn entity_object(ty: &str, desc: String, methods: bool) -> Object {
+    let mut o = Object::new(ty).implement("Entity").description(desc);
+    for s in ENTITY_SPECS {
+        o = o.field(spec_field(s));
+    }
+    if methods {
+        o = o.field(methods_field());
+    }
+    o
+}
+
+// ---- connections ------------------------------------------------------
+
+fn connection_types(node: &str) -> [Object; 2] {
+    let typed = node == "Entity";
+    let conn = format!("{node}Connection");
+    let edge = format!("{node}Edge");
+    let connection = Object::new(&conn)
+        .field(
+            Field::new("pageInfo", TypeRef::named_nn("PageInfo"), |ctx| {
+                let r = ctx.parent_value.try_downcast_ref::<Conn>().map(|c| {
+                    Some(FieldValue::owned_any(PageInfoVal {
+                        has_previous: c.has_previous,
+                        has_next: c.has_next,
+                        start: c.nodes.first().map(|(i, _)| i.to_string()),
+                        end: c.nodes.last().map(|(i, _)| i.to_string()),
+                    }))
+                });
+                FieldFuture::new(async move { r })
+            })
+            .description("Information to aid in pagination."),
+        )
+        .field(
+            Field::new("edges", TypeRef::named_nn_list_nn(&edge), |ctx| {
+                let r = (|| -> Out<'_> {
+                    let c = ctx.parent_value.try_downcast_ref::<Conn>()?;
+                    Ok(Some(FieldValue::list(c.nodes.iter().map(|(i, item)| {
+                        FieldValue::owned_any(EdgeVal {
+                            cursor: *i,
+                            item: item.clone(),
+                        })
+                    }))))
+                })();
+                FieldFuture::new(async move { r })
+            })
+            .description("A list of edges."),
+        )
+        .field(
+            Field::new("nodes", TypeRef::named_nn_list_nn(node), move |ctx| {
+                let r = (|| -> Out<'_> {
+                    let sh = shared(&ctx)?;
+                    let c = ctx.parent_value.try_downcast_ref::<Conn>()?;
+                    Ok(Some(FieldValue::list(
+                        c.nodes.iter().map(|(_, item)| item.value(sh, typed)),
+                    )))
+                })();
+                FieldFuture::new(async move { r })
+            })
+            .description("A list of nodes."),
+        )
+        .field(
+            Field::new("totalCount", TypeRef::named_nn(TypeRef::INT), |ctx| {
+                let r = ctx
+                    .parent_value
+                    .try_downcast_ref::<Conn>()
+                    .map(|c| Some(FieldValue::value(c.total as u64)));
+                FieldFuture::new(async move { r })
+            })
+            .description("Items matching the query, over all pages."),
+        );
+    let edge_obj = Object::new(&edge)
+        .description("An edge in a connection.")
+        .field(
+            Field::new("node", TypeRef::named_nn(node), move |ctx| {
+                let r = (|| -> Out<'_> {
+                    let sh = shared(&ctx)?;
+                    let e = ctx.parent_value.try_downcast_ref::<EdgeVal>()?;
+                    Ok(Some(e.item.value(sh, typed)))
+                })();
+                FieldFuture::new(async move { r })
+            })
+            .description("The item at the end of the edge"),
+        )
+        .field(
+            Field::new("cursor", TypeRef::named_nn(TypeRef::STRING), |ctx| {
+                let r = ctx
+                    .parent_value
+                    .try_downcast_ref::<EdgeVal>()
+                    .map(|e| Some(FieldValue::value(e.cursor.to_string())));
+                FieldFuture::new(async move { r })
+            })
+            .description("A cursor for use in pagination"),
+        );
+    [connection, edge_obj]
+}
+
+// ---- other objects ----------------------------------------------------
+
+fn plain<'a, T: Send + Sync + 'static>(
+    name: &str,
+    ty: TypeRef,
+    desc: Option<&str>,
+    f: impl for<'b> Fn(&'b T) -> Out<'static> + Send + Sync + 'static,
+) -> Field {
+    let mut field = Field::new(name, ty, move |ctx| {
+        let r = ctx.parent_value.try_downcast_ref::<T>().and_then(&f);
+        FieldFuture::new(async move { r })
+    });
+    if let Some(d) = desc {
+        field = field.description(d);
+    }
+    let _ = std::marker::PhantomData::<&'a ()>;
+    field
+}
+
+fn int(name: &str, f: fn(&model_core::Range) -> u32) -> Field {
+    plain::<RangeVal>(name, TypeRef::named_nn(TypeRef::INT), None, move |r| {
+        val(f(&r.0))
     })
 }
 
-/// Pick the concrete GraphQL object matching the model kind.
-fn entity_of(model: &Arc<Model>, e: EntityRef<'_>) -> Entity {
-    let base = EntityBase {
-        model: model.clone(),
-        id: e.id(),
+fn range_object() -> Object {
+    Object::new("Range")
+        .description("0-based, end exclusive.")
+        .field(int("startLine", |r| r.start_line))
+        .field(int("startCol", |r| r.start_col))
+        .field(int("endLine", |r| r.end_line))
+        .field(int("endCol", |r| r.end_col))
+}
+
+fn site_object() -> Object {
+    Object::new("Site")
+        .description("An occurrence with its flags (a relation's `sites` without them).")
+        .field(plain::<SiteVal>(
+            "range",
+            TypeRef::named_nn("Range"),
+            None,
+            |s| Ok(Some(FieldValue::owned_any(RangeVal(s.range)))),
+        ))
+        .field(plain::<SiteVal>(
+            "flags",
+            TypeRef::named_nn_list_nn(TypeRef::STRING),
+            Some("`read` / `write` (accesses), `receiver`."),
+            |s| {
+                Ok(Some(FieldValue::list(
+                    s.flags.iter().map(|f| FieldValue::value(f.as_str())),
+                )))
+            },
+        ))
+        .field(plain::<SiteVal>(
+            "read",
+            TypeRef::named_nn(TypeRef::BOOLEAN),
+            None,
+            |s| val(s.read),
+        ))
+        .field(plain::<SiteVal>(
+            "write",
+            TypeRef::named_nn(TypeRef::BOOLEAN),
+            None,
+            |s| val(s.write),
+        ))
+        .field(plain::<SiteVal>(
+            "receiver",
+            TypeRef::named_nn(TypeRef::BOOLEAN),
+            Some("The target is the receiver (`x` in `x.f()`)."),
+            |s| val(s.receiver),
+        ))
+}
+
+fn page_info_object() -> Object {
+    Object::new("PageInfo")
+        .field(plain::<PageInfoVal>(
+            "hasPreviousPage",
+            TypeRef::named_nn(TypeRef::BOOLEAN),
+            Some("When paginating backwards, are there more items?"),
+            |p| val(p.has_previous),
+        ))
+        .field(plain::<PageInfoVal>(
+            "hasNextPage",
+            TypeRef::named_nn(TypeRef::BOOLEAN),
+            Some("When paginating forwards, are there more items?"),
+            |p| val(p.has_next),
+        ))
+        .field(plain::<PageInfoVal>(
+            "startCursor",
+            TypeRef::named(TypeRef::STRING),
+            Some("When paginating backwards, the cursor to continue."),
+            |p| opt_val(p.start.clone()),
+        ))
+        .field(plain::<PageInfoVal>(
+            "endCursor",
+            TypeRef::named(TypeRef::STRING),
+            Some("When paginating forwards, the cursor to continue."),
+            |p| opt_val(p.end.clone()),
+        ))
+}
+
+fn stats_object() -> Object {
+    let stat = |name: &str, f: fn(&model_core::MemoryStats) -> usize| {
+        Field::new(name, TypeRef::named_nn(TypeRef::INT), move |ctx| {
+            let r = shared(&ctx).map(|sh| Some(FieldValue::value(f(&sh.model.memory()) as u64)));
+            FieldFuture::new(async move { r })
+        })
     };
-    if let Some(fine) = fine_entity(e.kind_name(), &base) {
-        return fine;
-    }
-    use model_core::EntityKind as K;
-    match e.kind() {
-        K::Namespace => Entity::Namespace(Namespace(base)),
-        K::File => Entity::File(File(base)),
-        K::Class => Entity::Class(Class(base)),
-        K::Interface => Entity::Interface(Interface(base)),
-        K::Trait => Entity::Trait(Trait(base)),
-        K::Enum => Entity::Enum(Enum(base)),
-        K::Struct => Entity::Struct(Struct(base)),
-        K::TypeAlias => Entity::TypeAlias(TypeAlias(base)),
-        K::Method => Entity::Method(Method(base)),
-        K::Constructor => Entity::Constructor(Constructor(base)),
-        K::Function => Entity::Function(Function(base)),
-        K::Field => Entity::Field(Field(base)),
-        K::Property => Entity::Property(Property(base)),
-        K::Constant => Entity::Constant(Constant(base)),
-        K::Variable => Entity::Variable(Variable(base)),
-    }
+    Object::new("Stats")
+        .field(stat("entities", |m| m.entities))
+        .field(stat("relations", |m| m.relations))
+        .field(stat("sites", |m| m.sites))
+        .field(stat("heapBytes", |m| m.heap_bytes))
 }
 
-/// A relation between two entities, with every place it occurs.
-#[derive(Clone)]
-pub struct Relation {
-    model: Arc<Model>,
-    id: RelationId,
+fn rel<'a>(c: Cx<'_, 'a>) -> Result<(&'a Arc<Shared>, model_core::RelationRef<'a>)> {
+    let sh = shared(c)?;
+    let Rel(id) = *c.parent_value.try_downcast_ref::<Rel>()?;
+    let r = sh
+        .model
+        .relation(id)
+        .ok_or_else(|| Error::new("relation no longer in the model"))?;
+    Ok((sh, r))
 }
 
-impl Relation {
-    pub(crate) fn of(model: &Arc<Model>, r: RelationRef<'_>) -> Relation {
-        Relation {
-            model: model.clone(),
-            id: r.id(),
-        }
-    }
-
-    fn r(&self) -> Result<RelationRef<'_>> {
-        self.model
-            .relation(self.id)
-            .ok_or_else(|| Error::new("relation no longer in the model"))
-    }
-}
-
-#[Object]
-impl Relation {
-    async fn id(&self) -> u32 {
-        self.id.index() as u32
-    }
-
-    /// `calls`, `references`, `inherits`, `implements`, `imports`, or custom.
-    async fn kind(&self) -> Result<&str> {
-        Ok(self.r()?.kind().as_str())
-    }
-
-    async fn from(&self) -> Result<Entity> {
-        Ok(entity_of(&self.model, self.r()?.from()))
-    }
-
-    async fn to(&self) -> Result<Entity> {
-        Ok(entity_of(&self.model, self.r()?.to()))
-    }
-
-    async fn provenance(&self) -> Result<Provenance> {
-        Ok(self.r()?.provenance().into())
-    }
-
-    /// Number of occurrences: the weight of the dependency.
-    async fn site_count(&self) -> Result<usize> {
-        Ok(self.r()?.sites().len())
-    }
-
-    /// Occurrences, in the file of `from`.
-    async fn sites(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Range>> {
-        page(
-            self.r()?.sites().iter().map(|&s| Range::from(s)),
-            first,
-            after,
-        )
-    }
-
-    /// Occurrences with their read/write/receiver flags.
-    async fn flagged_sites(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Site>> {
-        let r = self.r()?;
-        page(
-            r.sites().iter().zip(r.site_flags()).map(|(&s, &f)| Site {
-                range: Range::from(s),
-                flags: f.names().map(str::to_string).collect(),
-                read: f.contains(SiteFlags::READ),
-                write: f.contains(SiteFlags::WRITE),
-                receiver: f.contains(SiteFlags::RECEIVER),
-            }),
-            first,
-            after,
-        )
-    }
-}
-
-#[derive(SimpleObject)]
-pub struct Stats {
-    pub entities: usize,
-    pub relations: usize,
-    pub sites: usize,
-    pub heap_bytes: usize,
-}
-
-pub struct Query {
-    pub(crate) model: Arc<Model>,
-}
-
-impl Query {
-    /// The single entity of a kind with this stable key, when it has the
-    /// expected kind. Backs the per-kind `…ByKey` root fields: introspection-
-    /// driven clients need one root field with a single required scalar key
-    /// argument to recognise the by-key lookup of each concept.
-    fn one_of<T>(
-        &self,
-        kind: model_core::EntityKind,
-        key: &str,
-        wrap: fn(EntityBase) -> T,
-    ) -> Option<T> {
-        self.model
-            .by_key(key)
-            .filter(|e| e.kind() == kind)
-            .map(|e| {
-                wrap(EntityBase {
-                    model: self.model.clone(),
-                    id: e.id(),
-                })
-            })
-    }
-
-    /// Like [`Self::one_of`] for a fine kind, matched by name.
-    fn one_of_fine<T>(&self, kind: &str, key: &str, wrap: fn(EntityBase) -> T) -> Option<T> {
-        self.model
-            .by_key(key)
-            .filter(|e| e.kind_name() == kind)
-            .map(|e| {
-                wrap(EntityBase {
-                    model: self.model.clone(),
-                    id: e.id(),
-                })
-            })
-    }
-
-    /// Like [`Self::list_of`] for a fine kind; empty when the model does not
-    /// define it.
-    fn list_of_fine<T>(
-        &self,
-        kind: &str,
-        wrap: fn(EntityBase) -> T,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<T>>
-    where
-        T: async_graphql::OutputType,
-    {
-        let id = self.model.metamodel().find(kind);
-        let items = id
-            .into_iter()
-            .flat_map(|id| self.model.of_kind_id(id))
-            .map(|e| {
-                wrap(EntityBase {
-                    model: self.model.clone(),
-                    id: e.id(),
-                })
-            });
-        page(items, first, after)
-    }
-
-    /// Generic list query for a kind: shared by the per-kind root fields.
-    fn list_of<T>(
-        &self,
-        kind: model_core::EntityKind,
-        wrap: fn(EntityBase) -> T,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<T>>
-    where
-        T: async_graphql::OutputType,
-    {
-        let items = self.model.of_kind(kind).map(|e| {
-            wrap(EntityBase {
-                model: self.model.clone(),
-                id: e.id(),
-            })
+fn relation_object() -> Object {
+    let field = |name: &str, ty: TypeRef, desc: Option<&str>, f: Resolve| {
+        let mut x = Field::new(name, ty, move |ctx| {
+            let r = f(&ctx);
+            FieldFuture::new(async move { r })
         });
-        page(items, first, after)
-    }
+        if let Some(d) = desc {
+            x = x.description(d);
+        }
+        x
+    };
+    Object::new("Relation")
+        .field(field("id", TypeRef::named_nn(TypeRef::INT), None, |c| {
+            val(rel(c)?.1.id().index() as u32)
+        }))
+        .field(field(
+            "kind",
+            TypeRef::named_nn(TypeRef::STRING),
+            Some("`calls`, `references`, `inherits`, `implements`, `imports`, or custom."),
+            |c| val(rel(c)?.1.kind().as_str()),
+        ))
+        .field(field("from", TypeRef::named_nn("Entity"), None, |c| {
+            let (sh, r) = rel(c)?;
+            Ok(Some(sh.entity(r.from().id())))
+        }))
+        .field(field("to", TypeRef::named_nn("Entity"), None, |c| {
+            let (sh, r) = rel(c)?;
+            Ok(Some(sh.entity(r.to().id())))
+        }))
+        .field(field(
+            "provenance",
+            TypeRef::named_nn("Provenance"),
+            None,
+            |c| val(provenance_value(rel(c)?.1.provenance())),
+        ))
+        .field(field(
+            "siteCount",
+            TypeRef::named_nn(TypeRef::INT),
+            Some("Number of occurrences: the weight of the dependency."),
+            |c| val(rel(c)?.1.sites().len() as u64),
+        ))
+        .field(
+            field(
+                "sites",
+                TypeRef::named_nn("RangeConnection"),
+                Some("Occurrences, in the file of `from`."),
+                |c| {
+                    let (_, r) = rel(c)?;
+                    page(c, r.sites().iter().map(|&s| Item::Range(s)))
+                },
+            )
+            .argument(InputValue::new("first", TypeRef::named(TypeRef::INT)))
+            .argument(InputValue::new("after", TypeRef::named(TypeRef::STRING))),
+        )
+        .field(
+            field(
+                "flaggedSites",
+                TypeRef::named_nn("SiteConnection"),
+                Some("Occurrences with their read/write/receiver flags."),
+                |c| {
+                    let (_, r) = rel(c)?;
+                    page(
+                        c,
+                        r.sites().iter().zip(r.site_flags()).map(|(&s, &f)| {
+                            Item::Site(SiteVal {
+                                range: s,
+                                flags: f.names().map(str::to_string).collect(),
+                                read: f.contains(SiteFlags::READ),
+                                write: f.contains(SiteFlags::WRITE),
+                                receiver: f.contains(SiteFlags::RECEIVER),
+                            })
+                        }),
+                    )
+                },
+            )
+            .argument(InputValue::new("first", TypeRef::named(TypeRef::INT)))
+            .argument(InputValue::new("after", TypeRef::named(TypeRef::STRING))),
+        )
 }
 
-#[Object]
-impl Query {
-    /// Languages present.
-    async fn languages(&self) -> Vec<&str> {
-        self.model.languages().iter().map(|l| l.as_str()).collect()
-    }
+// ---- Query ------------------------------------------------------------
 
-    async fn stats(&self) -> Stats {
-        let m = self.model.memory();
-        Stats {
-            entities: m.entities,
-            relations: m.relations,
-            sites: m.sites,
-            heap_bytes: m.heap_bytes,
+fn list_root(
+    name: &str,
+    ty: &str,
+    desc: String,
+    keep: impl Fn(&Shared, EntityRef<'_>) -> bool + Send + Sync + 'static,
+    archetype: EntityKind,
+    kind: Option<KindId>,
+) -> Field {
+    Field::new(
+        name,
+        TypeRef::named_nn(format!("{ty}Connection")),
+        move |ctx| {
+            let r = (|| -> Out<'_> {
+                let sh = shared(&ctx)?;
+                let items: Box<dyn Iterator<Item = EntityRef<'_>>> = match kind {
+                    Some(k) => Box::new(sh.model.of_kind_id(k)),
+                    None => Box::new(sh.model.of_kind(archetype)),
+                };
+                page(
+                    &ctx,
+                    items.filter(|e| keep(sh, *e)).map(|e| Item::Entity(e.id())),
+                )
+            })();
+            FieldFuture::new(async move { r })
+        },
+    )
+    .description(desc)
+    .argument(InputValue::new("first", TypeRef::named(TypeRef::INT)))
+    .argument(InputValue::new("after", TypeRef::named(TypeRef::STRING)))
+}
+
+fn by_key_root(
+    name: &str,
+    ty: &str,
+    keep: impl Fn(&Shared, EntityRef<'_>) -> bool + Send + Sync + 'static,
+) -> Field {
+    Field::new(name, TypeRef::named(ty), move |ctx| {
+        let r = (|| -> Out<'_> {
+            let sh = shared(&ctx)?;
+            let key = ctx.args.try_get("key")?.string()?.to_string();
+            Ok(sh
+                .model
+                .by_key(&key)
+                .filter(|e| keep(sh, *e))
+                .map(|e| FieldValue::owned_any(Ent(e.id()))))
+        })();
+        FieldFuture::new(async move { r })
+    })
+    .description(format!("The `{ty}` with this key."))
+    .argument(InputValue::new("key", TypeRef::named_nn(TypeRef::STRING)))
+}
+
+fn entities_root() -> Field {
+    Field::new("entities", TypeRef::named_nn("EntityConnection"), |ctx| {
+        let r = (|| -> Out<'_> {
+            let sh = shared(&ctx)?;
+            let kind = arg_kind(&ctx, "kind")?;
+            let language = arg_str(&ctx, "language")?;
+            let name = arg_str(&ctx, "name")?;
+            let contains = arg_str(&ctx, "nameContains")?.map(|s| s.to_lowercase());
+            let external = arg_bool(&ctx, "external")?;
+            let file_prefix = arg_str(&ctx, "filePrefix")?;
+            let roots = arg_bool(&ctx, "roots")?;
+            let fine_kind = arg_str(&ctx, "fineKind")?;
+            let wanted = arg_str(&ctx, "trait")?
+                .as_deref()
+                .map(|n| {
+                    model_traits::trait_def(n).map(|t| t.mask()).ok_or_else(|| {
+                        Error::new(format!(
+                            "unknown trait {n:?}; known traits: {}",
+                            model_traits::TRAITS
+                                .iter()
+                                .map(|t| t.name)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ))
+                    })
+                })
+                .transpose()?;
+            let items = sh
+                .model
+                .entities()
+                .filter(|e| kind.is_none_or(|k| e.kind() == k))
+                .filter(|e| {
+                    language
+                        .as_deref()
+                        .is_none_or(|l| e.language().is_some_and(|x| x.as_str() == l))
+                })
+                .filter(|e| name.as_deref().is_none_or(|n| e.name() == n))
+                .filter(|e| {
+                    contains
+                        .as_deref()
+                        .is_none_or(|c| e.name().to_lowercase().contains(c))
+                })
+                .filter(|e| external.is_none_or(|x| e.external() == x))
+                .filter(|e| {
+                    file_prefix
+                        .as_deref()
+                        .is_none_or(|p| e.file().is_some_and(|f| f.starts_with(p)))
+                })
+                .filter(|e| roots.is_none_or(|r| e.parent().is_none() == r))
+                .filter(|e| fine_kind.as_deref().is_none_or(|f| e.kind_name() == f))
+                .filter(|e| wanted.is_none_or(|m| e.has_trait(m)))
+                .map(|e| Item::Entity(e.id()));
+            page(&ctx, items)
+        })();
+        FieldFuture::new(async move { r })
+    })
+    .description("Entities matching every given filter, in model order.")
+    .argument(InputValue::new("kind", TypeRef::named("EntityKind")))
+    .argument(InputValue::new("language", TypeRef::named(TypeRef::STRING)))
+    .argument(
+        InputValue::new("name", TypeRef::named(TypeRef::STRING)).description("Exact simple name."),
+    )
+    .argument(
+        InputValue::new("nameContains", TypeRef::named(TypeRef::STRING))
+            .description("Case-insensitive part of the simple name."),
+    )
+    .argument(InputValue::new(
+        "external",
+        TypeRef::named(TypeRef::BOOLEAN),
+    ))
+    .argument(
+        InputValue::new("filePrefix", TypeRef::named(TypeRef::STRING))
+            .description("Path prefix, relative to the analysed root."),
+    )
+    .argument(
+        InputValue::new("roots", TypeRef::named(TypeRef::BOOLEAN))
+            .description("Only entities without parent."),
+    )
+    .argument(
+        InputValue::new("fineKind", TypeRef::named(TypeRef::STRING))
+            .description("Exact fine kind name, as returned by `fineKind`."),
+    )
+    .argument(
+        InputValue::new("trait", TypeRef::named(TypeRef::STRING)).description(
+            "Only entities whose kind has this trait, by name (`Invocation`, `Annotations`...).",
+        ),
+    )
+    .argument(InputValue::new("first", TypeRef::named(TypeRef::INT)))
+    .argument(InputValue::new("after", TypeRef::named(TypeRef::STRING)))
+}
+
+fn query_object(concepts: &[Concept]) -> Object {
+    let mut q = Object::new("Query")
+        .field(
+            Field::new(
+                "languages",
+                TypeRef::named_nn_list_nn(TypeRef::STRING),
+                |ctx| {
+                    let r = shared(&ctx).map(|sh| {
+                        Some(FieldValue::list(
+                            sh.model
+                                .languages()
+                                .iter()
+                                .map(|l| FieldValue::value(l.as_str())),
+                        ))
+                    });
+                    FieldFuture::new(async move { r })
+                },
+            )
+            .description("Languages present."),
+        )
+        .field(Field::new("stats", TypeRef::named_nn("Stats"), |_| {
+            FieldFuture::new(async move { Ok(Some(FieldValue::owned_any(()))) })
+        }))
+        .field(
+            Field::new("entity", TypeRef::named("Entity"), |ctx| {
+                let r = (|| -> Out<'_> {
+                    let sh = shared(&ctx)?;
+                    let key = arg_str(&ctx, "key")?;
+                    let id = match ctx.args.get("id") {
+                        Some(v) if !v.is_null() => Some(v.i64()?),
+                        _ => None,
+                    };
+                    let e = match (key, id) {
+                        (Some(k), None) => sh.model.by_key(&k),
+                        (None, Some(i)) => u32::try_from(i)
+                            .ok()
+                            .and_then(|i| sh.model.entity(EntityId::from_index(i))),
+                        _ => return Err(Error::new("give exactly one of `key` and `id`")),
+                    };
+                    Ok(e.map(|e| sh.entity(e.id())))
+                })();
+                FieldFuture::new(async move { r })
+            })
+            .description("An entity by `key` (stable) or `id` (this model only).")
+            .argument(InputValue::new("key", TypeRef::named(TypeRef::STRING)))
+            .argument(InputValue::new("id", TypeRef::named(TypeRef::INT))),
+        )
+        .field(
+            Field::new("file", TypeRef::named("Entity"), |ctx| {
+                let r = (|| -> Out<'_> {
+                    let sh = shared(&ctx)?;
+                    let path = ctx.args.try_get("path")?.string()?.to_string();
+                    Ok(sh
+                        .model
+                        .of_kind(EntityKind::File)
+                        .find(|e| e.file() == Some(path.as_str()))
+                        .map(|e| sh.entity(e.id())))
+                })();
+                FieldFuture::new(async move { r })
+            })
+            .description("The `File` entity of a path relative to the analysed root.")
+            .argument(InputValue::new("path", TypeRef::named_nn(TypeRef::STRING))),
+        )
+        .field(
+            Field::new("entityByKey", TypeRef::named("Entity"), |ctx| {
+                let r = (|| -> Out<'_> {
+                    let sh = shared(&ctx)?;
+                    let key = ctx.args.try_get("key")?.string()?.to_string();
+                    Ok(sh.model.by_key(&key).map(|e| sh.entity(e.id())))
+                })();
+                FieldFuture::new(async move { r })
+            })
+            .description(
+                "An entity by its stable key, whatever its kind.\n\nIntrospection-driven clients recognise a concept's by-key lookup when\nthe root field returns that concrete concept and takes one required\nscalar argument; the `…ByKey` fields below provide exactly that.",
+            )
+            .argument(InputValue::new("key", TypeRef::named_nn(TypeRef::STRING))),
+        );
+    for a in &ARCHETYPES {
+        let kind = a.kind;
+        q = q.field(by_key_root(
+            &format!("{}ByKey", lower_first(a.ty)),
+            a.ty,
+            move |sh, e| e.kind() == kind && !sh.has_concept(e.kind_id()),
+        ));
+    }
+    q = q.field(entities_root()).field(
+        Field::new(
+            "relations",
+            TypeRef::named_nn("RelationConnection"),
+            |ctx| {
+                let r = (|| -> Out<'_> {
+                    let sh = shared(&ctx)?;
+                    let keep = relation_filter(arg_str(&ctx, "kind")?, arg_provenance(&ctx)?);
+                    page(
+                        &ctx,
+                        sh.model
+                            .relations()
+                            .filter(|r| keep(r))
+                            .map(|r| Item::Relation(r.id())),
+                    )
+                })();
+                FieldFuture::new(async move { r })
+            },
+        )
+        .description("Relations matching every given filter, sorted by source entity.")
+        .argument(InputValue::new("kind", TypeRef::named(TypeRef::STRING)))
+        .argument(InputValue::new("provenance", TypeRef::named("Provenance")))
+        .argument(InputValue::new("first", TypeRef::named(TypeRef::INT)))
+        .argument(InputValue::new("after", TypeRef::named(TypeRef::STRING))),
+    );
+    for a in &ARCHETYPES {
+        let kind = a.kind;
+        q = q.field(list_root(
+            a.root,
+            a.ty,
+            a.root_desc.to_string(),
+            move |sh, e| !sh.has_concept(e.kind_id()),
+            kind,
+            None,
+        ));
+    }
+    for c in concepts {
+        q = q.field(by_key_root(&c.by_key, &c.ty, {
+            let kind = c.kind;
+            move |_, e| e.kind_id() == kind
+        }));
+        if let Some(root) = &c.root {
+            q = q.field(list_root(
+                root,
+                &c.ty,
+                format!("All entities of the kind `{}`.", c.kind_name),
+                |_, _| true,
+                c.archetype,
+                Some(c.kind),
+            ));
         }
     }
+    q
+}
 
-    /// An entity by `key` (stable) or `id` (this model only).
-    async fn entity(&self, key: Option<String>, id: Option<u32>) -> Result<Option<Entity>> {
-        let e = match (key, id) {
-            (Some(k), None) => self.model.by_key(&k),
-            (None, Some(i)) => self.model.entity(EntityId::from_index(i)),
-            _ => return Err(Error::new("give exactly one of `key` and `id`")),
-        };
-        Ok(e.map(|e| entity_of(&self.model, e)))
-    }
+// ---- schema -----------------------------------------------------------
 
-    /// The `File` entity of a path relative to the analysed root.
-    async fn file(&self, path: String) -> Option<Entity> {
-        self.model
-            .of_kind(model_core::EntityKind::File)
-            .find(|e| e.file() == Some(path.as_str()))
-            .map(|e| entity_of(&self.model, e))
-    }
+fn entity_kind_enum() -> Enum {
+    Enum::new("EntityKind").items(
+        EntityKind::ALL
+            .iter()
+            .map(|k| EnumItem::new(k.as_str().to_ascii_uppercase())),
+    )
+}
 
-    /// An entity by its stable key, whatever its kind.
-    ///
-    /// Introspection-driven clients recognise a concept's by-key lookup when
-    /// the root field returns that concrete concept and takes one required
-    /// scalar argument; the `…ByKey` fields below provide exactly that.
-    async fn entity_by_key(&self, key: String) -> Option<Entity> {
-        self.model.by_key(&key).map(|e| entity_of(&self.model, e))
-    }
-
-    /// The `Namespace` with this key.
-    async fn namespace_by_key(&self, key: String) -> Option<Namespace> {
-        self.one_of(model_core::EntityKind::Namespace, &key, Namespace)
-    }
-
-    /// The `File` with this key.
-    async fn file_by_key(&self, key: String) -> Option<File> {
-        self.one_of(model_core::EntityKind::File, &key, File)
-    }
-
-    /// The `Class` with this key.
-    async fn class_by_key(&self, key: String) -> Option<Class> {
-        self.one_of(model_core::EntityKind::Class, &key, Class)
-    }
-
-    /// The `Interface` with this key.
-    async fn interface_by_key(&self, key: String) -> Option<Interface> {
-        self.one_of(model_core::EntityKind::Interface, &key, Interface)
-    }
-
-    /// The `Trait` with this key.
-    async fn trait_by_key(&self, key: String) -> Option<Trait> {
-        self.one_of(model_core::EntityKind::Trait, &key, Trait)
-    }
-
-    /// The `Enum` with this key.
-    async fn enum_by_key(&self, key: String) -> Option<Enum> {
-        self.one_of(model_core::EntityKind::Enum, &key, Enum)
-    }
-
-    /// The `Struct` with this key.
-    async fn struct_by_key(&self, key: String) -> Option<Struct> {
-        self.one_of(model_core::EntityKind::Struct, &key, Struct)
-    }
-
-    /// The `TypeAlias` with this key.
-    async fn type_alias_by_key(&self, key: String) -> Option<TypeAlias> {
-        self.one_of(model_core::EntityKind::TypeAlias, &key, TypeAlias)
-    }
-
-    /// The `Method` with this key.
-    async fn method_by_key(&self, key: String) -> Option<Method> {
-        self.one_of(model_core::EntityKind::Method, &key, Method)
-    }
-
-    /// The `Constructor` with this key.
-    async fn constructor_by_key(&self, key: String) -> Option<Constructor> {
-        self.one_of(model_core::EntityKind::Constructor, &key, Constructor)
-    }
-
-    /// The `Function` with this key.
-    async fn function_by_key(&self, key: String) -> Option<Function> {
-        self.one_of(model_core::EntityKind::Function, &key, Function)
-    }
-
-    /// The `Field` with this key.
-    async fn field_by_key(&self, key: String) -> Option<Field> {
-        self.one_of(model_core::EntityKind::Field, &key, Field)
-    }
-
-    /// The `Property` with this key.
-    async fn property_by_key(&self, key: String) -> Option<Property> {
-        self.one_of(model_core::EntityKind::Property, &key, Property)
-    }
-
-    /// The `Constant` with this key.
-    async fn constant_by_key(&self, key: String) -> Option<Constant> {
-        self.one_of(model_core::EntityKind::Constant, &key, Constant)
-    }
-
-    /// The `Variable` with this key.
-    async fn variable_by_key(&self, key: String) -> Option<Variable> {
-        self.one_of(model_core::EntityKind::Variable, &key, Variable)
-    }
-
-    /// Entities matching every given filter, in model order.
-    #[allow(clippy::too_many_arguments)]
-    async fn entities(
-        &self,
-        kind: Option<EntityKind>,
-        language: Option<String>,
-        #[graphql(desc = "Exact simple name.")] name: Option<String>,
-        #[graphql(desc = "Case-insensitive part of the simple name.")] name_contains: Option<
-            String,
-        >,
-        external: Option<bool>,
-        #[graphql(desc = "Path prefix, relative to the analysed root.")] file_prefix: Option<
-            String,
-        >,
-        #[graphql(desc = "Only entities without parent.")] roots: Option<bool>,
-        #[graphql(desc = "Exact fine kind name (`parameter`, `record`, `ts.interface`...).")]
-        fine_kind: Option<String>,
-        #[graphql(
-            name = "trait",
-            desc = "Only entities whose kind has this trait, by name (`Invocation`, `Annotations`...)."
-        )]
-        trait_name: Option<String>,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Entity>> {
-        let kind = kind.map(model_core::EntityKind::from);
-        let wanted = trait_name
-            .as_deref()
-            .map(|n| {
-                model_traits::trait_def(n).map(|t| t.mask()).ok_or_else(|| {
-                    Error::new(format!(
-                        "unknown trait {n:?}; known traits: {}",
-                        model_traits::TRAITS
-                            .iter()
-                            .map(|t| t.name)
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ))
-                })
-            })
-            .transpose()?;
-        let contains = name_contains.map(|s| s.to_lowercase());
-        let items = self
-            .model
-            .entities()
-            .filter(|e| kind.is_none_or(|k| e.kind() == k))
-            .filter(|e| {
-                language
-                    .as_deref()
-                    .is_none_or(|l| e.language().is_some_and(|x| x.as_str() == l))
-            })
-            .filter(|e| name.as_deref().is_none_or(|n| e.name() == n))
-            .filter(|e| {
-                contains
-                    .as_deref()
-                    .is_none_or(|c| e.name().to_lowercase().contains(c))
-            })
-            .filter(|e| external.is_none_or(|x| e.external() == x))
-            .filter(|e| {
-                file_prefix
-                    .as_deref()
-                    .is_none_or(|p| e.file().is_some_and(|f| f.starts_with(p)))
-            })
-            .filter(|e| roots.is_none_or(|r| e.parent().is_none() == r))
-            .filter(|e| fine_kind.as_deref().is_none_or(|f| e.kind_name() == f))
-            .filter(|e| wanted.is_none_or(|m| e.has_trait(m)))
-            .map(|e| entity_of(&self.model, e));
-        page(items, first, after)
-    }
-
-    /// Relations matching every given filter, sorted by source entity.
-    async fn relations(
-        &self,
-        kind: Option<String>,
-        provenance: Option<Provenance>,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Relation>> {
-        let keep = relation_filter(kind, provenance);
-        let items = self
-            .model
-            .relations()
-            .filter(|r| keep(r))
-            .map(|r| Relation::of(&self.model, r));
-        page(items, first, after)
-    }
-
-    /// All namespaces, packages and modules.
-    async fn namespaces(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Namespace>> {
-        self.list_of(model_core::EntityKind::Namespace, Namespace, first, after)
-    }
-
-    /// All source files.
-    async fn files(&self, first: Option<i32>, after: Option<String>) -> Result<Page<File>> {
-        self.list_of(model_core::EntityKind::File, File, first, after)
-    }
-
-    /// All classes.
-    async fn classes(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Class>> {
-        self.list_of(model_core::EntityKind::Class, Class, first, after)
-    }
-
-    /// All interfaces.
-    async fn interfaces(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Interface>> {
-        self.list_of(model_core::EntityKind::Interface, Interface, first, after)
-    }
-
-    /// All traits and mixins.
-    async fn traits(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Trait>> {
-        self.list_of(model_core::EntityKind::Trait, Trait, first, after)
-    }
-
-    /// All enumerations.
-    async fn enums(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Enum>> {
-        self.list_of(model_core::EntityKind::Enum, Enum, first, after)
-    }
-
-    /// All structs and records.
-    async fn structs(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Struct>> {
-        self.list_of(model_core::EntityKind::Struct, Struct, first, after)
-    }
-
-    /// All type aliases.
-    async fn type_aliases(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TypeAlias>> {
-        self.list_of(model_core::EntityKind::TypeAlias, TypeAlias, first, after)
-    }
-
-    /// All methods.
-    async fn methods(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Method>> {
-        self.list_of(model_core::EntityKind::Method, Method, first, after)
-    }
-
-    /// All constructors.
-    async fn constructors(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Constructor>> {
-        self.list_of(
-            model_core::EntityKind::Constructor,
-            Constructor,
-            first,
-            after,
+fn provenance_enum() -> Enum {
+    Enum::new("Provenance")
+        .item(
+            EnumItem::new("TREE_SITTER")
+                .description("Syntax only (tree-sitter); names may be unresolved."),
         )
-    }
+        .item(EnumItem::new("SCIP").description("Resolved by a SCIP indexer."))
+        .item(EnumItem::new("FRONTEND").description("A language-specific frontend."))
+        .item(EnumItem::new("DERIVED").description("Computed by an analysis."))
+}
 
-    /// All free functions.
-    async fn functions(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Function>> {
-        self.list_of(model_core::EntityKind::Function, Function, first, after)
-    }
+fn entity_interface() -> Interface {
+    ENTITY_SPECS.iter().fold(
+        Interface::new("Entity").description(
+            "The common interface implemented by every entity type: the archetype types and the \
+concept types of the model. Navigation fields return `Entity` so queries written against \
+the common fields work on any model; `__typename` reveals the concrete type.",
+        ),
+        |i, s| i.field(spec_interface_field(s)),
+    )
+}
 
-    /// All fields.
-    async fn fields(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Field>> {
-        self.list_of(model_core::EntityKind::Field, Field, first, after)
+/// The schema of `model`: the static part, the archetype types, and one
+/// object type, by-key field and list field per concept its metamodel names.
+pub fn build(
+    model: Arc<Model>,
+    max_depth: usize,
+) -> Result<async_graphql::dynamic::Schema, SchemaError> {
+    let concepts = concepts_of(&model);
+    let mut concept = vec![None; model.metamodel().len()];
+    for c in &concepts {
+        concept[c.kind.index()] = Some(c.ty.clone());
     }
-
-    /// All properties.
-    async fn properties(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Property>> {
-        self.list_of(model_core::EntityKind::Property, Property, first, after)
+    let shared = Arc::new(Shared {
+        model: model.clone(),
+        concept,
+    });
+    let mut b: SchemaBuilder = Schema::build("Query", None, None)
+        .data(shared)
+        .limit_depth(max_depth)
+        .register(Scalar::new("JSON").description("A scalar that can represent any JSON value."))
+        .register(entity_kind_enum())
+        .register(provenance_enum())
+        .register(entity_interface())
+        .register(range_object())
+        .register(site_object())
+        .register(page_info_object())
+        .register(stats_object())
+        .register(relation_object());
+    for node in ["Entity", "Range", "Relation", "Site"] {
+        for o in connection_types(node) {
+            b = b.register(o);
+        }
     }
-
-    /// All constants.
-    async fn constants(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Constant>> {
-        self.list_of(model_core::EntityKind::Constant, Constant, first, after)
+    for a in &ARCHETYPES {
+        b = b.register(entity_object(a.ty, a.desc.to_string(), a.methods));
+        for o in connection_types(a.ty) {
+            b = b.register(o);
+        }
     }
-
-    /// All local and global variables.
-    async fn variables(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Variable>> {
-        self.list_of(model_core::EntityKind::Variable, Variable, first, after)
+    for c in &concepts {
+        let desc = format!(
+            "Entities of the kind `{}`, a refinement of `{}`.",
+            c.kind_name,
+            archetype(c.archetype).ty
+        );
+        b = b.register(entity_object(&c.ty, desc, archetype(c.archetype).methods));
+        for o in connection_types(&c.ty) {
+            b = b.register(o);
+        }
     }
-
-    /// The `Parameter` with this key.
-    async fn parameter_by_key(&self, key: String) -> Option<Parameter> {
-        self.one_of_fine("parameter", &key, Parameter)
-    }
-
-    /// The `LocalVariable` with this key.
-    async fn local_variable_by_key(&self, key: String) -> Option<LocalVariable> {
-        self.one_of_fine("local_variable", &key, LocalVariable)
-    }
-
-    /// The `TypeParameter` with this key.
-    async fn type_parameter_by_key(&self, key: String) -> Option<TypeParameter> {
-        self.one_of_fine("type_parameter", &key, TypeParameter)
-    }
-
-    /// The `Annotation` with this key.
-    async fn annotation_by_key(&self, key: String) -> Option<Annotation> {
-        self.one_of_fine("annotation", &key, Annotation)
-    }
-
-    /// The `AnnotationType` with this key.
-    async fn annotation_type_by_key(&self, key: String) -> Option<AnnotationType> {
-        self.one_of_fine("annotation_type", &key, AnnotationType)
-    }
-
-    /// The `Record` with this key.
-    async fn record_by_key(&self, key: String) -> Option<Record> {
-        self.one_of_fine("record", &key, Record)
-    }
-
-    /// The `EnumConstant` with this key.
-    async fn enum_constant_by_key(&self, key: String) -> Option<EnumConstant> {
-        self.one_of_fine("enum_constant", &key, EnumConstant)
-    }
-
-    /// The `Comment` with this key.
-    async fn comment_by_key(&self, key: String) -> Option<Comment> {
-        self.one_of_fine("comment", &key, Comment)
-    }
-
-    /// The `TsInterface` with this key.
-    async fn ts_interface_by_key(&self, key: String) -> Option<TsInterface> {
-        self.one_of_fine("ts.interface", &key, TsInterface)
-    }
-
-    /// The `TsTypeAlias` with this key.
-    async fn ts_type_alias_by_key(&self, key: String) -> Option<TsTypeAlias> {
-        self.one_of_fine("ts.type_alias", &key, TsTypeAlias)
-    }
-
-    /// The `TsNamespace` with this key.
-    async fn ts_namespace_by_key(&self, key: String) -> Option<TsNamespace> {
-        self.one_of_fine("ts.namespace", &key, TsNamespace)
-    }
-
-    /// The `TsAbstractClass` with this key.
-    async fn ts_abstract_class_by_key(&self, key: String) -> Option<TsAbstractClass> {
-        self.one_of_fine("ts.abstract_class", &key, TsAbstractClass)
-    }
-
-    /// The `TsArrowFunction` with this key.
-    async fn ts_arrow_function_by_key(&self, key: String) -> Option<TsArrowFunction> {
-        self.one_of_fine("ts.arrow_function", &key, TsArrowFunction)
-    }
-
-    /// The `TsModule` with this key.
-    async fn ts_module_by_key(&self, key: String) -> Option<TsModule> {
-        self.one_of_fine("ts.module", &key, TsModule)
-    }
-
-    /// The `PythonModule` with this key.
-    async fn python_module_by_key(&self, key: String) -> Option<PythonModule> {
-        self.one_of_fine("python.module", &key, PythonModule)
-    }
-
-    /// The `PharoClass` with this key.
-    async fn pharo_class_by_key(&self, key: String) -> Option<PharoClass> {
-        self.one_of_fine("pharo.class", &key, PharoClass)
-    }
-
-    /// The `PharoTrait` with this key.
-    async fn pharo_trait_by_key(&self, key: String) -> Option<PharoTrait> {
-        self.one_of_fine("pharo.trait", &key, PharoTrait)
-    }
-
-    /// The `PharoMethod` with this key.
-    async fn pharo_method_by_key(&self, key: String) -> Option<PharoMethod> {
-        self.one_of_fine("pharo.method", &key, PharoMethod)
-    }
-
-    /// The `PharoExtensionMethod` with this key.
-    async fn pharo_extension_method_by_key(&self, key: String) -> Option<PharoExtensionMethod> {
-        self.one_of_fine("pharo.extension_method", &key, PharoExtensionMethod)
-    }
-
-    /// All method or function parameters (fine kind `parameter`).
-    async fn parameters(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Parameter>> {
-        self.list_of_fine("parameter", Parameter, first, after)
-    }
-
-    /// All local variables (fine kind `local_variable`).
-    async fn local_variables(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<LocalVariable>> {
-        self.list_of_fine("local_variable", LocalVariable, first, after)
-    }
-
-    /// All generic type parameters (fine kind `type_parameter`).
-    async fn type_parameters(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TypeParameter>> {
-        self.list_of_fine("type_parameter", TypeParameter, first, after)
-    }
-
-    /// All An annotation instance.s (fine kind `annotation`).
-    async fn annotations(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<Annotation>> {
-        self.list_of_fine("annotation", Annotation, first, after)
-    }
-
-    /// All An annotation type declaration.s (fine kind `annotation_type`).
-    async fn annotation_types(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<AnnotationType>> {
-        self.list_of_fine("annotation_type", AnnotationType, first, after)
-    }
-
-    /// All record declarations (fine kind `record`).
-    async fn records(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Record>> {
-        self.list_of_fine("record", Record, first, after)
-    }
-
-    /// All An enumeration constant.s (fine kind `enum_constant`).
-    async fn enum_constants(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<EnumConstant>> {
-        self.list_of_fine("enum_constant", EnumConstant, first, after)
-    }
-
-    /// All comments (fine kind `comment`).
-    async fn comments(&self, first: Option<i32>, after: Option<String>) -> Result<Page<Comment>> {
-        self.list_of_fine("comment", Comment, first, after)
-    }
-
-    /// All TypeScript interfaces (fine kind `ts.interface`).
-    async fn ts_interfaces(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TsInterface>> {
-        self.list_of_fine("ts.interface", TsInterface, first, after)
-    }
-
-    /// All TypeScript type aliass (fine kind `ts.type_alias`).
-    async fn ts_type_aliases(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TsTypeAlias>> {
-        self.list_of_fine("ts.type_alias", TsTypeAlias, first, after)
-    }
-
-    /// All TypeScript namespaces (fine kind `ts.namespace`).
-    async fn ts_namespaces(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TsNamespace>> {
-        self.list_of_fine("ts.namespace", TsNamespace, first, after)
-    }
-
-    /// All TypeScript abstract classs (fine kind `ts.abstract_class`).
-    async fn ts_abstract_classes(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TsAbstractClass>> {
-        self.list_of_fine("ts.abstract_class", TsAbstractClass, first, after)
-    }
-
-    /// All TypeScript arrow functions (fine kind `ts.arrow_function`).
-    async fn ts_arrow_functions(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TsArrowFunction>> {
-        self.list_of_fine("ts.arrow_function", TsArrowFunction, first, after)
-    }
-
-    /// All TypeScript module (file)s (fine kind `ts.module`).
-    async fn ts_modules(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<TsModule>> {
-        self.list_of_fine("ts.module", TsModule, first, after)
-    }
-
-    /// All Python module (file)s (fine kind `python.module`).
-    async fn python_modules(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<PythonModule>> {
-        self.list_of_fine("python.module", PythonModule, first, after)
-    }
-
-    /// All Pharo classs (fine kind `pharo.class`).
-    async fn pharo_classes(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<PharoClass>> {
-        self.list_of_fine("pharo.class", PharoClass, first, after)
-    }
-
-    /// All Pharo traits (fine kind `pharo.trait`).
-    async fn pharo_traits(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<PharoTrait>> {
-        self.list_of_fine("pharo.trait", PharoTrait, first, after)
-    }
-
-    /// All Pharo methods (fine kind `pharo.method`).
-    async fn pharo_methods(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<PharoMethod>> {
-        self.list_of_fine("pharo.method", PharoMethod, first, after)
-    }
-
-    /// All Pharo method defined outside its class's packages (fine kind `pharo.extension_method`).
-    async fn pharo_extension_methods(
-        &self,
-        first: Option<i32>,
-        after: Option<String>,
-    ) -> Result<Page<PharoExtensionMethod>> {
-        self.list_of_fine("pharo.extension_method", PharoExtensionMethod, first, after)
-    }
+    b.register(query_object(&concepts)).finish()
 }

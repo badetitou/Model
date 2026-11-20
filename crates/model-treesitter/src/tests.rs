@@ -617,6 +617,61 @@ fn kinds_file_is_valid_and_traits_exist() {
 }
 
 #[test]
+fn kinds_declare_unique_graphql_concepts() {
+    let mut types = std::collections::HashSet::new();
+    let mut roots = std::collections::HashSet::new();
+    for k in crate::facts::kinds() {
+        let (Some(t), Some(r)) = (&k.graphql_type, &k.graphql_root) else {
+            assert!(
+                k.graphql_type.is_none() && k.graphql_root.is_none(),
+                "{}: a concept needs both names",
+                k.name
+            );
+            continue;
+        };
+        assert!(t.starts_with(|c: char| c.is_ascii_uppercase()), "{t}");
+        assert!(r.starts_with(|c: char| c.is_ascii_lowercase()), "{r}");
+        assert!(types.insert(t.clone()), "duplicate type {t}");
+        assert!(roots.insert(r.clone()), "duplicate root {r}");
+    }
+    assert!(types.len() >= 15);
+}
+
+#[test]
+fn extracted_kinds_carry_their_concept_names() {
+    let (m, _) = model(&[(
+        "src/A.java",
+        "package p;\nclass A { void m(int x) { } }\nrecord R(int a) { }\n",
+    )]);
+    let concept = |name: &str| {
+        let id = m.metamodel().find(name).expect(name);
+        let k = m.metamodel().get(id).unwrap();
+        (k.graphql_type.clone(), k.graphql_root.clone())
+    };
+    assert_eq!(
+        concept("parameter"),
+        (Some("Parameter".into()), Some("parameters".into()))
+    );
+    assert_eq!(
+        concept("record"),
+        (Some("Record".into()), Some("records".into()))
+    );
+}
+
+#[test]
+fn declare_kinds_defines_every_kind_with_its_concept() {
+    let mut b = model_core::ModelBuilder::new();
+    crate::declare_kinds(&mut b);
+    let m = b.build();
+    let named = m
+        .metamodel()
+        .iter()
+        .filter(|(_, k)| k.graphql_type.is_some())
+        .count();
+    assert_eq!(named, crate::facts::kinds().len());
+}
+
+#[test]
 fn typescript_kinds_are_fine_kinds_with_traits() {
     let src = "export interface Shape { area(): number }\ntype Id = string;\nnamespace N { export const x = 1 }\nabstract class Base {}\nclass A extends Base implements Shape { area() { return 1 } }\nconst f = () => 1;\nenum E { A }\n";
     let (m, _) = model(&[("src/a.ts", src)]);

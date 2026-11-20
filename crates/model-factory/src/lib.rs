@@ -205,6 +205,16 @@ fn has_grammar(language: &str) -> bool {
         .any(|g| g.language == language)
 }
 
+/// An empty model that knows every kind of the bundled language data
+/// (`model-treesitter`'s `kinds.json`, the Pharo kinds) with their GraphQL
+/// concept names: what a model of any of those languages would carry.
+pub fn default_model() -> Model {
+    let mut b = model_core::ModelBuilder::new();
+    treesitter::declare_kinds(&mut b);
+    lang_pharo::declare_kinds(&mut b);
+    b.build()
+}
+
 pub fn build(
     root: &Path,
     opts: &BuildOptions,

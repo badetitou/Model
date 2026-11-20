@@ -9,6 +9,7 @@
 //! extract with `relations: false`: SCIP resolves them exactly.
 
 mod apply;
+pub use apply::declare_kinds;
 mod facts;
 mod grammars;
 

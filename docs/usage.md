@@ -143,44 +143,77 @@ cargo run --release -p model-graphql -- path/to/repo --on-demand --diff origin/m
 `outgoing(kind: "calls")` does. `OnDemand` and `requirement_of` (selection → traits) are in
 `crates/model-graphql/src/ondemand.rs`. Use `--no-cache` on fixtures.
 
-### Famix-like concepts in GraphQL
+### Fine kinds, traits and typed concepts in GraphQL
 
-Fine kinds are first-class in the schema. Besides the 15 archetype types
-(`Class`, `Method`, `Variable`, ...), there is one concrete type per fine kind
-of the default kind tables, each implementing `Entity`, with a root list field
-and a `...ByKey(key: String!)` lookup:
-
-| Java | TypeScript / Python | Pharo |
-| --- | --- | --- |
-| `Parameter` (`parameters`, `parameterByKey`) | `TsInterface` (`tsInterfaces`) | `PharoClass` (`pharoClasses`) |
-| `LocalVariable` (`localVariables`) | `TsTypeAlias`, `TsNamespace`, `TsAbstractClass` | `PharoTrait` (`pharoTraits`) |
-| `TypeParameter` (`typeParameters`) | `TsArrowFunction`, `TsModule` | `PharoMethod` (`pharoMethods`) |
-| `Annotation`, `AnnotationType` (`annotations`, `annotationTypes`) | `PythonModule` (`pythonModules`) | `PharoExtensionMethod` |
-| `Record` (`records`), `EnumConstant` (`enumConstants`), `Comment` (`comments`) | | |
-
-- `__typename` of an entity is its fine kind's type when the kind is in that
-  list (a parameter is a `Parameter`, a record a `Record`, a Pharo class a
-  `PharoClass`), otherwise its archetype's type. Kinds defined elsewhere
-  (user `kinds.json`, Moose imports) keep the archetype type; `fineKind`
-  always gives the exact name. So `... on Class` no longer matches records or
-  Pharo classes: use `... on Record` or filter on `kind: CLASS`, which still
-  matches every class-archetype entity. `kind`, `classByKey`, `classes` ... keep
-  working on the archetype.
-- `Entity.traits: [String!]!` lists the trait names of the entity's kind
-  (`Named`, `Typed`, `Invocation` ...).
-- `entities(fineKind: "parameter", trait: "Invocation", ...)`: exact fine kind
-  name, and trait by name (an unknown trait is an error listing the known
-  ones). They combine with the other filters.
-- A fine-kind root field is empty when the model defines no such kind.
-- `--on-demand`: these fields need only the structure layer; no indexer runs.
+`model-graphql` carries no language knowledge. Its schema is built from the
+model at startup (async-graphql's dynamic schema): the 15 archetype types
+(`Class`, `Method`, `Variable`, ...) are always there, and every kind of the
+model's `Metamodel` that **names a GraphQL concept** gets one more object type,
+implementing `Entity`, with a list field and a lookup by key:
 
 ```graphql
 {
-  parameters(first: 5) { totalCount nodes { name traits parent { name } } }
-  records { nodes { name } }
-  entities(trait: "Invocation", fineKind: "pharo.method", first: 3) { nodes { __typename name } }
+  parameters(first: 5) { totalCount nodes { name traits parent { name } } }  # type Parameter
+  parameterByKey(key: "...") { name }
+  tsInterfaces { nodes { name } }                    # TypeScript, from kinds.json
+  pharoClasses { nodes { name children(kind: METHOD) { totalCount } } }
 }
 ```
+
+- A concept is a root list `parameters(first, after)` (a `ParameterConnection`)
+  and `parameterByKey(key: String!)`. The by-key name is the type name,
+  lower-cased first letter, plus `ByKey`.
+- Concept types exist **when the model has the kind**: they appear as the
+  frontend meets the kind (a Java file without parameters defines no
+  `parameter` kind), and `--schema <root | model.json>` prints the schema of a
+  given model. `--schema` alone prints the one of the bundled language data
+  (`crates/model-graphql/schema.graphql`).
+- `__typename` of an entity is its kind's concept type when the kind has one,
+  otherwise the archetype type. So `... on Class` and the `classes` list hold
+  the class-archetype entities that have **no** concept type of their own (a
+  Java `record` is a `Record`, not a `Class`); `entities(kind: CLASS)` still
+  matches all of them. `methods(first)` on containers lists only entities typed
+  `Method`; use `children(kind: METHOD)` for every kind of method.
+- Generic access stays available for every kind, with or without a concept:
+  `Entity.fineKind: String!` (exact kind name, `record`, `parameter`, ...),
+  `Entity.traits: [String!]!` (`Named`, `Typed`, `Invocation` ...), and
+  `entities(fineKind: "parameter", trait: "Invocation", ...)` (an unknown trait
+  is an error listing the known ones). A kind without a concept name keeps its
+  archetype type.
+- `--on-demand`: typed roots and by-key fields need only the structure layer;
+  no indexer runs unless the query follows relations.
+
+A name is dropped, and the kind keeps its archetype type, when it is not a
+valid GraphQL name or is already taken (by an archetype, `Query` fields, an
+earlier kind); a root name already taken only drops the list field.
+
+#### How a language declares its concepts
+
+Each kind carries two optional strings in the `Metamodel`
+(`KindInfo::graphql_type`, `KindInfo::graphql_root`); they are serialised in
+model JSON, so a saved model keeps its concepts.
+
+- **tree-sitter languages**: add the two fields to the kind's row in
+  `crates/model-treesitter/kinds.json`; no Rust change:
+
+  ```json
+  {"name": "ts.interface", "archetype": "interface",
+   "graphql_type": "TsInterface", "graphql_root": "tsInterfaces",
+   "traits": ["Named", "WithMembers"]}
+  ```
+
+- **Rust frontends** (`model-lang-*`): call the builder when defining the kind:
+
+  ```rust
+  let k = b.define_kind("pharo.class", EntityKind::Class, mask, Some("Famix-Smalltalk-Entities.Class"));
+  b.set_kind_concept(k, Some("PharoClass"), Some("pharoClasses"));
+  ```
+
+- **Moose imports**: derived from the FM3 class (`Famix-Java-Entities.Record`
+  → `JavaRecord`, `javaRecords`).
+
+Archetype default kinds cannot carry a concept (`set_kind_concept` returns
+false): they already have their archetype type.
 
 ## 5. Fragments and incremental rebuild
 

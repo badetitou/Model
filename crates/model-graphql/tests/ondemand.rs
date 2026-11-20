@@ -109,10 +109,37 @@ fn the_selection_set_gives_the_traits() {
         requirement_of(q, Some("A")).unwrap().layers().layers(),
         [Structure, Resolution]
     );
-    // A field the table does not know is assumed to need everything.
+    // A nested field the tables do not know is assumed to need everything.
     assert_eq!(
-        requirement_of("{ somethingNew }", None).unwrap(),
+        requirement_of("{ methods { nodes { somethingNew } } }", None).unwrap(),
         Requirement::all_traits()
+    );
+    // A root field they do not know is a typed concept's list (its name comes
+    // from the metamodel, unknown yet): entities, structure only.
+    assert_eq!(
+        requirement_of("{ parameters { nodes { name } } }", None)
+            .unwrap()
+            .layers()
+            .layers(),
+        [Structure]
+    );
+    assert_eq!(
+        requirement_of("{ tsInterfaceByKey(key: \"k\") { name } }", None)
+            .unwrap()
+            .layers()
+            .layers(),
+        [Structure]
+    );
+    // Walking relations from a typed concept still needs resolution.
+    assert_eq!(
+        requirement_of(
+            "{ parameters { nodes { outgoing(kind: \"calls\") { totalCount } } } }",
+            None
+        )
+        .unwrap()
+        .layers()
+        .layers(),
+        [Structure, Resolution]
     );
     assert!(requirement_of("{ ", None).is_err());
 }
@@ -185,14 +212,37 @@ async fn errors_are_reported_not_raised() {
 fn fine_kind_fields_need_the_structure_layer_only() {
     use Layer::*;
     for q in [
-        "{ parameters { nodes { name traits fineKind } } }",
-        "{ localVariables { totalCount } records { nodes { name } } }",
-        r#"{ parameterByKey(key: "k") { name traits } }"#,
-        r#"{ entities(fineKind: "parameter", trait: "Typed") { nodes { name } } }"#,
-        "{ pharoClasses { totalCount } tsInterfaces { totalCount } }",
+        "{ methods { nodes { name traits fineKind } } }",
+        r#"{ entities(fineKind: "parameter", trait: "Typed") { nodes { name traits } } }"#,
     ] {
         assert_eq!(layers(q), [Structure], "{q}");
     }
+}
+
+/// Concept types come from the model the session built: a query on one starts
+/// no indexer, and the type is there because the model has the kind.
+#[tokio::test]
+async fn typed_concept_queries_start_no_indexer() {
+    let d = project("typed");
+    std::fs::write(
+        d.join("src/C.java"),
+        "package app;\n\nclass C {\n    void m(String p, int q) { }\n}\n",
+    )
+    .unwrap();
+    let od = od(&d, Scope::All);
+    let data = ask(
+        &od,
+        r#"{ parameters { totalCount nodes { __typename name fineKind } }
+             first: parameterByKey(key: "nope") { name } }"#,
+    )
+    .await;
+    assert_eq!(data["parameters"]["totalCount"], 2);
+    assert_eq!(data["parameters"]["nodes"][0]["__typename"], "Parameter");
+    assert_eq!(data["first"], serde_json::json!(null));
+    let r = od.last_report().unwrap();
+    assert_eq!(r.layers_run, [Layer::Structure]);
+    assert_eq!(r.indexing_events, 0);
+    let _ = std::fs::remove_dir_all(&d);
 }
 
 #[tokio::test]
@@ -201,11 +251,12 @@ async fn fine_kind_queries_start_no_indexer() {
     let od = od(&d, Scope::All);
     let data = ask(
         &od,
-        r#"{ methods { nodes { traits } } localVariables { totalCount }
+        r#"{ methods { nodes { traits } }
+             local: entities(fineKind: "local_variable") { totalCount }
              inv: entities(trait: "Invocation") { totalCount } }"#,
     )
     .await;
-    assert_eq!(data["localVariables"]["totalCount"], 0);
+    assert_eq!(data["local"]["totalCount"], 0);
     assert!(data["inv"]["totalCount"].as_u64().unwrap() >= 3);
     let traits = data["methods"]["nodes"][0]["traits"].as_array().unwrap();
     assert!(traits.iter().any(|t| t == "Invocation"));

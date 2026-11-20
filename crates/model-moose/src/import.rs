@@ -312,6 +312,9 @@ impl<'a> Importer<'a> {
             model_traits::mask_of_fm3_class(class),
             Some(class),
         );
+        if let Some((ty, root)) = mapping::concept_names(class, simple) {
+            self.b.set_kind_concept(k, Some(&ty), Some(&root));
+        }
         self.classes.insert(class.to_string(), Some(k));
         k
     }
