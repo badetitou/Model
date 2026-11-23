@@ -624,6 +624,26 @@ fn enrich_reads_a_project_directory() {
     assert_eq!(stats.handlers, 1);
 }
 
+/// Generated twins are never main sources, whatever the ignore rules say
+/// (CI has no global gitignore hiding `target/`).
+#[test]
+fn generated_trees_are_not_main_sources() {
+    let d = scratch("gen");
+    write(&d, "src/main/java/p/A.java", "package p; class A {}");
+    write(
+        &d,
+        "target/generated-sources/x/p/B.java",
+        "package p; class B {}",
+    );
+    write(&d, "build/generated/y/p/C.java", "package p; class C {}");
+    let mut b = ModelBuilder::new();
+    let opts = ExtractOptions::default();
+    model_treesitter::extract(&mut b, &d, &opts).unwrap();
+    let stats = crate::enrich(&mut b, &d).unwrap();
+    let _ = std::fs::remove_dir_all(&d);
+    assert_eq!((stats.files, stats.generated_files), (1, 2));
+}
+
 /// Real project check, skipped without `MODEL_FIXTURES` (Structure's `fixtures/`).
 #[test]
 fn realworld_controllers_have_endpoints() {
