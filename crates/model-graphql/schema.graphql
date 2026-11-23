@@ -5,7 +5,7 @@ type Analysis {
 	metrics: Metrics!
 	cycles: Cycles!
 	"""
-	Candidate dead code: entities nothing calls, references or implements.
+	Isolated entities: no call, reference or implementation in or out (candidate dead code).
 	"""
 	unused(kind: EntityKind, first: Int, after: String): EntityConnection!
 	"""
@@ -76,7 +76,7 @@ type Annotation implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -180,7 +180,7 @@ type AnnotationType implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -288,7 +288,7 @@ type Class implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -396,7 +396,7 @@ type Comment implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -500,7 +500,7 @@ type Constant implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -604,7 +604,7 @@ type Constructor implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -724,7 +724,7 @@ interface Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -846,7 +846,7 @@ type Enum implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -940,7 +940,7 @@ type EnumConstant implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -1058,7 +1058,7 @@ type Field implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -1162,7 +1162,7 @@ type File implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -1270,7 +1270,7 @@ type Function implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -1374,7 +1374,7 @@ type HttpCall implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -1478,7 +1478,7 @@ type HttpEndpoint implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -1582,7 +1582,7 @@ type Interface implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -1695,7 +1695,7 @@ type LocalVariable implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -1799,7 +1799,7 @@ type Method implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -1945,7 +1945,7 @@ type Namespace implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -2072,7 +2072,7 @@ type Parameter implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -2176,7 +2176,7 @@ type PharoClass implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -2284,7 +2284,7 @@ type PharoExtensionMethod implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -2388,7 +2388,7 @@ type PharoMethod implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -2492,7 +2492,7 @@ type PharoTrait implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -2600,7 +2600,7 @@ type Property implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -2723,7 +2723,7 @@ type PythonModule implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -3223,7 +3223,7 @@ type Record implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -3444,7 +3444,7 @@ type Struct implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -3552,7 +3552,7 @@ type Trait implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -3660,7 +3660,7 @@ type TsAbstractClass implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -3768,7 +3768,7 @@ type TsArrowFunction implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -3872,7 +3872,7 @@ type TsInterface implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -3980,7 +3980,7 @@ type TsModule implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -4088,7 +4088,7 @@ type TsNamespace implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -4196,7 +4196,7 @@ type TsTypeAlias implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -4300,7 +4300,7 @@ type TypeAlias implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -4404,7 +4404,7 @@ type TypeParameter implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""
@@ -4508,7 +4508,7 @@ type Variable implements Entity {
 	"""
 	outDegree: Int!
 	"""
-	Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
 	"""
 	isUnused: Boolean!
 	"""

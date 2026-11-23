@@ -245,7 +245,7 @@ fn analysis_object() -> Object {
                 })();
                 FieldFuture::new(async move { r })
             })
-            .description("Candidate dead code: entities nothing calls, references or implements.")
+            .description("Isolated entities: no call, reference or implementation in or out (candidate dead code).")
             .argument(InputValue::new("kind", TypeRef::named("EntityKind")))
             .argument(InputValue::new("first", TypeRef::named(TypeRef::INT)))
             .argument(InputValue::new("after", TypeRef::named(TypeRef::STRING))),

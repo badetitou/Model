@@ -797,10 +797,10 @@ const ENTITY_SPECS: &[Spec] = &[
         ty: || TypeRef::named_nn(TypeRef::BOOLEAN),
         args: no_args,
         iface_desc: Some(
-            "Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.",
+            "Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.",
         ),
         obj_desc: Some(
-            "Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.",
+            "Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.",
         ),
         resolve: |c| {
             let (sh, e) = ent(c)?;
