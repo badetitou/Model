@@ -1011,7 +1011,7 @@ async fn analysis_namespace_answers_for_the_whole_model() {
         &analysed(),
         r#"{ analysis {
             metrics { entities relations files entitiesByKind }
-            cycles { count cyclicEntities components { size entities { name } } }
+            cycles { count cyclicEntities components(minSize: 2) { size entities { name } } loops: count(minSize: 3) }
             unused(kind: METHOD) { totalCount nodes { name } }
             mostConnected(first: 2) { name inDegree }
         } }"#,
@@ -1026,6 +1026,7 @@ async fn analysis_namespace_answers_for_the_whole_model() {
     );
     assert_eq!(a["cycles"]["count"], 1);
     assert_eq!(a["cycles"]["components"][0]["size"], 2);
+    assert_eq!(a["cycles"]["loops"], 0);
     let unused: Vec<&str> = a["unused"]["nodes"]
         .as_array()
         .unwrap()

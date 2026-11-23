@@ -658,12 +658,18 @@ type Cycle {
 Dependency cycles over calls and references.
 """
 type Cycles {
-	count: Int!
-	cyclicEntities: Int!
 	"""
-	The components, by their smallest entity id.
+	Number of components with at least `minSize` entities.
 	"""
-	components(first: Int): [Cycle!]!
+	count(minSize: Int): Int!
+	"""
+	Entities in components of at least `minSize` entities.
+	"""
+	cyclicEntities(minSize: Int): Int!
+	"""
+	The components, biggest first.
+	"""
+	components(minSize: Int, first: Int): [Cycle!]!
 }
 
 """

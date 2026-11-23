@@ -28,6 +28,8 @@ pub(crate) struct Computed {
     unused_ids: Vec<EntityId>,
     in_cycle: Vec<bool>,
     cycles: Cycles,
+    /// Positions in `cycles.components`, biggest component first.
+    cycles_by_size: Vec<usize>,
     metrics: Metrics,
     /// Entities by decreasing total degree.
     ranked: Vec<EntityId>,
@@ -49,6 +51,8 @@ impl Computed {
         for id in cycles.components.iter().flatten() {
             in_cycle[id.index()] = true;
         }
+        let mut cycles_by_size: Vec<usize> = (0..cycles.components.len()).collect();
+        cycles_by_size.sort_by_key(|i| std::cmp::Reverse(cycles.components[*i].len()));
         let ranked = degrees.ranked().into_iter().map(|(id, _)| id).collect();
         Computed {
             degrees,
@@ -56,6 +60,7 @@ impl Computed {
             unused_ids,
             in_cycle,
             cycles,
+            cycles_by_size,
             metrics: run_analysis(&Metrics::default(), model).unwrap_or_default(),
             ranked,
         }
@@ -71,6 +76,14 @@ impl Computed {
 
     pub(crate) fn is_unused(&self, id: EntityId) -> bool {
         self.unused.get(id.index()).copied().unwrap_or(false)
+    }
+
+    /// Components of at least `min_size` entities, biggest first (positions in `cycles.components`).
+    fn big_cycles(&self, min_size: usize) -> impl Iterator<Item = usize> + '_ {
+        self.cycles_by_size
+            .iter()
+            .copied()
+            .take_while(move |i| self.cycles.components[*i].len() >= min_size)
     }
 
     pub(crate) fn in_cycle(&self, id: EntityId) -> bool {
@@ -172,48 +185,62 @@ fn cycle_object() -> Object {
         )
 }
 
+fn min_size() -> InputValue {
+    InputValue::new("minSize", TypeRef::named(TypeRef::INT))
+}
+
+/// `minSize` (default 1): `2` leaves out the components that are one entity calling itself.
+fn min_size_of(ctx: &async_graphql::dynamic::ResolverContext<'_>) -> Result<usize, Error> {
+    Ok(arg_int(ctx, "minSize")?.map_or(1, |n| n.max(1) as usize))
+}
+
 fn cycles_object() -> Object {
     Object::new("Cycles")
         .description("Dependency cycles over calls and references.")
-        .field(Field::new(
-            "count",
-            TypeRef::named_nn(TypeRef::INT),
-            |ctx| {
-                let r = shared(&ctx).map(|sh| {
-                    Some(FieldValue::value(
-                        sh.computed().cycles.components.len() as u32
-                    ))
-                });
+        .field(
+            Field::new("count", TypeRef::named_nn(TypeRef::INT), |ctx| {
+                let r = (|| -> Out<'_> {
+                    let n = min_size_of(&ctx)?;
+                    val(shared(&ctx)?.computed().big_cycles(n).count() as u32)
+                })();
                 FieldFuture::new(async move { r })
-            },
-        ))
-        .field(Field::new(
-            "cyclicEntities",
-            TypeRef::named_nn(TypeRef::INT),
-            |ctx| {
-                let r = shared(&ctx).map(|sh| {
-                    Some(FieldValue::value(
-                        sh.computed().cycles.cyclic_entities as u32,
-                    ))
-                });
+            })
+            .description("Number of components with at least `minSize` entities.")
+            .argument(min_size()),
+        )
+        .field(
+            Field::new("cyclicEntities", TypeRef::named_nn(TypeRef::INT), |ctx| {
+                let r = (|| -> Out<'_> {
+                    let n = min_size_of(&ctx)?;
+                    let sh = shared(&ctx)?;
+                    let c = sh.computed();
+                    val(c
+                        .big_cycles(n)
+                        .map(|i| c.cycles.components[i].len())
+                        .sum::<usize>() as u32)
+                })();
                 FieldFuture::new(async move { r })
-            },
-        ))
+            })
+            .description("Entities in components of at least `minSize` entities.")
+            .argument(min_size()),
+        )
         .field(
             Field::new("components", TypeRef::named_nn_list_nn("Cycle"), |ctx| {
                 let r = (|| -> Out<'_> {
                     let sh = shared(&ctx)?;
                     let n = page_size(arg_int(&ctx, "first")?)?;
-                    let total = sh.computed().cycles.components.len();
+                    let size = min_size_of(&ctx)?;
                     Ok(Some(FieldValue::list(
-                        (0..total)
+                        sh.computed()
+                            .big_cycles(size)
                             .take(n)
                             .map(|i| FieldValue::owned_any(CycleAt(i))),
                     )))
                 })();
                 FieldFuture::new(async move { r })
             })
-            .description("The components, by their smallest entity id.")
+            .description("The components, biggest first.")
+            .argument(min_size())
             .argument(InputValue::new("first", TypeRef::named(TypeRef::INT))),
         )
 }
