@@ -1,0 +1,23 @@
+[package]
+name = "model-lang-python"
+description = "Python enricher: HTTP endpoints of Flask, FastAPI and Django on top of tree-sitter extraction"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+readme = "../../README.md"
+keywords = ["code-analysis", "static-analysis", "tree-sitter", "scip", "code-model"]
+categories = ["development-tools"]
+
+[dependencies]
+model-core.workspace = true
+model-traits.workspace = true
+anyhow.workspace = true
+ignore.workspace = true
+tree-sitter.workspace = true
+tree-sitter-python.workspace = true
+
+[dev-dependencies]
+model-treesitter.workspace = true

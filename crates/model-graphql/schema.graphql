@@ -1085,6 +1085,94 @@ type FunctionEdge {
 }
 
 """
+Entities of the kind `http.endpoint`, a refinement of `Variable`.
+"""
+type HttpEndpoint implements Entity {
+	"""
+	Position in this model; stable only while the model is served.
+	"""
+	id: Int!
+	"""
+	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
+	"""
+	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
+	kind: EntityKind!
+	fineKind: String!
+	"""
+	Names of the traits of this entity's kind.
+	"""
+	traits: [String!]!
+	fm3Class: String
+	name: String!
+	language: String
+	"""
+	Referenced, not defined in the analysed sources (libraries).
+	"""
+	external: Boolean!
+	"""
+	Path relative to the analysed root.
+	"""
+	file: String
+	range: Range
+	nameRange: Range
+	"""
+	Language-specific facts (annotations, decorators...).
+	"""
+	props: JSON!
+	parent: Entity
+	"""
+	Enclosing entities, innermost first.
+	"""
+	ancestors: [Entity!]!
+	children(kind: EntityKind, first: Int, after: String): EntityConnection!
+	"""
+	Relations from this entity. `kind`: `calls`, `references`,
+	`inherits`, `implements`, `imports`, or a custom kind.
+	"""
+	outgoing(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations to this entity.
+	"""
+	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+}
+
+type HttpEndpointConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [HttpEndpointEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [HttpEndpoint!]!
+	"""
+	Items matching the query, over all pages.
+	"""
+	totalCount: Int!
+}
+
+"""
+An edge in a connection.
+"""
+type HttpEndpointEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: HttpEndpoint!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
 An interface declaration.
 """
 type Interface implements Entity {
@@ -2442,6 +2530,14 @@ type Query {
 	All entities of the kind `pharo.extension_method`.
 	"""
 	pharoExtensionMethods(first: Int, after: String): PharoExtensionMethodConnection!
+	"""
+	The `HttpEndpoint` with this key.
+	"""
+	httpEndpointByKey(key: String!): HttpEndpoint
+	"""
+	All entities of the kind `http.endpoint`.
+	"""
+	httpEndpoints(first: Int, after: String): HttpEndpointConnection!
 }
 
 """

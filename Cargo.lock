@@ -887,6 +887,7 @@ dependencies = [
  "model-detect",
  "model-index",
  "model-lang-pharo",
+ "model-lang-python",
  "model-link",
  "model-scip",
  "model-treesitter",
@@ -953,6 +954,19 @@ dependencies = [
  "ignore",
  "model-core",
  "model-traits",
+]
+
+[[package]]
+name = "model-lang-python"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "ignore",
+ "model-core",
+ "model-traits",
+ "model-treesitter",
+ "tree-sitter",
+ "tree-sitter-python",
 ]
 
 [[package]]

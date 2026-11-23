@@ -9,6 +9,7 @@ CRATES=(
   model-lang-pharo
   model-link
   model-treesitter
+  model-lang-python
   model-moose
   model-index
   model-factory

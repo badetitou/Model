@@ -41,6 +41,10 @@ Structure (`../Structure`), its first client.
   `extract_sources` in memory): STON headers → classes/traits/methods,
   heritage and references, hand-resolved sends → `Calls` with
   `Provenance::Frontend`; `PharoStats` reported through `model::build`.
+- `crates/model-lang-python` — enricher (`enrich`/`enrich_sources`) run by
+  `model-factory` before linking: Flask/FastAPI/Django HTTP endpoints as
+  `http.endpoint` entities (`Provenance::Frontend`). Richer
+  `queries/python.scm` (imports, decorators, fields, properties, async).
 - `crates/model-index` — `ensure_index` (reuse / staleness / run, only the
   index's own tool; none for a custom one), `custom.rs` (`CustomIndex`: user-only
   `sh -c` index command, never read from the analysed repo; `--index-command
@@ -129,7 +133,7 @@ Structure (`../Structure`), its first client.
 
 ## Releasing
 
-All fifteen crates are publishable on crates.io. Keep the workspace version and
+All sixteen crates are publishable on crates.io. Keep the workspace version and
 `CHANGELOG.md` in sync; internal path dependencies in `[workspace.dependencies]`
 must carry the same `version`. The facade is `model-factory` because `model` is
 taken on crates.io.
@@ -142,5 +146,5 @@ checks that the tag matches `Cargo.toml`, publishes every crate with
 a GitHub Release whose notes come from `scripts/release-notes.sh`.
 
 The repository needs a `CARGO_REGISTRY_TOKEN` secret with publish rights on all
-fifteen crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
+sixteen crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
 crates.io versions are immutable.

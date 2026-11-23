@@ -334,6 +334,9 @@ pub(crate) fn read(
             r.start_col,
             std::cmp::Reverse((r.end_line, r.end_col)),
             (d.name_range.start_line, d.name_range.start_col),
+            // Same identifier and extent: the specific pattern (constructor,
+            // property) beats the generic `function` one.
+            d.kind == EntityKind::Function && d.fine.is_none(),
         )
     });
     let mut seen = std::collections::HashSet::new();
