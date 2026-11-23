@@ -12,6 +12,7 @@ CRATES=(
   model-moose
   model-index
   model-factory
+  model-ffi
   model-session
   model-graphql
 )

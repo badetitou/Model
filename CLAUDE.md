@@ -93,6 +93,25 @@ Structure (`../Structure`), its first client.
   property against the full FamixJava FM3 fixture and round-trips through the
   importer. `examples/export.rs`. Acceptance in Moose: load with
   `FamixJavaModel new importFromJSONStream:`.
+- `crates/model-ffi` — C ABI (cdylib + rlib) over a frozen `Model` for foreign
+  importers (Pharo UFFI). Depends on `model-core` (+ `serde_json` to open a
+  `model.json`) only: no language, no Famix. Optional feature `build` (off by
+  default; test it with `cargo test -p model-ffi --features build`) adds
+  `model_build`: sources → handle in-process via `model-factory`, no JSON, no
+  cache, no indexer unless asked; hence `model-ffi` is published after
+  `model-factory`. `model_open` → handle; flat
+  columns (entities, relations, CSR sites, kinds/languages, `StrRef` strings
+  pointing into the model); `model_entity_props_json`; `model_char_offsets`
+  (byte columns → 1-based inclusive char offsets, Moose anchors). `unsafe` is
+  allowed here only, each block with `// SAFETY:` (user's agreement, 2026-11).
+  `KindInfo.fm3` is empty for models built from sources: the client maps kind
+  names to FM3 classes. Pharo side: Tonel sources in `pharo/src`
+  (`ModelLibrary` UFFI binding, `ModelImporter`, `BaselineOfModelMooseImporter`
+  depending on `github://moosetechnology/Famix:development/src`, groups
+  `Minimal` + `ModelJava`); parity with the JSON import checked on a small
+  Java project. Never read columns with
+  `FFIExternalArray fromPointer:type:size:` (crashed the image): copy with
+  `LibC memCopy:to:size:`.
 - `crates/model-detect` — `detect(root)`: languages, file counts, project
   roots; `languages.rs` is the data table (`LanguageSpec`).
 
@@ -110,7 +129,7 @@ Structure (`../Structure`), its first client.
 
 ## Releasing
 
-All fourteen crates are publishable on crates.io. Keep the workspace version and
+All fifteen crates are publishable on crates.io. Keep the workspace version and
 `CHANGELOG.md` in sync; internal path dependencies in `[workspace.dependencies]`
 must carry the same `version`. The facade is `model-factory` because `model` is
 taken on crates.io.
@@ -123,5 +142,5 @@ checks that the tag matches `Cargo.toml`, publishes every crate with
 a GitHub Release whose notes come from `scripts/release-notes.sh`.
 
 The repository needs a `CARGO_REGISTRY_TOKEN` secret with publish rights on all
-fourteen crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
+fifteen crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
 crates.io versions are immutable.

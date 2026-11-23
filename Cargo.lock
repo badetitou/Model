@@ -896,6 +896,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "model-ffi"
+version = "0.4.0"
+dependencies = [
+ "model-core",
+ "model-factory",
+ "serde_json",
+]
+
+[[package]]
 name = "model-fm3"
 version = "0.4.0"
 dependencies = [
