@@ -16,6 +16,10 @@
 //! clients use as a concept's by-id lookup. The schema is built from the
 //! model, so `model-graphql --schema` prints the one of a given model.
 //!
+//! Analyses (`model-analysis`) are read in two shapes (`analysis.rs`): per-entity facts are fields of
+//! `Entity` (`inDegree`, `outDegree`, `isUnused`, `inCycle`), and results about the whole model live
+//! under `Query.analysis` (`metrics`, `cycles`, `unused`, `mostConnected`). They run once, on first use.
+//!
 //! `OnDemand` serves the same schema without building a model up front: each
 //! request's selection set is mapped to the traits it needs and a
 //! `model_session::Session` runs only the layers (and scope files) they
@@ -26,6 +30,7 @@
 //! passed by `--allow-origin`; plain `router` keeps the default same-origin
 //! behaviour.
 
+mod analysis;
 #[cfg(feature = "server")]
 mod ondemand;
 mod schema;

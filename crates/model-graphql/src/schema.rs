@@ -188,6 +188,10 @@ const RESERVED_TYPES: &[&str] = &[
     "Range",
     "Site",
     "Stats",
+    "Analysis",
+    "Metrics",
+    "Cycles",
+    "Cycle",
     "PageInfo",
     "Relation",
     "JSON",
@@ -201,6 +205,7 @@ const RESERVED_TYPES: &[&str] = &[
 const RESERVED_ROOTS: &[&str] = &[
     "languages",
     "stats",
+    "analysis",
     "entity",
     "file",
     "entityByKey",
@@ -295,9 +300,16 @@ fn concepts_of(model: &Model) -> Vec<Concept> {
 pub(crate) struct Shared {
     pub(crate) model: Arc<Model>,
     concept: Vec<Option<String>>,
+    /// Analyses of the frozen model, computed the first time a query needs one.
+    analysis: std::sync::OnceLock<crate::analysis::Computed>,
 }
 
 impl Shared {
+    pub(crate) fn computed(&self) -> &crate::analysis::Computed {
+        self.analysis
+            .get_or_init(|| crate::analysis::Computed::of(&self.model))
+    }
+
     fn has_concept(&self, kind: KindId) -> bool {
         matches!(self.concept.get(kind.index()), Some(Some(_)))
     }
@@ -310,7 +322,7 @@ impl Shared {
         }
     }
 
-    fn entity(&self, id: EntityId) -> FieldValue<'static> {
+    pub(crate) fn entity(&self, id: EntityId) -> FieldValue<'static> {
         match self.model.entity(id) {
             Some(e) => FieldValue::owned_any(Ent(id)).with_type(self.type_name(e)),
             None => FieldValue::NULL,
@@ -329,7 +341,7 @@ struct Rel(RelationId);
 struct RangeVal(model_core::Range);
 
 #[derive(Clone)]
-struct SiteVal {
+pub(crate) struct SiteVal {
     range: model_core::Range,
     flags: Vec<String>,
     read: bool,
@@ -339,7 +351,7 @@ struct SiteVal {
 
 /// One node of a connection.
 #[derive(Clone)]
-enum Item {
+pub(crate) enum Item {
     Entity(EntityId),
     Relation(RelationId),
     Range(model_core::Range),
@@ -379,24 +391,24 @@ struct EdgeVal {
     item: Item,
 }
 
-type Cx<'b, 'a> = &'b ResolverContext<'a>;
-type Out<'a> = Result<Option<FieldValue<'a>>>;
+pub(crate) type Cx<'b, 'a> = &'b ResolverContext<'a>;
+pub(crate) type Out<'a> = Result<Option<FieldValue<'a>>>;
 
-fn shared<'a>(c: Cx<'_, 'a>) -> Result<&'a Arc<Shared>> {
+pub(crate) fn shared<'a>(c: Cx<'_, 'a>) -> Result<&'a Arc<Shared>> {
     c.data::<Arc<Shared>>()
 }
 
-fn missing() -> Error {
+pub(crate) fn missing() -> Error {
     Error::new("entity no longer in the model")
 }
 
-fn ent<'a>(c: Cx<'_, 'a>) -> Result<(&'a Arc<Shared>, EntityRef<'a>)> {
+pub(crate) fn ent<'a>(c: Cx<'_, 'a>) -> Result<(&'a Arc<Shared>, EntityRef<'a>)> {
     let sh = shared(c)?;
     let Ent(id) = *c.parent_value.try_downcast_ref::<Ent>()?;
     Ok((sh, sh.model.entity(id).ok_or_else(missing)?))
 }
 
-fn val<'a>(v: impl Into<Value>) -> Out<'a> {
+pub(crate) fn val<'a>(v: impl Into<Value>) -> Out<'a> {
     Ok(Some(FieldValue::value(v)))
 }
 
@@ -404,7 +416,7 @@ fn opt_val<'a, V: Into<Value>>(v: Option<V>) -> Out<'a> {
     Ok(v.map(|v| FieldValue::value(v)))
 }
 
-fn arg_int(c: Cx<'_, '_>, name: &str) -> Result<Option<i32>> {
+pub(crate) fn arg_int(c: Cx<'_, '_>, name: &str) -> Result<Option<i32>> {
     match c.args.get(name) {
         Some(v) if !v.is_null() => {
             Ok(Some(i32::try_from(v.i64()?).map_err(|_| {
@@ -429,7 +441,7 @@ fn arg_bool(c: Cx<'_, '_>, name: &str) -> Result<Option<bool>> {
     }
 }
 
-fn arg_kind(c: Cx<'_, '_>, name: &str) -> Result<Option<EntityKind>> {
+pub(crate) fn arg_kind(c: Cx<'_, '_>, name: &str) -> Result<Option<EntityKind>> {
     match c.args.get(name) {
         Some(v) if !v.is_null() => {
             let n = v.enum_name()?;
@@ -456,7 +468,7 @@ fn arg_provenance(c: Cx<'_, '_>) -> Result<Option<Provenance>> {
     }
 }
 
-fn page_size(first: Option<i32>) -> Result<usize> {
+pub(crate) fn page_size(first: Option<i32>) -> Result<usize> {
     match first {
         None => Ok(DEFAULT_PAGE),
         Some(f) if f < 0 => Err(Error::new("`first` must not be negative")),
@@ -466,7 +478,7 @@ fn page_size(first: Option<i32>) -> Result<usize> {
 
 /// Forward page of `items`: `first` (default [`DEFAULT_PAGE`], at most
 /// [`MAX_PAGE`]) items after the `after` cursor (an item's position).
-fn page(c: Cx<'_, '_>, items: impl Iterator<Item = Item>) -> Out<'static> {
+pub(crate) fn page(c: Cx<'_, '_>, items: impl Iterator<Item = Item>) -> Out<'static> {
     let n = page_size(arg_int(c, "first")?)?;
     let start = match arg_str(c, "after")? {
         None => 0,
@@ -503,11 +515,11 @@ fn relation_filter(
     }
 }
 
-fn kind_value(k: EntityKind) -> Value {
+pub(crate) fn kind_value(k: EntityKind) -> Value {
     Value::Enum(Name::new(k.as_str().to_ascii_uppercase()))
 }
 
-fn provenance_value(p: Provenance) -> Value {
+pub(crate) fn provenance_value(p: Provenance) -> Value {
     Value::Enum(Name::new(match p {
         Provenance::TreeSitter => "TREE_SITTER",
         Provenance::Scip => "SCIP",
@@ -756,6 +768,54 @@ const ENTITY_SPECS: &[Spec] = &[
                     .filter(|r| keep(r))
                     .map(|r| Item::Relation(r.id())),
             )
+        },
+    },
+    Spec {
+        name: "inDegree",
+        ty: || TypeRef::named_nn(TypeRef::INT),
+        args: no_args,
+        iface_desc: Some("Relations pointing at this entity, of any kind (fan-in)."),
+        obj_desc: Some("Relations pointing at this entity, of any kind (fan-in)."),
+        resolve: |c| {
+            let (sh, e) = ent(c)?;
+            val(sh.computed().in_degree(e.id()) as u32)
+        },
+    },
+    Spec {
+        name: "outDegree",
+        ty: || TypeRef::named_nn(TypeRef::INT),
+        args: no_args,
+        iface_desc: Some("Relations leaving this entity, of any kind (fan-out)."),
+        obj_desc: Some("Relations leaving this entity, of any kind (fan-out)."),
+        resolve: |c| {
+            let (sh, e) = ent(c)?;
+            val(sh.computed().out_degree(e.id()) as u32)
+        },
+    },
+    Spec {
+        name: "isUnused",
+        ty: || TypeRef::named_nn(TypeRef::BOOLEAN),
+        args: no_args,
+        iface_desc: Some(
+            "Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.",
+        ),
+        obj_desc: Some(
+            "Candidate dead code: no call, reference or implementation reaches it or its enclosing entities, and it is not external.",
+        ),
+        resolve: |c| {
+            let (sh, e) = ent(c)?;
+            val(sh.computed().is_unused(e.id()))
+        },
+    },
+    Spec {
+        name: "inCycle",
+        ty: || TypeRef::named_nn(TypeRef::BOOLEAN),
+        args: no_args,
+        iface_desc: Some("Part of a dependency cycle (calls and references)."),
+        obj_desc: Some("Part of a dependency cycle (calls and references)."),
+        resolve: |c| {
+            let (sh, e) = ent(c)?;
+            val(sh.computed().in_cycle(e.id()))
         },
     },
 ];
@@ -1275,6 +1335,7 @@ fn query_object(concepts: &[Concept]) -> Object {
             )
             .description("Languages present."),
         )
+        .field(crate::analysis::root_field())
         .field(Field::new("stats", TypeRef::named_nn("Stats"), |_| {
             FieldFuture::new(async move { Ok(Some(FieldValue::owned_any(()))) })
         }))
@@ -1441,6 +1502,7 @@ pub fn build(
     let shared = Arc::new(Shared {
         model: model.clone(),
         concept,
+        analysis: std::sync::OnceLock::new(),
     });
     let mut b: SchemaBuilder = Schema::build("Query", None, None)
         .data(shared)
@@ -1454,6 +1516,9 @@ pub fn build(
         .register(page_info_object())
         .register(stats_object())
         .register(relation_object());
+    for o in crate::analysis::objects() {
+        b = b.register(o);
+    }
     for node in ["Entity", "Range", "Relation", "Site"] {
         for o in connection_types(node) {
             b = b.register(o);

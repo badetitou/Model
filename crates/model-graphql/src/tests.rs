@@ -969,3 +969,69 @@ fn the_archetype_table_covers_every_entity_kind() {
         assert_eq!(super::schema::archetype_kind_check(k), k);
     }
 }
+
+// ---- analyses ---------------------------------------------------------
+
+const CYCLE: &str = r#"package app;
+
+class Pair {
+    void ping() { pong(); }
+    void pong() { ping(); }
+    void forgotten() { }
+}
+"#;
+
+/// `ping` and `pong` call each other; nothing calls `forgotten`.
+fn analysed() -> ModelSchema {
+    let mut b = ModelBuilder::new();
+    extract_sources(&mut b, &[("Pair.java", CYCLE)], &ExtractOptions::default()).unwrap();
+    schema(Arc::new(b.build()))
+}
+
+#[tokio::test]
+async fn entities_carry_derived_facts() {
+    let d = run(
+        &analysed(),
+        "{ methods { nodes { name inDegree outDegree isUnused inCycle } } }",
+    )
+    .await;
+    let rows = d["methods"]["nodes"].as_array().unwrap();
+    let row = |n: &str| rows.iter().find(|r| r["name"] == n).unwrap().clone();
+    assert_eq!(row("ping")["inCycle"], true);
+    assert_eq!(row("pong")["inCycle"], true);
+    assert_eq!(row("forgotten")["inCycle"], false);
+    assert_eq!(row("forgotten")["isUnused"], true);
+    assert_eq!(row("ping")["isUnused"], false);
+    assert!(row("ping")["inDegree"].as_u64().unwrap() >= 1);
+}
+
+#[tokio::test]
+async fn analysis_namespace_answers_for_the_whole_model() {
+    let d = run(
+        &analysed(),
+        r#"{ analysis {
+            metrics { entities relations files entitiesByKind }
+            cycles { count cyclicEntities components { size entities { name } } }
+            unused(kind: METHOD) { totalCount nodes { name } }
+            mostConnected(first: 2) { name inDegree }
+        } }"#,
+    )
+    .await;
+    let a = &d["analysis"];
+    assert_eq!(a["metrics"]["files"], 1);
+    assert!(
+        a["metrics"]["entitiesByKind"].to_string().contains("lass"),
+        "{}",
+        a["metrics"]["entitiesByKind"]
+    );
+    assert_eq!(a["cycles"]["count"], 1);
+    assert_eq!(a["cycles"]["components"][0]["size"], 2);
+    let unused: Vec<&str> = a["unused"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(unused, ["forgotten"]);
+    assert_eq!(a["mostConnected"].as_array().unwrap().len(), 2);
+}
