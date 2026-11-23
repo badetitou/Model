@@ -13,6 +13,7 @@ members = [
     "crates/model-index",
     "crates/model-lang-pharo",
     "crates/model-lang-python",
+    "crates/model-lang-java",
     "crates/model-factory",
     "crates/model-session",
     "crates/model-analysis",
@@ -38,6 +39,7 @@ model-treesitter = { path = "crates/model-treesitter", version = "0.5.0" }
 model-index = { path = "crates/model-index", version = "0.5.0" }
 model-lang-pharo = { path = "crates/model-lang-pharo", version = "0.5.0" }
 model-lang-python = { path = "crates/model-lang-python", version = "0.5.0" }
+model-lang-java = { path = "crates/model-lang-java", version = "0.5.0" }
 model-factory = { path = "crates/model-factory", version = "0.5.0" }
 model-session = { path = "crates/model-session", version = "0.5.0" }
 model-analysis = { path = "crates/model-analysis", version = "0.5.0" }

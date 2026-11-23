@@ -10,6 +10,7 @@ CRATES=(
   model-link
   model-treesitter
   model-lang-python
+  model-lang-java
   model-moose
   model-index
   model-factory

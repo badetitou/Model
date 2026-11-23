@@ -886,6 +886,7 @@ dependencies = [
  "model-core",
  "model-detect",
  "model-index",
+ "model-lang-java",
  "model-lang-pharo",
  "model-lang-python",
  "model-link",
@@ -944,6 +945,21 @@ dependencies = [
  "model-scip",
  "protobuf",
  "scip",
+]
+
+[[package]]
+name = "model-lang-java"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "ignore",
+ "model-core",
+ "model-moose",
+ "model-traits",
+ "model-treesitter",
+ "rayon",
+ "tree-sitter",
+ "tree-sitter-java",
 ]
 
 [[package]]
