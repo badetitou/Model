@@ -64,6 +64,10 @@ Namespace ⊃ Class ⊃ Method
   reads borrow the model and never allocate.
 - **Stable identity.** Entities are keyed by SCIP symbols (or SCIP-like keys for
   languages without an indexer), so two builds are comparable.
+- **Straight into Pharo.** A Pharo image can load a model into Moose through
+  UFFI, from a `model.json` or from the sources, with no Moose JSON round trip:
+  3.5 to 4x faster than the Moose JSON import on `java/util` (see
+  [below](#moose-from-pharo-without-json)).
 - **Batteries included.** GraphQL server with GraphiQL, JSON export, a git-blob
   keyed document cache that rebuilds an index without running the indexer.
 
@@ -246,6 +250,39 @@ fn print_call_counts(model: &Model, class_name: &str) {
 }
 ```
 
+## Moose from Pharo, without JSON
+
+[`model-ffi`](crates/model-ffi) exposes a frozen `Model` as flat arrays over a
+C ABI; the Pharo package [`Model-Moose-Importer`](pharo/README.md) reads them
+through UFFI and creates the FamixJava objects directly. Two entry points: a
+`model.json`, or the sources themselves (library built with
+`--features build`, the model is built in-process and no file is written).
+
+```bash
+cargo build --release -p model-ffi --features build
+```
+
+```smalltalk
+ModelLibrary libraryPath: '/path/to/target/release/libmodel_ffi.dylib'.
+ModelImporter new
+	prefix: 'FamixJava';
+	importSourcesAt: '/path/to/sources' into: FamixJavaModel new.
+```
+
+On `java/util` of the JDK (370 files, 65 k entities, 122 k sites), same image:
+
+| Path | Time |
+|---|---|
+| Moose JSON (`importFromJSONStream:`) | 8.7 s |
+| `model.json` through `model-ffi` | 2.3 s |
+| From the sources, in one call (build included) | 2.5 s |
+
+Typings, accesses, invocations and references match the JSON import exactly;
+the remaining differences (file comments, `Parametric*` classes, implicit
+`self`) and what is not done yet are listed in the
+[importer README](pharo/README.md#parity-with-the-json-import). Only FamixJava
+has been tried.
+
 ## The metamodel
 
 ```
@@ -295,6 +332,7 @@ go into `props`, and plugins can add relations under their own name.
 | [`model-fm3`](https://github.com/badetitou/Model/tree/main/crates/model-fm3) | reads Moose FM3 metamodels exported as JSON |
 | [`model-traits`](https://github.com/badetitou/Model/tree/main/crates/model-traits) | traits as data, generated from the FamixJava FM3; `has_trait` / `of_trait` |
 | [`model-moose`](https://github.com/badetitou/Model/tree/main/crates/model-moose) | Moose JSON import, diff report, and export; see the [usage guide](docs/usage.md) |
+| [`model-ffi`](https://github.com/badetitou/Model/tree/main/crates/model-ffi) | C ABI over a frozen `Model` for foreign importers (Pharo UFFI); optional `build` feature builds a model in-process |
 | [`model-graphql`](https://github.com/badetitou/Model/tree/main/crates/model-graphql) | GraphQL server with GraphiQL; [schema](https://github.com/badetitou/Model/blob/main/crates/model-graphql/schema.graphql) |
 
 Grammar crates sit behind Cargo features (`java`, `typescript`, `python`;
@@ -400,6 +438,7 @@ object type, a list root and a by-key lookup (`records`, `parameters`,
 | [Design](docs/design.md) | storage, pipeline, measurements |
 | [Baseline](docs/baseline.md) | measurements before epic #1 |
 | [VerveineJ comparison](docs/verveinej-comparison.md) | Model's Moose export measured against VerveineJ |
+| [Pharo importer](pharo/README.md) | loading a model into Moose from Pharo through FFI, without JSON |
 
 ## Development
 

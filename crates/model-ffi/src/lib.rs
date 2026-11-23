@@ -1,7 +1,8 @@
 //! C ABI over a frozen [`Model`](model_core::Model), for foreign importers
 //! (Pharo through UFFI, ...).
 //!
-//! Depends on `model-core` only: it exposes raw columns and tables, with no
+//! Depends on `model-core` only (plus `model-factory` behind the optional
+//! `build` feature): it exposes raw columns and tables, with no
 //! knowledge of any language or of Famix. Mapping to a target metamodel
 //! (FM3 class per kind, containers, associations) is the client's business,
 //! driven by [`KindInfo`](model_core::KindInfo) (`kind_fm3`).
@@ -9,7 +10,9 @@
 //! # Usage
 //!
 //! `model_open` loads a model JSON and returns an opaque handle (null on
-//! error, see `model_last_error`). Every `model_*` column getter returns a
+//! error, see `model_last_error`); with the `build` feature, `model_build`
+//! builds the model from sources in-process and returns the same kind of
+//! handle, with no JSON involved. Every `model_*` column getter returns a
 //! pointer into the handle's memory, valid until `model_free`; the length is
 //! given by the matching count function. All numbers are little-endian
 //! (native); `u32::MAX` means absent in a `u32` column. Ranges are flat
@@ -33,6 +36,8 @@
 //! and not yet freed (or null, which yields null/0). The handle is not
 //! thread-safe: use it from one thread at a time.
 
+#[cfg(feature = "build")]
+mod building;
 mod columns;
 mod offsets;
 
@@ -55,6 +60,20 @@ pub struct Handle {
     columns: Columns,
     /// Result of the last `model_entity_props_json` call.
     scratch: Vec<u8>,
+    /// Build report (empty for a model opened from a file).
+    info: String,
+}
+
+impl Handle {
+    fn new(model: Model, info: String) -> Handle {
+        let columns = Columns::build(&model);
+        Handle {
+            model,
+            columns,
+            scratch: Vec::new(),
+            info,
+        }
+    }
 }
 
 thread_local! {
@@ -70,12 +89,7 @@ fn load(path: &Path) -> Result<Handle, String> {
     let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let model: Model = serde_json::from_reader(BufReader::new(file))
         .map_err(|e| format!("{}: {e}", path.display()))?;
-    let columns = Columns::build(&model);
-    Ok(Handle {
-        model,
-        columns,
-        scratch: Vec::new(),
-    })
+    Ok(Handle::new(model, String::new()))
 }
 
 /// # Safety
@@ -114,6 +128,112 @@ pub unsafe extern "C" fn model_open(path: *const c_char) -> *mut Handle {
             std::ptr::null_mut()
         }
     }
+}
+
+/// 1 when this library was compiled with the `build` feature (so that
+/// `model_build` exists and works), else 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn model_has_build() -> u32 {
+    u32::from(cfg!(feature = "build"))
+}
+
+/// Optional UTF-8 argument: null → `None`.
+///
+/// # Safety
+/// `p` is null or a NUL-terminated string.
+#[cfg(feature = "build")]
+unsafe fn optional_str(p: *const c_char) -> Result<Option<String>, &'static str> {
+    if p.is_null() {
+        return Ok(None);
+    }
+    // SAFETY: `p` is non-null and NUL-terminated by the caller's contract.
+    unsafe { CStr::from_ptr(p) }
+        .to_str()
+        .map(|s| Some(s.to_owned()))
+        .map_err(|_| "argument is not UTF-8")
+}
+
+/// Builds the model of the sources under `root` in this process: no
+/// `model.json`. Returns a handle like `model_open`'s, or null on error (see
+/// `model_last_error`). The call blocks until the build is done.
+///
+/// - `scip`: non-zero to use SCIP indexes (reused, or run per `reindex`); zero
+///   for tree-sitter only.
+/// - `reindex`: `0` never, `1` if missing, `2` if stale, `3` always. Anything
+///   but `0` may run an indexer, that is the project's build tool.
+/// - `languages`: comma-separated language ids, or null/empty for all detected.
+/// - `scope`: comma-separated files or directories relative to `root`, or
+///   null/empty for everything.
+///
+/// No cache is read or written. Only available with the `build` feature
+/// (`model_has_build`); without it this returns null.
+///
+/// # Safety
+/// `root` is a NUL-terminated string; `languages` and `scope` are each null or
+/// NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn model_build(
+    root: *const c_char,
+    scip: u32,
+    reindex: u32,
+    languages: *const c_char,
+    scope: *const c_char,
+) -> *mut Handle {
+    #[cfg(feature = "build")]
+    {
+        // SAFETY: forwarded from this function's contract.
+        let args = unsafe {
+            (
+                optional_str(root),
+                optional_str(languages),
+                optional_str(scope),
+            )
+        };
+        let (Ok(Some(root)), Ok(languages), Ok(scope)) = args else {
+            set_error("invalid argument (root missing or not UTF-8)");
+            return std::ptr::null_mut();
+        };
+        let Some(reindex) = building::reindex_of(reindex) else {
+            set_error("reindex must be 0, 1, 2 or 3");
+            return std::ptr::null_mut();
+        };
+        let spec = building::Spec {
+            scip: scip != 0,
+            reindex,
+            languages: languages.as_deref().and_then(building::list),
+            scope: scope.as_deref().and_then(building::list),
+        };
+        match building::run(Path::new(&root), &spec) {
+            Ok((model, info)) => Box::into_raw(Box::new(Handle::new(model, info))),
+            Err(e) => {
+                set_error(e);
+                std::ptr::null_mut()
+            }
+        }
+    }
+    #[cfg(not(feature = "build"))]
+    {
+        let _ = (root, scip, reindex, languages, scope);
+        set_error("this library was built without the `build` feature");
+        std::ptr::null_mut()
+    }
+}
+
+/// Report of `model_build` (UTF-8, not NUL-terminated): counts, then one
+/// line per warning. Empty for a model opened with `model_open`. Its length
+/// goes to `*len`; valid until `model_free`.
+///
+/// # Safety
+/// `h` is null or a live handle; `len` is null or writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn model_build_report(h: *const Handle, len: *mut u32) -> *const u8 {
+    // SAFETY: forwarded from this function's contract.
+    let (h, len) = unsafe { (handle(h), len.as_mut()) };
+    let n = h.map_or(0, |h| u32::try_from(h.info.len()).unwrap_or(u32::MAX));
+    if let Some(len) = len {
+        *len = n;
+    }
+    h.map_or(std::ptr::null(), |h| h.info.as_ptr())
 }
 
 /// Frees a handle; all pointers obtained from it become invalid.
@@ -385,5 +505,81 @@ mod tests {
         // SAFETY: buffers sized as documented.
         let rc = unsafe { model_char_offsets(c.as_ptr(), r.as_ptr(), 1, out.as_mut_ptr()) };
         assert_eq!(rc, -1);
+    }
+
+    #[cfg(feature = "build")]
+    fn java_project(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("model-ffi-{}-{name}", std::process::id()));
+        let src = dir.join("src/acme");
+        std::fs::create_dir_all(&src).expect("project dir");
+        std::fs::write(
+            src.join("A.java"),
+            "package acme;\n\npublic class A {\n    public void run(B b) { b.go(); }\n}\n",
+        )
+        .expect("A.java");
+        std::fs::write(
+            src.join("B.java"),
+            "package acme;\n\npublic class B {\n    public void go() {}\n}\n",
+        )
+        .expect("B.java");
+        dir
+    }
+
+    #[cfg(feature = "build")]
+    #[test]
+    fn build_from_sources_without_json() {
+        let root = java_project("build");
+        let c = CString::new(root.to_str().expect("utf8")).expect("cstring");
+        // SAFETY: valid NUL-terminated root, null optional arguments; the
+        // handle is freed once.
+        unsafe {
+            assert_eq!(model_has_build(), 1);
+            let h = model_build(c.as_ptr(), 0, 0, std::ptr::null(), std::ptr::null());
+            assert!(!h.is_null(), "{:?}", CStr::from_ptr(model_last_error()));
+            assert!(model_entity_count(h) >= 6);
+            assert!(model_relation_count(h) >= 1);
+            let mut len = 0;
+            let p = model_build_report(h, &mut len);
+            let report =
+                std::str::from_utf8(std::slice::from_raw_parts(p, len as usize)).expect("utf8");
+            assert!(report.contains("entities"), "{report}");
+            model_free(h);
+        }
+    }
+
+    #[cfg(feature = "build")]
+    #[test]
+    fn build_honours_languages_and_rejects_bad_arguments() {
+        let root = java_project("filter");
+        let c = CString::new(root.to_str().expect("utf8")).expect("cstring");
+        let python = CString::new("python").expect("cstring");
+        // SAFETY: valid NUL-terminated strings; handles freed once.
+        unsafe {
+            let h = model_build(c.as_ptr(), 0, 0, python.as_ptr(), std::ptr::null());
+            assert!(!h.is_null());
+            assert_eq!(model_entity_count(h), 0);
+            model_free(h);
+            assert!(model_build(c.as_ptr(), 0, 7, std::ptr::null(), std::ptr::null()).is_null());
+            assert!(
+                model_build(std::ptr::null(), 0, 0, std::ptr::null(), std::ptr::null()).is_null()
+            );
+            let missing = CString::new("/nonexistent/project").expect("cstring");
+            assert!(
+                model_build(missing.as_ptr(), 0, 0, std::ptr::null(), std::ptr::null()).is_null()
+            );
+        }
+    }
+
+    #[cfg(not(feature = "build"))]
+    #[test]
+    fn build_is_reported_unavailable_without_the_feature() {
+        let c = CString::new("/tmp").expect("cstring");
+        // SAFETY: valid NUL-terminated root.
+        unsafe {
+            assert_eq!(model_has_build(), 0);
+            assert!(model_build(c.as_ptr(), 0, 0, std::ptr::null(), std::ptr::null()).is_null());
+            let msg = CStr::from_ptr(model_last_error()).to_string_lossy();
+            assert!(msg.contains("build"), "{msg}");
+        }
     }
 }

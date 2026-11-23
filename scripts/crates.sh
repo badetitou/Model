@@ -1,7 +1,6 @@
 # Shared crate list, in dependency order. Sourced by the release scripts.
 CRATES=(
   model-core
-  model-ffi
   model-fm3
   model-traits
   model-detect
@@ -13,6 +12,7 @@ CRATES=(
   model-moose
   model-index
   model-factory
+  model-ffi
   model-session
   model-graphql
 )

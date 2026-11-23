@@ -900,6 +900,7 @@ name = "model-ffi"
 version = "0.4.0"
 dependencies = [
  "model-core",
+ "model-factory",
  "serde_json",
 ]
 
