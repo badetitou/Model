@@ -331,7 +331,7 @@ Caveats: not tried on the OpenJDK. Its build runs its own `javac` invocations
 per module (the bootstrap `javac` and interim compilers, which may not accept
 the plugin), the flag name for extra options above is a placeholder, and the
 scip-java manual-configuration guide describes a newer scip-java than the one
-pinned here (`SCIP_JAVA_VERSION`, 0.12.3): check the plugin and
+pinned here (`SCIP_JAVA_VERSION`, 0.14.2): check the plugin and
 subcommand names (`-Xplugin:scip` or `-Xplugin:semanticdb`, `aggregate` or
 `index-semanticdb`) against `scip-java --help` of the version you use. Safer alternatives: `--no-scip` (tree-sitter entities and name-resolved
 relations, nothing to run), or `--on-demand --package <dir>` to model only part

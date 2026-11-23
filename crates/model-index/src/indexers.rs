@@ -3,8 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub const SCIP_JAVA_VERSION: &str = "0.12.3";
-pub const SCIP_TS_VERSION: &str = "0.6.1";
+pub const SCIP_JAVA_VERSION: &str = "0.14.2";
+pub const SCIP_TS_VERSION: &str = "0.6.2";
 pub const DEFAULT_NODE_HEAP_MB: u64 = 8192;
 
 pub struct Indexer {
@@ -78,9 +78,7 @@ fn java_command(_: &Path, output: &str) -> Option<Command> {
     })?;
     let mut c = Command::new(cs);
     c.arg("launch")
-        .arg(format!(
-            "com.sourcegraph:scip-java_2.13:{SCIP_JAVA_VERSION}"
-        ))
+        .arg(format!("org.scip-code:scip-java:{SCIP_JAVA_VERSION}"))
         .args(["--", "index", "--output", output]);
     Some(c)
 }
