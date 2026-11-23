@@ -142,10 +142,11 @@ Structure (`../Structure`), its first client.
 
 ## Releasing
 
-All eighteen crates are publishable on crates.io. Keep the workspace version and
-`CHANGELOG.md` in sync; internal path dependencies in `[workspace.dependencies]`
-must carry the same `version`. The facade is `model-factory` because `model` is
-taken on crates.io.
+The nineteen crates listed in `scripts/crates.sh` are publishable on crates.io;
+`model-wasm` has `publish = false`. Keep the workspace version, the internal path
+dependency versions in `[workspace.dependencies]`, `CHANGELOG.md` and the
+version references in `README.md` and `docs/` in sync. The facade is
+`model-factory` because `model` is taken on crates.io.
 
 To release: bump those versions, add a `## X.Y.Z — date` section to
 `CHANGELOG.md`, commit, then `git tag -a vX.Y.Z -m vX.Y.Z` and push the tag.
@@ -155,5 +156,5 @@ checks that the tag matches `Cargo.toml`, publishes every crate with
 a GitHub Release whose notes come from `scripts/release-notes.sh`.
 
 The repository needs a `CARGO_REGISTRY_TOKEN` secret with publish rights on all
-eighteen crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
+nineteen crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
 crates.io versions are immutable.

@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.7.0 — 2026-11-23
+
+Model in the browser, and the analyses visible over GraphQL. A new private
+crate, `model-wasm`, builds a model from in-memory files and answers GraphQL
+in the browser; `model-analysis` becomes queryable from `model-graphql`.
+
+### Added
+
+- `model-graphql`: entity facts `inDegree`, `outDegree`, `isUnused` and
+  `inCycle` on every entity. `isUnused` means isolation (no call, reference or
+  implementation in or out, nor on the members, and not external), not just a
+  zero fan-in.
+- `model-graphql`: `Query.analysis` with `metrics` (counts and per-kind,
+  per-provenance and per-language breakdowns as JSON), `cycles` (count,
+  cyclic entity count and components, biggest first, with `minSize` to leave
+  out self-recursion), `unused` (a paged, kind-filterable connection) and
+  `mostConnected` (ten project entities by default). Analyses run once, on
+  first use, and do not mutate the model.
+- `model-wasm` (new crate, `publish = false`): `Engine` builds a model from
+  in-memory files — tree-sitter fragments, the Pharo frontend and the Python,
+  TypeScript and Java enrichers — and answers GraphQL with the same schema as
+  `model-graphql`, without a filesystem, threads or a server. `ModelSession`
+  is its `wasm-bindgen` face (`add_file` / `build` / `execute` / `warnings`).
+  `scripts/build-wasm.sh` builds the module with wasm-pack.
+
+### Changed
+
+- `model-graphql`: a default-on `server` feature isolates axum, tokio, the
+  binary and the on-demand session. With `default-features = false` the crate
+  is only the executable schema, which compiles to WebAssembly and is used by
+  `model-wasm`.
+
 ## 0.6.0 — 2026-11-23
 
 Framework enrichers. Three new crates add what the grammars and SCIP indexes
