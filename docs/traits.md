@@ -20,16 +20,17 @@ optional FM3 class name.
 
 Trait names refer to `model-traits`; an unknown name is ignored. The FM3 class
 names of TypeScript and Smalltalk (`Famix-TypeScript-Entities.*`,
-`Famix-Smalltalk-Entities.*`) are written from the Famix repositories' naming
-and have **not** been checked against an FM3 export (none was available):
-verify them when the Moose crates exercise them.
+`Famix-Smalltalk-Entities.*`) are written from the Famix repositories' naming.
+The TypeScript ones are checked against FamixTypeScript's class list (test in
+`model-lang-typescript`, mapping table in its README); the Smalltalk ones have
+**not** been checked against an FM3 export (none was available).
 
 ## TypeScript
 
 | Kind | Archetype | Traits | Famix-TypeScript |
 |---|---|---|---|
 | `ts.interface` | Interface | Named, WithMembers, WithInheritances, Typed | `Interface` |
-| `ts.type_alias` | TypeAlias | Named, Typed | `TypeAlias` |
+| `ts.type_alias` | TypeAlias | Named, Typed | `Alias` |
 | `ts.namespace` | Namespace | Named, WithMembers | `Namespace` |
 | `ts.abstract_class` | Class | Named, WithMembers, WithInheritances, Modifiers, Annotations | `Class` |
 | `ts.arrow_function` | Function | Named, Invocation, Access, Typed, Modifiers | `ArrowFunction` |

@@ -683,7 +683,7 @@ fn typescript_kinds_are_fine_kinds_with_traits() {
     );
     assert_eq!(
         kind_of(&m, &key("Id#")),
-        ("ts.type_alias".into(), K::TypeAlias, fm3("TypeAlias"))
+        ("ts.type_alias".into(), K::TypeAlias, fm3("Alias"))
     );
     assert_eq!(kind_of(&m, &key("Base#")).0, "ts.abstract_class");
     assert_eq!(kind_of(&m, &key("f().")).0, "ts.arrow_function");

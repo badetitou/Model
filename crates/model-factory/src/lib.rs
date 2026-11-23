@@ -24,6 +24,7 @@ pub use model_index as index;
 pub use model_lang_java as lang_java;
 pub use model_lang_pharo as lang_pharo;
 pub use model_lang_python as lang_python;
+pub use model_lang_typescript as lang_typescript;
 pub use model_link as link;
 pub use model_scip as scip;
 pub use model_treesitter as treesitter;
@@ -146,6 +147,8 @@ pub struct Build {
     pub python: Option<lang_python::PythonStats>,
     /// Java enricher facts (HTTP endpoints, GWT RPC), when Java was detected.
     pub java: Option<lang_java::JavaStats>,
+    /// TypeScript enricher facts (HTTP calls and endpoints), when detected.
+    pub typescript: Option<lang_typescript::TypeScriptStats>,
     /// Tree-sitter fragments taken from the cache vs parsed (all passes).
     pub fragments: LoadStats,
     pub indexes: Vec<IndexReport>,
@@ -228,6 +231,7 @@ pub fn default_model() -> Model {
     lang_pharo::declare_kinds(&mut b);
     lang_python::declare_kinds(&mut b);
     lang_java::declare_kinds(&mut b);
+    lang_typescript::declare_kinds(&mut b);
     b.build()
 }
 
@@ -472,6 +476,15 @@ pub fn build(
 
     // Enrichers read the sources again and add to entities that exist: after
     // linking, so they hang off the final keys.
+    let typescript = if detection
+        .languages
+        .iter()
+        .any(|l| l.language.as_str() == "typescript")
+    {
+        Some(lang_typescript::enrich(&mut b, root, &mut warnings))
+    } else {
+        None
+    };
     let java = if detection
         .languages
         .iter()
@@ -492,6 +505,7 @@ pub fn build(
         pharo,
         python,
         java,
+        typescript,
         fragments,
         indexes: reports,
         warnings,

@@ -48,6 +48,12 @@ Structure (`../Structure`), its first client.
 - `crates/model-lang-java` — enricher run after linking: Spring/JAX-RS
   endpoints (prop `http.endpoints`) and GWT RPC (`rpc.*` props, relation
   `gwt-rpc`), ported from Structure. Extension facts: not exported to Moose.
+- `crates/model-lang-typescript` — enricher run by `model-factory` after linking
+  (`enrich` on disk, `enrich_sources` in memory): HTTP calls (fetch, axios,
+  Angular `HttpClient`) and endpoints (NestJS, Express-style) as `http.call` /
+  `http.endpoint` entities (kinds in `kinds.json`) + `http.calls`/`http.endpoints`
+  relations (`Provenance::Frontend`) and owner list props. README holds the
+  Model → FamixTypeScript class mapping; ported from Structure's `lang-ts/http.rs`.
 - `crates/model-index` — `ensure_index` (reuse / staleness / run, only the
   index's own tool; none for a custom one), `custom.rs` (`CustomIndex`: user-only
   `sh -c` index command, never read from the analysed repo; `--index-command
@@ -136,7 +142,7 @@ Structure (`../Structure`), its first client.
 
 ## Releasing
 
-All seventeen crates are publishable on crates.io. Keep the workspace version and
+All eighteen crates are publishable on crates.io. Keep the workspace version and
 `CHANGELOG.md` in sync; internal path dependencies in `[workspace.dependencies]`
 must carry the same `version`. The facade is `model-factory` because `model` is
 taken on crates.io.
@@ -149,5 +155,5 @@ checks that the tag matches `Cargo.toml`, publishes every crate with
 a GitHub Release whose notes come from `scripts/release-notes.sh`.
 
 The repository needs a `CARGO_REGISTRY_TOKEN` secret with publish rights on all
-seventeen crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
+eighteen crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
 crates.io versions are immutable.

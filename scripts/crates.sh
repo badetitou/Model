@@ -11,6 +11,7 @@ CRATES=(
   model-treesitter
   model-lang-python
   model-lang-java
+  model-lang-typescript
   model-moose
   model-index
   model-factory
