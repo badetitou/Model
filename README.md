@@ -15,7 +15,7 @@ that every analysis and plugin can share — whatever the language.
 <p align="center">
   <a href="https://github.com/badetitou/Model/actions/workflows/ci.yml"><img src="https://github.com/badetitou/Model/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://crates.io/crates/model-factory"><img src="https://img.shields.io/crates/v/model-factory.svg?style=flat-square" alt="crates.io"></a>
-  <a href="https://github.com/badetitou/Model/tree/main/crates"><img src="https://img.shields.io/badge/crates-14-6EE7B7?style=flat-square" alt="14 crates"></a>
+  <a href="https://github.com/badetitou/Model/tree/main/crates"><img src="https://img.shields.io/badge/crates-15-6EE7B7?style=flat-square" alt="15 crates"></a>
   <a href="https://github.com/badetitou/Model/blob/main/rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.100%2B-A78BFA?style=flat-square&logo=rust&logoColor=white" alt="Rust 1.100+"></a>
   <a href="https://github.com/badetitou/Model/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B1020?style=flat-square" alt="MIT license"></a>
 </p>
