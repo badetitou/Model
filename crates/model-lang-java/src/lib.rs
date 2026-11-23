@@ -179,7 +179,9 @@ pub fn enrich(b: &mut ModelBuilder, root: &Path) -> anyhow::Result<JavaStats> {
     };
     let main: Vec<String> = model_treesitter::source_files(root, &opts)?
         .into_iter()
-        .filter(|f| eligible(f))
+        // A build-generated tree is read below, for inheritance only: whether
+        // an ignore rule hides it from the walk must not change the result.
+        .filter(|f| eligible(f) && !in_generated(Path::new(f)))
         .collect();
     let main = main
         .par_iter()
