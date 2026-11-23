@@ -1,4 +1,20 @@
 """
+Results about the whole model, computed on first use with the default options of model-analysis.
+"""
+type Analysis {
+	metrics: Metrics!
+	cycles: Cycles!
+	"""
+	Isolated entities: no call, reference or implementation in or out (candidate dead code).
+	"""
+	unused(kind: EntityKind, first: Int, after: String): EntityConnection!
+	"""
+	Entities with the highest fan-in plus fan-out, project code only (default 10).
+	"""
+	mostConnected(kind: EntityKind, first: Int): [Entity!]!
+}
+
+"""
 Entities of the kind `annotation`, a refinement of `Variable`.
 """
 type Annotation implements Entity {
@@ -51,6 +67,22 @@ type Annotation implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type AnnotationConnection {
@@ -139,6 +171,22 @@ type AnnotationType implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 	"""
 	Methods contained in this entity.
 	"""
@@ -232,6 +280,22 @@ type Class implements Entity {
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
 	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
+	"""
 	Methods contained in this entity.
 	"""
 	methods(first: Int): [Method!]!
@@ -323,6 +387,22 @@ type Comment implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type CommentConnection {
@@ -411,6 +491,22 @@ type Constant implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type ConstantConnection {
@@ -499,6 +595,22 @@ type Constructor implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type ConstructorConnection {
@@ -532,6 +644,32 @@ type ConstructorEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+"""
+A strongly connected component of the dependency graph.
+"""
+type Cycle {
+	size: Int!
+	entities(first: Int): [Entity!]!
+}
+
+"""
+Dependency cycles over calls and references.
+"""
+type Cycles {
+	"""
+	Number of components with at least `minSize` entities.
+	"""
+	count(minSize: Int): Int!
+	"""
+	Entities in components of at least `minSize` entities.
+	"""
+	cyclicEntities(minSize: Int): Int!
+	"""
+	The components, biggest first.
+	"""
+	components(minSize: Int, first: Int): [Cycle!]!
 }
 
 """
@@ -583,6 +721,22 @@ interface Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type EntityConnection {
@@ -690,6 +844,22 @@ type Enum implements Entity {
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
 	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
+	"""
 	Methods contained in this entity.
 	"""
 	methods(first: Int): [Method!]!
@@ -767,6 +937,22 @@ type EnumConstant implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type EnumConstantConnection {
@@ -869,6 +1055,22 @@ type Field implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type FieldConnection {
@@ -957,6 +1159,22 @@ type File implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 	"""
 	Methods contained in this entity.
 	"""
@@ -1049,6 +1267,22 @@ type Function implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type FunctionConnection {
@@ -1137,6 +1371,22 @@ type HttpCall implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type HttpCallConnection {
@@ -1225,6 +1475,22 @@ type HttpEndpoint implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type HttpEndpointConnection {
@@ -1313,6 +1579,22 @@ type Interface implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 	"""
 	Methods contained in this entity.
 	"""
@@ -1410,6 +1692,22 @@ type LocalVariable implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type LocalVariableConnection {
@@ -1498,6 +1796,22 @@ type Method implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type MethodConnection {
@@ -1531,6 +1845,48 @@ type MethodEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+"""
+Size and shape of the model.
+"""
+type Metrics {
+	"""
+	Entities.
+	"""
+	entities: Int!
+	"""
+	Relations.
+	"""
+	relations: Int!
+	"""
+	Occurrence sites, repeated ones included.
+	"""
+	sites: Int!
+	"""
+	Entities modelling other projects.
+	"""
+	externalEntities: Int!
+	"""
+	Distinct source files.
+	"""
+	files: Int!
+	"""
+	Entity count by archetype, as a JSON object.
+	"""
+	entitiesByKind: JSON!
+	"""
+	Relation count by kind, as a JSON object.
+	"""
+	relationsByKind: JSON!
+	"""
+	Relation count by provenance, as a JSON object.
+	"""
+	relationsByProvenance: JSON!
+	"""
+	Entity count by language id, as a JSON object.
+	"""
+	entitiesByLanguage: JSON!
 }
 
 """
@@ -1586,6 +1942,22 @@ type Namespace implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 	"""
 	Methods contained in this entity.
 	"""
@@ -1697,6 +2069,22 @@ type Parameter implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type ParameterConnection {
@@ -1785,6 +2173,22 @@ type PharoClass implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 	"""
 	Methods contained in this entity.
 	"""
@@ -1877,6 +2281,22 @@ type PharoExtensionMethod implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type PharoExtensionMethodConnection {
@@ -1965,6 +2385,22 @@ type PharoMethod implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type PharoMethodConnection {
@@ -2053,6 +2489,22 @@ type PharoTrait implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 	"""
 	Methods contained in this entity.
 	"""
@@ -2145,6 +2597,22 @@ type Property implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type PropertyConnection {
@@ -2253,6 +2721,22 @@ type PythonModule implements Entity {
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
 	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
+	"""
 	Methods contained in this entity.
 	"""
 	methods(first: Int): [Method!]!
@@ -2296,6 +2780,10 @@ type Query {
 	Languages present.
 	"""
 	languages: [String!]!
+	"""
+	Analyses of the whole model: metrics, cycles, unused entities, most connected entities.
+	"""
+	analysis: Analysis!
 	stats: Stats!
 	"""
 	An entity by `key` (stable) or `id` (this model only).
@@ -2733,6 +3221,22 @@ type Record implements Entity {
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
 	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
+	"""
 	Methods contained in this entity.
 	"""
 	methods(first: Int): [Method!]!
@@ -2938,6 +3442,22 @@ type Struct implements Entity {
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
 	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
+	"""
 	Methods contained in this entity.
 	"""
 	methods(first: Int): [Method!]!
@@ -3029,6 +3549,22 @@ type Trait implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 	"""
 	Methods contained in this entity.
 	"""
@@ -3122,6 +3658,22 @@ type TsAbstractClass implements Entity {
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
 	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
+	"""
 	Methods contained in this entity.
 	"""
 	methods(first: Int): [Method!]!
@@ -3213,6 +3765,22 @@ type TsArrowFunction implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type TsArrowFunctionConnection {
@@ -3301,6 +3869,22 @@ type TsInterface implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 	"""
 	Methods contained in this entity.
 	"""
@@ -3394,6 +3978,22 @@ type TsModule implements Entity {
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
 	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
+	"""
 	Methods contained in this entity.
 	"""
 	methods(first: Int): [Method!]!
@@ -3486,6 +4086,22 @@ type TsNamespace implements Entity {
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
 	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
+	"""
 	Methods contained in this entity.
 	"""
 	methods(first: Int): [Method!]!
@@ -3577,6 +4193,22 @@ type TsTypeAlias implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type TsTypeAliasConnection {
@@ -3665,6 +4297,22 @@ type TypeAlias implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type TypeAliasConnection {
@@ -3753,6 +4401,22 @@ type TypeParameter implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type TypeParameterConnection {
@@ -3841,6 +4505,22 @@ type Variable implements Entity {
 	Relations to this entity.
 	"""
 	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
 }
 
 type VariableConnection {
