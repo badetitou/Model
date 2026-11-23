@@ -88,6 +88,26 @@ async fn entity_by_key_with_containment_and_props() {
 }
 
 #[tokio::test]
+async fn typed_methods_field_resolves_on_a_container_with_methods() {
+    let s = schema(model());
+    let d = run(
+        &s,
+        r#"{ classByKey(key: "model java . . app/A#") {
+              methods(first: 5) { name __typename }
+           } }"#,
+    )
+    .await;
+    let names: Vec<_> = d["classByKey"]["methods"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["name"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(names, ["run", "helper"]);
+    assert_eq!(d["classByKey"]["methods"][0]["__typename"], "Method");
+}
+
+#[tokio::test]
 async fn relations_with_their_sites() {
     let s = schema(model());
     let d = run(

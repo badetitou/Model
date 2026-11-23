@@ -799,7 +799,8 @@ fn methods_field() -> Field {
                 e.children()
                     .filter(|c| c.kind() == EntityKind::Method && !sh.has_concept(c.kind_id()))
                     .take(n)
-                    .map(|c| sh.entity(c.id())),
+                    // Field of object type (`[Method!]!`): no type name.
+                    .map(|c| FieldValue::owned_any(Ent(c.id()))),
             )))
         })();
         FieldFuture::new(async move { r })
