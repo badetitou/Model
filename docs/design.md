@@ -40,7 +40,7 @@ Crates are published on crates.io (git tags `v*` remain available for pinning
 the whole workspace):
 
 ```toml
-model-factory = "0.4.0"
+model-factory = "0.5.0"
 ```
 
 ```

@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.5.0 — 2026-11-23
+
+Pharo import without JSON. A new crate, `model-ffi`, exposes a frozen `Model`
+over a C ABI so a Pharo image can build its Famix model straight from the
+columns, and can even build the model from sources in-process. The workspace
+goes from fourteen to fifteen crates.
+
+### Added
+
+- `model-ffi` (new crate, cdylib + rlib): flat columns (entities, relations,
+  CSR sites, kinds, languages, `StrRef` strings pointing into the model),
+  `model_entity_props_json`, and `model_char_offsets` (byte columns to 1-based
+  inclusive character offsets, as Moose anchors need). Depends on `model-core`
+  only; `unsafe` is confined to this crate, each block with a `// SAFETY:`.
+- `model-ffi` optional feature `build` (off by default): `model_build` builds
+  the model of a source tree in-process through `model-factory` and returns the
+  same handle as `model_open`; `model_has_build`, `model_build_report`. No
+  cache and no indexer unless asked.
+- `pharo/`: Tonel sources (`ModelLibrary` UFFI binding, `ModelImporter`) and
+  `BaselineOfModelMooseImporter` (groups `Minimal` and `ModelJava`). On
+  java/util: 8.7 s through Moose JSON, 2.3 s from a `model.json`, 2.5 s from the
+  sources in one call. Remaining differences with the JSON import are listed in
+  `pharo/README.md`.
+
+### Fixed
+
+- `model-graphql`: the typed `methods` field no longer errors on containers
+  that have methods (#18).
+
+### Changed
+
+- `scripts/crates.sh`: `model-ffi` is published after `model-factory`.
+
 ## 0.4.0 — 2026-11-20
 
 Famix-like models. Model now builds models at the level of FamixJava from
