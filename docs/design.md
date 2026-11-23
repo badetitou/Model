@@ -711,7 +711,8 @@ Each step is one PR, Structure's tests and goldens staying green:
    linked with SCIP, it meets Structure's mapping-ratio test on its fixtures
    (1.000 jpetstore, 0.989 angular-realworld, Structure requires 0.8). Still
    to port from `structure-lang-java`/`-ts`: HTTP endpoints/calls and GWT RPC
-   (enrichers), and a side-by-side comparison of entities.
+   (enrichers; TypeScript HTTP calls and endpoints are ported in
+   `model-lang-typescript`), and a side-by-side comparison of entities.
 4. **Pharo** ✅ — direct Tonel reader and send linker ported from
    `structure-lang-pharo`; no grammar binding needed.
 5. **Structure switches** — depends on Model by git tag; a thin adapter

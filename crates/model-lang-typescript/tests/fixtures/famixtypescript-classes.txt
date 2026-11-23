@@ -1,0 +1,68 @@
+# Classes of the FM3 package `Famix-TypeScript-Entities` (FamixTypeScript),
+# one simple name per line; the FM3 class name is
+# `Famix-TypeScript-Entities.<name>`.
+#
+# Source: https://github.com/fuhrmanator/FamixTypeScript at commit
+# de43767b802588b14212fef65413a286bf24ba71 (2026-09-04), the `*.class.st`
+# files of src/Famix-TypeScript-Entities, name without the `FamixTypeScript`
+# prefix (as the generator's translationDictionary does). The repository
+# publishes no FM3 JSON export and states no licence, so only these class
+# names (facts, not code) are recorded here, not its sources.
+#
+# Traits (`*.trait.st`) of the package, not classes: TClassMetrics,
+# TEntityCreator, TFunctionMetrics, TWithInterfaces.
+Access
+Accessor
+Alias
+ArrowFunction
+BehaviouralEntity
+Class
+Comment
+Concretization
+ContainerEntity
+Decorator
+Entity
+EntityTyping
+Enum
+EnumValue
+File
+Folder
+Function
+Implementation
+ImportClause
+ImportingContext
+IndexedFileAnchor
+Inheritance
+Interface
+Invocation
+JSDoc
+Method
+Model
+Module
+NamedEntity
+Namespace
+Parameter
+ParametricArrowFunction
+ParametricClass
+ParametricEntityTyping
+ParametricFunction
+ParametricImplementation
+ParametricInheritance
+ParametricInterface
+ParametricInvocation
+ParametricMethod
+ParametricReference
+PrimitiveType
+Property
+Reference
+ScopingEntity
+ScriptEntity
+SourceAnchor
+SourceLanguage
+SourceTextAnchor
+SourcedEntity
+StructuralEntity
+Type
+TypeParameter
+Variable
+implicitVariable

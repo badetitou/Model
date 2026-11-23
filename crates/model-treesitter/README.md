@@ -9,7 +9,7 @@ a grammar crate (behind a Cargo feature), a query, and a row in
 |---|---|---|---|
 | Java | tree-sitter-java 0.23 | `queries/java.scm` | declared (`package`) |
 | TypeScript, TSX | tree-sitter-typescript 0.23 | `queries/typescript.scm` | file path |
-| Python | tree-sitter-python 0.25 | `queries/python.scm` (tags.scm + superclasses, parameters) | file path |
+| Python | tree-sitter-python 0.25 | `queries/python.scm` (imports as `Imports` + `imports` prop, decorators, fields, properties, `__init__`, async, annotations, parameters) | file path |
 
 ## Captures
 

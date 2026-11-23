@@ -1,0 +1,4 @@
+[
+  {"name": "http.call", "archetype": "variable", "traits": ["Named"], "graphql_type": "HttpCall", "graphql_root": "httpCalls"},
+  {"name": "http.endpoint", "archetype": "variable", "traits": ["Named"], "graphql_type": "HttpEndpoint", "graphql_root": "httpEndpoints"}
+]

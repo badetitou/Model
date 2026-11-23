@@ -1,0 +1,25 @@
+[package]
+name = "model-lang-java"
+description = "Java enricher: HTTP endpoints served by handler methods (Spring, JAX-RS) and GWT RPC calls"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+readme = "../../README.md"
+keywords = ["code-analysis", "static-analysis", "tree-sitter", "java", "code-model"]
+categories = ["development-tools"]
+
+[dependencies]
+model-core.workspace = true
+model-traits.workspace = true
+model-treesitter.workspace = true
+anyhow.workspace = true
+ignore.workspace = true
+rayon.workspace = true
+tree-sitter.workspace = true
+tree-sitter-java.workspace = true
+
+[dev-dependencies]
+model-moose = { path = "../model-moose" }

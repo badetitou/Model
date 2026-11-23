@@ -1,0 +1,23 @@
+[package]
+name = "model-lang-typescript"
+description = "TypeScript enricher: HTTP calls (fetch, axios, Angular HttpClient) and HTTP endpoints (NestJS, Express-style)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+readme = "README.md"
+keywords = ["code-analysis", "static-analysis", "tree-sitter", "typescript", "code-model"]
+categories = ["development-tools"]
+
+[dependencies]
+model-core.workspace = true
+model-traits.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tree-sitter.workspace = true
+tree-sitter-typescript.workspace = true
+
+[dev-dependencies]
+model-treesitter.workspace = true

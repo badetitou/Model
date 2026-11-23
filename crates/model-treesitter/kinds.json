@@ -8,7 +8,7 @@
   {"name": "annotation", "archetype": "variable", "desc": "meta", "graphql_type": "Annotation", "graphql_root": "annotations", "traits": ["Named"]},
   {"name": "comment", "archetype": "variable", "desc": "site", "leaf": true, "graphql_type": "Comment", "graphql_root": "comments"},
   {"name": "ts.interface", "archetype": "interface", "fm3": "Famix-TypeScript-Entities.Interface", "graphql_type": "TsInterface", "graphql_root": "tsInterfaces", "traits": ["Named", "WithMembers", "WithInheritances", "Typed"]},
-  {"name": "ts.type_alias", "archetype": "type_alias", "fm3": "Famix-TypeScript-Entities.TypeAlias", "graphql_type": "TsTypeAlias", "graphql_root": "tsTypeAliases", "traits": ["Named", "Typed"]},
+  {"name": "ts.type_alias", "archetype": "type_alias", "fm3": "Famix-TypeScript-Entities.Alias", "graphql_type": "TsTypeAlias", "graphql_root": "tsTypeAliases", "traits": ["Named", "Typed"]},
   {"name": "ts.namespace", "archetype": "namespace", "fm3": "Famix-TypeScript-Entities.Namespace", "graphql_type": "TsNamespace", "graphql_root": "tsNamespaces", "traits": ["Named", "WithMembers"]},
   {"name": "ts.abstract_class", "archetype": "class", "fm3": "Famix-TypeScript-Entities.Class", "graphql_type": "TsAbstractClass", "graphql_root": "tsAbstractClasses", "traits": ["Named", "WithMembers", "WithInheritances", "Modifiers", "Annotations"]},
   {"name": "ts.arrow_function", "archetype": "function", "fm3": "Famix-TypeScript-Entities.ArrowFunction", "graphql_type": "TsArrowFunction", "graphql_root": "tsArrowFunctions", "traits": ["Named", "Invocation", "Access", "Typed", "Modifiers"]},

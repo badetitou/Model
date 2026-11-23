@@ -683,7 +683,7 @@ fn typescript_kinds_are_fine_kinds_with_traits() {
     );
     assert_eq!(
         kind_of(&m, &key("Id#")),
-        ("ts.type_alias".into(), K::TypeAlias, fm3("TypeAlias"))
+        ("ts.type_alias".into(), K::TypeAlias, fm3("Alias"))
     );
     assert_eq!(kind_of(&m, &key("Base#")).0, "ts.abstract_class");
     assert_eq!(kind_of(&m, &key("f().")).0, "ts.arrow_function");
@@ -776,4 +776,98 @@ fn java_entities_carry_traits() {
             .all(|e| e.kind() == K::Method || e.kind() == K::Constructor)
     );
     assert!(m.of_trait(exceptions).any(|e| e.name() == "m"));
+}
+
+const PY_RICH: &str = r#"import os, a.b as c
+from x.y import Z as W
+from . import rel
+
+class Base:
+    pass
+
+@dataclass
+class Item(Base):
+    count: int = 0
+    tag: Base
+    LIMIT = 3
+
+    class Meta:
+        ordering = 1
+
+    def __init__(self, a: Base, *rest, **kw) -> None:
+        pass
+
+    @property
+    def size(self) -> Base:
+        return 1
+
+    @size.setter
+    def size(self, v):
+        pass
+
+    @staticmethod
+    @app.route("/x")
+    async def go(self):
+        pass
+
+def helper():
+    pass
+"#;
+
+#[test]
+fn python_imports_decorators_fields_properties_async() {
+    let (m, _) = model(&[("pkg/rich.py", PY_RICH)]);
+    let key = |k: &str| format!("model python . . pkg/`rich.py`/{k}");
+    let kind = |k: &str| kind_of(&m, &key(k)).1;
+    assert_eq!(kind("Item#"), K::Class);
+    assert_eq!(kind("Item#Meta#"), K::Class);
+    assert_eq!(kind("Item#Meta#ordering."), K::Field);
+    assert_eq!(kind("Item#count."), K::Field);
+    assert_eq!(kind("Item#tag."), K::Field);
+    assert_eq!(kind("Item#LIMIT."), K::Field);
+    assert_eq!(kind("Item#__init__()."), K::Constructor);
+    // Getter and setter are one property key.
+    assert_eq!(kind("Item#size."), K::Property);
+    assert_eq!(kind("Item#go()."), K::Method);
+    assert_eq!(kind("helper()."), K::Function);
+    assert_eq!(kind("Item#__init__().(rest)"), K::Variable);
+    assert_eq!(kind("Item#__init__().(kw)"), K::Variable);
+    let go = m.by_key(&key("Item#go().")).unwrap();
+    assert_eq!(
+        go.props().get("decorators"),
+        Some(&Value::List(vec![
+            Value::Str("staticmethod".into()),
+            Value::Str("app.route".into())
+        ]))
+    );
+    assert_eq!(
+        go.props().get("modifiers"),
+        Some(&Value::List(vec![Value::Str("async".into())]))
+    );
+    let item = m.by_key(&key("Item#")).unwrap();
+    assert_eq!(
+        item.props().get("decorators"),
+        Some(&Value::List(vec![Value::Str("dataclass".into())]))
+    );
+    // Imports are props of the file and `Imports` relations to modules.
+    let file = m.by_key("model python . . pkg/`rich.py`/").unwrap();
+    let Some(Value::List(imports)) = file.props().get("imports") else {
+        panic!("no imports prop");
+    };
+    assert_eq!(imports.len(), 3, "{imports:?}");
+    let mods: Vec<_> = edges(&m, R::Imports).into_iter().map(|e| e.1).collect();
+    assert!(mods.iter().any(|k| k.ends_with("a/b#")), "{mods:?}");
+    assert!(mods.iter().any(|k| k.ends_with("x/y#")), "{mods:?}");
+    // Declared types of project types only (`int`, `None` are builtins).
+    let typed: Vec<_> = edges(&m, R::DeclaredType)
+        .into_iter()
+        .map(|e| (e.0, e.1.rsplit('/').next().unwrap_or("").to_string()))
+        .collect();
+    for who in ["a", "tag", "size"] {
+        assert!(
+            typed.contains(&(who.to_string(), "Base#".to_string())),
+            "{who}: {typed:?}"
+        );
+    }
+    assert_eq!(typed.len(), 3, "{typed:?}");
 }
