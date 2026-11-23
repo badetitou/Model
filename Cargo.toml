@@ -22,7 +22,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/badetitou/Model"
@@ -30,21 +30,21 @@ rust-version = "1.100"
 publish = true
 
 [workspace.dependencies]
-model-core = { path = "crates/model-core", version = "0.5.0" }
-model-fm3 = { path = "crates/model-fm3", version = "0.5.0" }
-model-traits = { path = "crates/model-traits", version = "0.5.0" }
-model-scip = { path = "crates/model-scip", version = "0.5.0" }
-model-detect = { path = "crates/model-detect", version = "0.5.0" }
-model-link = { path = "crates/model-link", version = "0.5.0" }
-model-treesitter = { path = "crates/model-treesitter", version = "0.5.0" }
-model-index = { path = "crates/model-index", version = "0.5.0" }
-model-lang-pharo = { path = "crates/model-lang-pharo", version = "0.5.0" }
-model-lang-python = { path = "crates/model-lang-python", version = "0.5.0" }
-model-lang-java = { path = "crates/model-lang-java", version = "0.5.0" }
-model-lang-typescript = { path = "crates/model-lang-typescript", version = "0.5.0" }
-model-factory = { path = "crates/model-factory", version = "0.5.0" }
-model-session = { path = "crates/model-session", version = "0.5.0" }
-model-analysis = { path = "crates/model-analysis", version = "0.5.0" }
+model-core = { path = "crates/model-core", version = "0.6.0" }
+model-fm3 = { path = "crates/model-fm3", version = "0.6.0" }
+model-traits = { path = "crates/model-traits", version = "0.6.0" }
+model-scip = { path = "crates/model-scip", version = "0.6.0" }
+model-detect = { path = "crates/model-detect", version = "0.6.0" }
+model-link = { path = "crates/model-link", version = "0.6.0" }
+model-treesitter = { path = "crates/model-treesitter", version = "0.6.0" }
+model-index = { path = "crates/model-index", version = "0.6.0" }
+model-lang-pharo = { path = "crates/model-lang-pharo", version = "0.6.0" }
+model-lang-python = { path = "crates/model-lang-python", version = "0.6.0" }
+model-lang-java = { path = "crates/model-lang-java", version = "0.6.0" }
+model-lang-typescript = { path = "crates/model-lang-typescript", version = "0.6.0" }
+model-factory = { path = "crates/model-factory", version = "0.6.0" }
+model-session = { path = "crates/model-session", version = "0.6.0" }
+model-analysis = { path = "crates/model-analysis", version = "0.6.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"

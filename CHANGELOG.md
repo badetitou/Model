@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.6.0 — 2026-11-23
+
+Framework enrichers. Three new crates add what the grammars and SCIP indexes
+cannot see: HTTP endpoints and calls, and GWT RPC. The workspace goes from
+fifteen to eighteen crates. The indexers are upgraded.
+
+### Added
+
+- `model-lang-python`: Flask / FastAPI / Django HTTP endpoints as
+  `http.endpoint` entities, run by `model-factory` before linking; richer
+  `queries/python.scm` (imports, decorators, fields, properties, async).
+- `model-lang-java`: Spring / JAX-RS endpoints (prop `http.endpoints`) and GWT
+  RPC (`rpc.*` props, relation `gwt-rpc`), run after linking.
+- `model-lang-typescript`: HTTP calls (fetch, axios, Angular `HttpClient`) and
+  endpoints (NestJS, Express-style) as `http.call` / `http.endpoint` entities
+  and `http.calls` / `http.endpoints` relations.
+
+### Fixed
+
+- `model-index`: scip-java moved to `org.scip-code:scip-java` on Maven Central;
+  upgraded to scip-java 0.14.2 and scip-typescript 0.6.2.
+- `model-lang-java`: build-generated source trees are never treated as main
+  sources.
+
 ## 0.5.0 — 2026-11-23
 
 Pharo import without JSON. A new crate, `model-ffi`, exposes a frozen `Model`
