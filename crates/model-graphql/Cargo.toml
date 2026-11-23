@@ -14,19 +14,34 @@ categories = ["development-tools"]
 [[bin]]
 name = "model-graphql"
 path = "src/main.rs"
+required-features = ["server"]
+
+[features]
+default = ["server"]
+# The HTTP server (axum), the `model-graphql` binary and the on-demand session. Without it the crate
+# is only the executable schema, which compiles to WebAssembly (see `model-wasm`).
+server = [
+    "dep:anyhow",
+    "dep:model-factory",
+    "dep:model-session",
+    "dep:async-graphql-axum",
+    "dep:axum",
+    "dep:tower-http",
+    "dep:tokio",
+]
 
 [dependencies]
-model-factory.workspace = true
+model-factory = { workspace = true, optional = true }
 model-core.workspace = true
-model-session.workspace = true
+model-session = { workspace = true, optional = true }
 model-traits.workspace = true
-anyhow.workspace = true
+anyhow = { workspace = true, optional = true }
 async-graphql.workspace = true
-async-graphql-axum.workspace = true
-axum.workspace = true
-tower-http.workspace = true
+async-graphql-axum = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
 serde_json.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, optional = true }
 
 [dev-dependencies]
 protobuf.workspace = true

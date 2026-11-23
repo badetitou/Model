@@ -1,0 +1,28 @@
+[package]
+name = "model-wasm"
+description = "Model in the browser: build a code model from in-memory files and answer GraphQL, as WebAssembly"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+model-core.workspace = true
+model-treesitter.workspace = true
+model-lang-pharo.workspace = true
+model-lang-python.workspace = true
+model-lang-java.workspace = true
+model-lang-typescript.workspace = true
+model-graphql = { workspace = true, default-features = false }
+anyhow.workspace = true
+async-graphql.workspace = true
+serde_json.workspace = true
+futures-executor = "0.3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
