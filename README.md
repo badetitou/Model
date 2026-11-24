@@ -15,7 +15,7 @@ that every analysis and plugin can share — whatever the language.
 <p align="center">
   <a href="https://github.com/badetitou/Model/actions/workflows/ci.yml"><img src="https://github.com/badetitou/Model/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://crates.io/crates/model-factory"><img src="https://img.shields.io/crates/v/model-factory.svg?style=flat-square" alt="crates.io"></a>
-  <a href="https://github.com/badetitou/Model/tree/main/crates"><img src="https://img.shields.io/badge/crates-15-6EE7B7?style=flat-square" alt="15 crates"></a>
+  <a href="https://github.com/badetitou/Model/tree/main/crates"><img src="https://img.shields.io/badge/crates-20-6EE7B7?style=flat-square" alt="20 crates"></a>
   <a href="https://github.com/badetitou/Model/blob/main/rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.100%2B-A78BFA?style=flat-square&logo=rust&logoColor=white" alt="Rust 1.100+"></a>
   <a href="https://github.com/badetitou/Model/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-0B1020?style=flat-square" alt="MIT license"></a>
 </p>
@@ -346,6 +346,7 @@ go into `props`, and plugins can add relations under their own name.
 | [`model-treesitter`](https://github.com/badetitou/Model/tree/main/crates/model-treesitter) | query-driven extraction; [captures](https://github.com/badetitou/Model/blob/main/crates/model-treesitter/README.md) |
 | [`model-index`](https://github.com/badetitou/Model/tree/main/crates/model-index) | runs SCIP indexers, staleness, document cache |
 | [`model-lang-pharo`](https://github.com/badetitou/Model/tree/main/crates/model-lang-pharo) | direct Tonel frontend: classes, methods, references, resolved sends |
+| [`model-lang-rust`](https://github.com/badetitou/Model/tree/main/crates/model-lang-rust) | rust-analyzer SCIP frontend: `impl` blocks, overrides, Rust kinds |
 | [`model-analysis`](https://github.com/badetitou/Model/tree/main/crates/model-analysis) | `Analysis` trait: metrics, degrees, cycles, unused, quotient, impact, derived relations |
 | [`model-factory`](https://github.com/badetitou/Model/tree/main/crates/model-factory) | facade: detect → index → extract → link; `model_factory::analysis` re-export |
 | [`model-cli`](https://github.com/badetitou/Model/tree/main/crates/model-cli) | `model detect`, `build`, `query`, `context`, `impact`, `analysis` (JSON, agents) — [docs](docs/cli.md) |
@@ -368,7 +369,8 @@ grammars it needs — WASM builds included.
 | TypeScript / TSX | tree-sitter-typescript | `typescript.scm` | scip-typescript | ✅ |
 | Python | tree-sitter-python | its `tags.scm` | scip-python | ✅ baseline |
 | Pharo (Tonel) | — (direct reader) | — | — | ✅ frontend |
-| Go, Rust, C/C++, C#, Ruby, PHP | official grammars | `tags.scm` | scip-go, rust-analyzer, scip-clang, scip-dotnet, scip-ruby, scip-php | ⏳ a row each |
+| Rust | — (SCIP frontend) | — | rust-analyzer | ✅ frontend |
+| Go, C/C++, C#, Ruby, PHP | official grammars | `tags.scm` | scip-go, scip-clang, scip-dotnet, scip-ruby, scip-php | ⏳ a row each |
 
 Adding a language means a grammar crate, a query file — often its own
 `tags.scm` — and a row in `model-treesitter`'s grammar registry, or a small

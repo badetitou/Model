@@ -1,0 +1,16 @@
+[
+  {
+    "name": "rust.impl",
+    "archetype": "class",
+    "traits": ["Named", "WithMembers"],
+    "graphql_type": "RustImpl",
+    "graphql_root": "rustImpls"
+  },
+  {
+    "name": "rust.enum_variant",
+    "archetype": "constant",
+    "traits": ["Named"],
+    "graphql_type": "RustEnumVariant",
+    "graphql_root": "rustEnumVariants"
+  }
+]

@@ -20,6 +20,7 @@ model-lang-pharo.workspace = true
 model-lang-java.workspace = true
 model-lang-python.workspace = true
 model-lang-typescript.workspace = true
+model-lang-rust.workspace = true
 model-link.workspace = true
 model-scip.workspace = true
 model-treesitter.workspace = true

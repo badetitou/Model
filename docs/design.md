@@ -4,8 +4,8 @@ Status: draft. Done: `model-core` (metamodel, keys, compact storage),
 `model-detect`, `model-scip` (loader), `model-link` (SCIP fusion and
 SCIP-only models), `model-treesitter` (Java, TypeScript, Python),
 `model-index` (indexer runs, document cache), `model-lang-pharo` (direct Tonel
-frontend), `model-analysis` (generic analyses), the `model-factory` facade and
-`model-graphql`.
+frontend), `model-lang-rust` (rust-analyzer SCIP frontend), `model-analysis`
+(generic analyses), the `model-factory` facade and `model-graphql`.
 
 ## 1. Goal
 
@@ -52,6 +52,7 @@ model-core         metamodel + builder + navigation API      (serde only)
   ├── model-index       indexer runs, staleness, document cache  ✅
   ├── model-link        SCIP → builder (fusion, SCIP-only)       ✅
   ├── model-lang-pharo  hand-written Tonel reader + send linker  ✅
+  ├── model-lang-rust   rust-analyzer SCIP frontend               ✅
   ├── model-lang-*      optional per-language enrichers          ⏳
   └── model-analysis    Analysis trait + generic analyses        ✅
         ^
@@ -450,10 +451,11 @@ Implemented in `model-treesitter`; captures, rules and measurements are in
   `model-link` (`Lift`) resolves them exactly. Definitions, extents and
   props still come from tree-sitter.
 - **Frontends** (`model-lang-*`) are the escape hatch for facts a query cannot
-  express. `model-lang-pharo` implements one: with no usable grammar or SCIP
-  indexer it parses Tonel directly and adds entities, props and
-  `Frontend`-provenance relations to the shared builder. The same mechanism is
-  open to Java/TS HTTP endpoints and GWT RPC enrichers.
+  express. `model-lang-pharo` parses Tonel directly; `model-lang-rust` reads a
+  rust-analyzer SCIP index and rebuilds the `impl` blocks, overrides and Rust
+  kinds that rust-analyzer only encodes in symbol names. Both add entities,
+  props and `Frontend`-provenance relations to the shared builder. The same
+  mechanism is open to Java/TS HTTP endpoints and GWT RPC enrichers.
 
 So a new language needs a grammar crate, a query file (often just its
 `tags.scm`) and a row in `grammars.rs`; optionally a SCIP indexer row in
@@ -465,7 +467,8 @@ So a new language needs a grammar crate, a query file (often just its
 | TypeScript/TSX | tree-sitter-typescript | `typescript.scm` | scip-typescript | ✅ |
 | Python | tree-sitter-python | its `tags.scm` | scip-python | ✅ baseline |
 | Pharo (Tonel) | — (direct reader) | — | — | ✅ frontend |
-| Go, Rust, C/C++, C#, Ruby, PHP | official grammars | `tags.scm` | scip-go, rust-analyzer, scip-clang, scip-dotnet, scip-ruby, scip-php | ⏳ a row each |
+| Rust | — (SCIP frontend) | — | rust-analyzer | ✅ frontend |
+| Go, C/C++, C#, Ruby, PHP | official grammars | `tags.scm` | scip-go, scip-clang, scip-dotnet, scip-ruby, scip-php | ⏳ a row each |
 
 Tree-sitter extents are what fix SCIP-only attribution: on
 angular-realworld, references at file level go from 67% to the code that
@@ -715,6 +718,8 @@ Each step is one PR, Structure's tests and goldens staying green:
    `model-lang-typescript`), and a side-by-side comparison of entities.
 4. **Pharo** ✅ — direct Tonel reader and send linker ported from
    `structure-lang-pharo`; no grammar binding needed.
+   **Rust** ✅ — `model-lang-rust` rebuilds impl blocks and overrides from
+   rust-analyzer SCIP symbols; no grammar binding needed either.
 5. **Structure switches** — depends on Model by git tag; a thin adapter
    converts `Model` to its IR, then classify/matrix/impact move to `Model`
    directly and `structure-ir`'s `Graph` is removed. Language detection in

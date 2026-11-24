@@ -1105,6 +1105,7 @@ dependencies = [
  "model-lang-java",
  "model-lang-pharo",
  "model-lang-python",
+ "model-lang-rust",
  "model-lang-typescript",
  "model-link",
  "model-scip",
@@ -1202,6 +1203,18 @@ dependencies = [
  "model-treesitter",
  "tree-sitter",
  "tree-sitter-python",
+]
+
+[[package]]
+name = "model-lang-rust"
+version = "0.8.0"
+dependencies = [
+ "model-core",
+ "model-link",
+ "model-scip",
+ "model-traits",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

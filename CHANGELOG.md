@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added
+
+- `model-lang-rust` (new crate): rust-analyzer SCIP frontend. Links a Rust
+  index into entities keyed by SCIP symbols, then rebuilds what the indexer
+  only encodes in names: `rust.impl` blocks with `rust.self_type`/`rust.trait`,
+  `Implements`/`Overrides` relations, Rust modules and enum variants.
+  Wired into `model-factory` and the release list; two new GraphQL concepts
+  (`RustImpl`, `RustEnumVariant`).
+
 ## 0.8.0 — 2026-11-24
 
 The model is now usable from a terminal and from an MCP client. `model-cli`

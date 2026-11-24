@@ -3122,6 +3122,22 @@ type Query {
 	All entities of the kind `http.call`.
 	"""
 	httpCalls(first: Int, after: String): HttpCallConnection!
+	"""
+	The `RustImpl` with this key.
+	"""
+	rustImplByKey(key: String!): RustImpl
+	"""
+	All entities of the kind `rust.impl`.
+	"""
+	rustImpls(first: Int, after: String): RustImplConnection!
+	"""
+	The `RustEnumVariant` with this key.
+	"""
+	rustEnumVariantByKey(key: String!): RustEnumVariant
+	"""
+	All entities of the kind `rust.enum_variant`.
+	"""
+	rustEnumVariants(first: Int, after: String): RustEnumVariantConnection!
 }
 
 """
@@ -3325,6 +3341,218 @@ type RelationEdge {
 	The item at the end of the edge
 	"""
 	node: Relation!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+Entities of the kind `rust.enum_variant`, a refinement of `Constant`.
+"""
+type RustEnumVariant implements Entity {
+	"""
+	Position in this model; stable only while the model is served.
+	"""
+	id: Int!
+	"""
+	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
+	"""
+	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
+	kind: EntityKind!
+	fineKind: String!
+	"""
+	Names of the traits of this entity's kind.
+	"""
+	traits: [String!]!
+	fm3Class: String
+	name: String!
+	language: String
+	"""
+	Referenced, not defined in the analysed sources (libraries).
+	"""
+	external: Boolean!
+	"""
+	Path relative to the analysed root.
+	"""
+	file: String
+	range: Range
+	nameRange: Range
+	"""
+	Language-specific facts (annotations, decorators...).
+	"""
+	props: JSON!
+	parent: Entity
+	"""
+	Enclosing entities, innermost first.
+	"""
+	ancestors: [Entity!]!
+	children(kind: EntityKind, first: Int, after: String): EntityConnection!
+	"""
+	Relations from this entity. `kind`: `calls`, `references`,
+	`inherits`, `implements`, `imports`, or a custom kind.
+	"""
+	outgoing(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations to this entity.
+	"""
+	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
+}
+
+type RustEnumVariantConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [RustEnumVariantEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [RustEnumVariant!]!
+	"""
+	Items matching the query, over all pages.
+	"""
+	totalCount: Int!
+}
+
+"""
+An edge in a connection.
+"""
+type RustEnumVariantEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: RustEnumVariant!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+"""
+Entities of the kind `rust.impl`, a refinement of `Class`.
+"""
+type RustImpl implements Entity {
+	"""
+	Position in this model; stable only while the model is served.
+	"""
+	id: Int!
+	"""
+	Stable across builds: the SCIP symbol, or a SCIP-like frontend key.
+	"""
+	key: String!
+	"""
+	Archetype; see `fineKind` for the finer kind.
+	"""
+	kind: EntityKind!
+	fineKind: String!
+	"""
+	Names of the traits of this entity's kind.
+	"""
+	traits: [String!]!
+	fm3Class: String
+	name: String!
+	language: String
+	"""
+	Referenced, not defined in the analysed sources (libraries).
+	"""
+	external: Boolean!
+	"""
+	Path relative to the analysed root.
+	"""
+	file: String
+	range: Range
+	nameRange: Range
+	"""
+	Language-specific facts (annotations, decorators...).
+	"""
+	props: JSON!
+	parent: Entity
+	"""
+	Enclosing entities, innermost first.
+	"""
+	ancestors: [Entity!]!
+	children(kind: EntityKind, first: Int, after: String): EntityConnection!
+	"""
+	Relations from this entity. `kind`: `calls`, `references`,
+	`inherits`, `implements`, `imports`, or a custom kind.
+	"""
+	outgoing(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations to this entity.
+	"""
+	incoming(kind: String, provenance: Provenance, first: Int, after: String): RelationConnection!
+	"""
+	Relations pointing at this entity, of any kind (fan-in).
+	"""
+	inDegree: Int!
+	"""
+	Relations leaving this entity, of any kind (fan-out).
+	"""
+	outDegree: Int!
+	"""
+	Isolated: no call, reference or implementation leaves or reaches it (nor its members), and it is not external. Narrower than `inDegree == 0`: something that only calls others is not isolated.
+	"""
+	isUnused: Boolean!
+	"""
+	Part of a dependency cycle (calls and references).
+	"""
+	inCycle: Boolean!
+	"""
+	Methods contained in this entity.
+	"""
+	methods(first: Int): [Method!]!
+}
+
+type RustImplConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [RustImplEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [RustImpl!]!
+	"""
+	Items matching the query, over all pages.
+	"""
+	totalCount: Int!
+}
+
+"""
+An edge in a connection.
+"""
+type RustImplEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: RustImpl!
 	"""
 	A cursor for use in pagination
 	"""

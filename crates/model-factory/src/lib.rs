@@ -24,6 +24,7 @@ pub use model_index as index;
 pub use model_lang_java as lang_java;
 pub use model_lang_pharo as lang_pharo;
 pub use model_lang_python as lang_python;
+pub use model_lang_rust as lang_rust;
 pub use model_lang_typescript as lang_typescript;
 pub use model_link as link;
 pub use model_scip as scip;
@@ -149,6 +150,8 @@ pub struct Build {
     pub java: Option<lang_java::JavaStats>,
     /// TypeScript enricher facts (HTTP calls and endpoints), when detected.
     pub typescript: Option<lang_typescript::TypeScriptStats>,
+    /// Rust SCIP facts (impl blocks, overrides, variants), when indexed.
+    pub rust: Option<lang_rust::RustStats>,
     /// Tree-sitter fragments taken from the cache vs parsed (all passes).
     pub fragments: LoadStats,
     pub indexes: Vec<IndexReport>,
@@ -232,6 +235,7 @@ pub fn default_model() -> Model {
     lang_python::declare_kinds(&mut b);
     lang_java::declare_kinds(&mut b);
     lang_typescript::declare_kinds(&mut b);
+    lang_rust::declare_kinds(&mut b);
     b.build()
 }
 
@@ -453,7 +457,9 @@ pub fn build(
 
     step("linking", 80, None);
     let mut reports = Vec::new();
+    let mut rust: Option<lang_rust::RustStats> = None;
     for (job, idx, origin) in indexes {
+        let is_rust = job.indexer.languages.contains(&"rust");
         let unmapped = if job.indexer.languages.iter().any(|l| has_grammar(l)) {
             Unmapped::Lift
         } else {
@@ -464,6 +470,13 @@ pub fn build(
             language: None,
         };
         let link = model_link::link(&mut b, &idx, &lo);
+        if is_rust {
+            // Rust has no grammar: its index is linked with `Create`, then the
+            // SCIP frontend rebuilds what rust-analyzer only encodes in symbol
+            // names (`impl` blocks, trait implementations and overrides).
+            rust.get_or_insert_with(lang_rust::RustStats::default)
+                .merge(lang_rust::enrich(&mut b, &idx));
+        }
         reports.push(IndexReport {
             root: job.root,
             indexer: job.indexer.name,
@@ -506,6 +519,7 @@ pub fn build(
         python,
         java,
         typescript,
+        rust,
         fragments,
         indexes: reports,
         warnings,

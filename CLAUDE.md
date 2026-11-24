@@ -54,6 +54,11 @@ Structure (`../Structure`), its first client.
   `http.endpoint` entities (kinds in `kinds.json`) + `http.calls`/`http.endpoints`
   relations (`Provenance::Frontend`) and owner list props. README holds the
   Model → FamixTypeScript class mapping; ported from Structure's `lang-ts/http.rs`.
+- `crates/model-lang-rust` — rust-analyzer SCIP frontend (`build`/`from_scip`,
+  `enrich` from the index after linking): modules, `rust.impl` blocks with
+  `rust.self_type`/`rust.trait`, `Implements`/`Overrides` and `rust.enum_variant`
+  kinds from symbol names (`kinds.json` concepts `RustImpl`/`rustImpls`,
+  `RustEnumVariant`/`rustEnumVariants`); no grammar
 - `crates/model-index` — `ensure_index` (reuse / staleness / run, only the
   index's own tool; none for a custom one), `custom.rs` (`CustomIndex`: user-only
   `sh -c` index command, never read from the analysed repo; `--index-command
@@ -151,7 +156,7 @@ Structure (`../Structure`), its first client.
 
 ## Releasing
 
-The nineteen crates listed in `scripts/crates.sh` are publishable on crates.io;
+The twenty crates listed in `scripts/crates.sh` are publishable on crates.io;
 `model-wasm` has `publish = false`. Keep the workspace version, the internal path
 dependency versions in `[workspace.dependencies]`, `CHANGELOG.md` and the
 version references in `README.md` and `docs/` in sync. The facade is
@@ -165,5 +170,5 @@ checks that the tag matches `Cargo.toml`, publishes every crate with
 a GitHub Release whose notes come from `scripts/release-notes.sh`.
 
 The repository needs a `CARGO_REGISTRY_TOKEN` secret with publish rights on all
-nineteen crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
+twenty crates. Local equivalent: `./scripts/publish.sh`. Re-running a tag fails:
 crates.io versions are immutable.

@@ -12,6 +12,7 @@ CRATES=(
   model-lang-python
   model-lang-java
   model-lang-typescript
+  model-lang-rust
   model-moose
   model-index
   model-factory
