@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.8.0 — 2026-11-24
+
+The model is now usable from a terminal and from an MCP client. `model-cli`
+(new publishable crate) and `model-mcp` (new crate, built from source) expose
+the library's facts to scripts and agents; the `code-model` plugin wires the
+MCP server into a Claude Code session.
+
 ### Added
 
 - `model-cli` (new crate, bin `model`): `detect` a source tree, `build` a model
@@ -9,6 +16,14 @@
   run `metrics`, `cycles`, `unused` or `degrees`. Data commands print JSON for
   scripts and agents; `MODEL_TIMING=1` reports the cost of reloading a saved
   model on each stateless invocation.
+- `model-mcp` (new crate, bin `model-mcp`): a stdio MCP server that keeps a
+  `Model` in memory, so repeated calls do not reload `model.json`. Tools:
+  `model_status`, `model_query`, `model_context`, `model_impact`,
+  `model_analysis` and `model_rebuild` (reload JSON or rebuild from sources).
+  Built from source; deliberately not part of the tag release's crate list.
+- `plugins/code-model` (Claude Code plugin): starts `model-mcp` against the
+  session's `model.json` and ships `model-context`, `model-architecture` and
+  `model-impact` skills plus an `impact-reviewer` agent.
 
 ## 0.7.0 — 2026-11-23
 

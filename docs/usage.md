@@ -1,6 +1,6 @@
 # Usage guide
 
-The reference for the APIs and the servers of the 0.7.0 release: what each
+The reference for the APIs and the servers of the 0.8.0 release: what each
 layer gives you, how to call it, and its limits. For worked scenarios with
 output you can reproduce, see [examples.md](examples.md).
 

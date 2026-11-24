@@ -122,7 +122,7 @@ scip-java. Regenerate the recording with <code>vhs docs/demo.tape</code>.
 
 ```sh
 git clone https://github.com/badetitou/Model && cd Model
-# to build exactly the 0.7.0 release: git checkout v0.7.0
+# to build exactly the 0.8.0 release: git checkout v0.8.0
 ```
 
 **Try it on the bundled sample** (8 Java files, no indexer needed — the other
@@ -209,7 +209,7 @@ any origin. Without it, no CORS header is sent.
 
 ```toml
 [dependencies]
-model-factory = "0.7.0"
+model-factory = "0.8.0"
 ```
 
 ```rust
@@ -451,7 +451,7 @@ object type, a list root and a by-key lookup (`records`, `parameters`,
 
 | Document | For |
 |---|---|
-| [Usage guide](docs/usage.md) | the APIs of the 0.7.0 release, with a "which document for what" table |
+| [Usage guide](docs/usage.md) | the APIs of the 0.8.0 release, with a "which document for what" table |
 | [Examples](docs/examples.md) | nine end-to-end scenarios on a bundled sample project, all runnable |
 | [On-demand import](docs/on-demand.md) | demand-driven layers, scopes, caching |
 | [Traits](docs/traits.md) | the traits of each language's kinds |

@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "model-analysis"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "model-core",
@@ -1066,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "model-cli"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "model-analysis",
@@ -1078,7 +1078,7 @@ dependencies = [
 
 [[package]]
 name = "model-core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1086,7 +1086,7 @@ dependencies = [
 
 [[package]]
 name = "model-detect"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "ignore",
@@ -1095,7 +1095,7 @@ dependencies = [
 
 [[package]]
 name = "model-factory"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "model-analysis",
@@ -1116,7 +1116,7 @@ dependencies = [
 
 [[package]]
 name = "model-ffi"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "model-core",
  "model-factory",
@@ -1125,7 +1125,7 @@ dependencies = [
 
 [[package]]
 name = "model-fm3"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1133,7 +1133,7 @@ dependencies = [
 
 [[package]]
 name = "model-graphql"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -1156,7 +1156,7 @@ dependencies = [
 
 [[package]]
 name = "model-index"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "ignore",
@@ -1168,7 +1168,7 @@ dependencies = [
 
 [[package]]
 name = "model-lang-java"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "ignore",
@@ -1183,7 +1183,7 @@ dependencies = [
 
 [[package]]
 name = "model-lang-pharo"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "ignore",
@@ -1193,7 +1193,7 @@ dependencies = [
 
 [[package]]
 name = "model-lang-python"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "ignore",
@@ -1206,7 +1206,7 @@ dependencies = [
 
 [[package]]
 name = "model-lang-typescript"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "model-core",
  "model-traits",
@@ -1219,7 +1219,7 @@ dependencies = [
 
 [[package]]
 name = "model-link"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "model-core",
@@ -1231,7 +1231,7 @@ dependencies = [
 
 [[package]]
 name = "model-mcp"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "model-analysis",
@@ -1247,7 +1247,7 @@ dependencies = [
 
 [[package]]
 name = "model-moose"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "model-core",
  "model-fm3",
@@ -1258,7 +1258,7 @@ dependencies = [
 
 [[package]]
 name = "model-scip"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "model-core",
@@ -1269,7 +1269,7 @@ dependencies = [
 
 [[package]]
 name = "model-session"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "model-core",
@@ -1281,7 +1281,7 @@ dependencies = [
 
 [[package]]
 name = "model-traits"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "model-core",
  "model-fm3",
@@ -1290,7 +1290,7 @@ dependencies = [
 
 [[package]]
 name = "model-treesitter"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "ignore",
@@ -1310,7 +1310,7 @@ dependencies = [
 
 [[package]]
 name = "model-wasm"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-graphql",

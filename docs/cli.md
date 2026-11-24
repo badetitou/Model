@@ -12,7 +12,7 @@ server, which keep the model in memory.
 
 The `model-cli` crate is listed in the repository release pipeline and published
 to [crates.io](https://crates.io) as **`model-cli`** when a version tag (e.g.
-`v0.7.0`) is released. **Whether a given version is already on crates.io depends
+`v0.8.0`) is released. **Whether a given version is already on crates.io depends
 on what has been published:** if you see `model-cli` on crates.io for the version
 you need, you can install the `model` binary:
 
