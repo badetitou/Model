@@ -2,6 +2,14 @@
 
 Claude Code plugin for code-model MCP tools.
 
+## Install
+
+```text
+/plugin install code-model --marketplace badetitou/model
+```
+
+This repository is the marketplace (`.claude-plugin/marketplace.json`, named `badetitou-model`), so the installed plugin id is `code-model@badetitou-model`.
+
 ## Setup (SessionStart)
 
 On `SessionStart`, `hooks/hooks.json` runs `scripts/install-model-mcp.sh`:

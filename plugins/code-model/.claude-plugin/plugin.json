@@ -1,5 +1,6 @@
 {
   "name": "code-model",
+  "icon": ".claude-plugin/icon.png",
   "description": "Code-model tools for Claude Code: query the in-memory model via MCP, with skills for context, impact, and architecture analysis.",
   "version": "0.1.0",
   "author": {

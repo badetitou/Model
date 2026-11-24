@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "badetitou-model",
+  "description": "Claude Code plugins for Model: query and analyse a code model through MCP.",
+  "owner": {
+    "name": "Benoît Verhaeghe",
+    "url": "https://github.com/badetitou"
+  },
+  "plugins": [
+    {
+      "name": "code-model",
+      "source": "./plugins/code-model",
+      "description": "Code-model tools for Claude Code: query the in-memory model via MCP, with skills for context, impact, and architecture analysis."
+    }
+  ]
+}
