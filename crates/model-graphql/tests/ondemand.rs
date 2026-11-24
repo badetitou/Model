@@ -219,6 +219,40 @@ fn fine_kind_fields_need_the_structure_layer_only() {
     }
 }
 
+#[test]
+fn code_metric_fields_need_the_structure_layer_only() {
+    use Layer::*;
+    for q in [
+        "{ methods { nodes { numberOfLinesOfCode cyclomaticComplexity } } }",
+        r#"{ classByKey(key: "k") { methods { numberOfLinesOfCode cyclomaticComplexity } } }"#,
+    ] {
+        assert_eq!(layers(q), [Structure], "{q}");
+    }
+}
+
+#[tokio::test]
+async fn code_metrics_are_available_without_indexing() {
+    let d = project("metrics");
+    let od = od(&d, Scope::All);
+    let data = ask(
+        &od,
+        "{ classes { nodes { methods { name numberOfLinesOfCode cyclomaticComplexity } } } }",
+    )
+    .await;
+    let classes = data["classes"]["nodes"].as_array().unwrap();
+    let run = classes
+        .iter()
+        .flat_map(|c| c["methods"].as_array().unwrap())
+        .find(|m| m["name"] == "run")
+        .unwrap();
+    assert_eq!(run["numberOfLinesOfCode"], 1);
+    assert_eq!(run["cyclomaticComplexity"], 1);
+    let r = od.last_report().unwrap();
+    assert_eq!(r.layers_run, [Layer::Structure]);
+    assert_eq!(r.indexing_events, 0);
+    let _ = std::fs::remove_dir_all(&d);
+}
+
 /// Concept types come from the model the session built: a query on one starts
 /// no indexer, and the type is there because the model has the kind.
 #[tokio::test]

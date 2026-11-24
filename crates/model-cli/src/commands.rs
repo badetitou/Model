@@ -373,7 +373,7 @@ pub fn analysis(args: &mut Args) -> Result<()> {
             "--pretty" => pretty = true,
             "-h" | "--help" => {
                 println!(
-                    "usage: model analysis <model.json> <metrics|cycles|unused|degrees> [--kinds <kind,kind>] [--limit <n>] [--pretty]"
+                    "usage: model analysis <model.json> <metrics|code-metrics|cycles|unused|degrees> [--kinds <kind,kind>] [--limit <n>] [--pretty]"
                 );
                 return Ok(());
             }

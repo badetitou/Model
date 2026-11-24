@@ -7,6 +7,11 @@ use serde::{Deserialize, Serialize};
 /// namespaced by convention: `java.annotations`, `http.endpoints`.
 pub type Props = BTreeMap<String, Value>;
 
+/// Number of cyclomatic decision points extracted from an entity's syntax
+/// (`if`, loops, `catch`, logical operators...). A frontend fact, not a
+/// derived metric: `model-analysis` computes cyclomatic complexity from it.
+pub const BRANCHES_PROP: &str = "complexity.branches";
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Value {

@@ -109,8 +109,10 @@ Propagation from one or more `--seed <key>` (repeatable). Options:
 
 ### `analysis`
 
-`model analysis <model.json> <metrics|cycles|unused|degrees>` with optional
-`--kinds`, `--limit`.
+`model analysis <model.json> <metrics|code-metrics|cycles|unused|degrees>` with
+optional `--kinds`, `--limit`. `code-metrics` reports LOC and cyclomatic
+complexity (model-wide, by file/language, and the `--limit` most complex
+entities).
 
 ## Timing
 

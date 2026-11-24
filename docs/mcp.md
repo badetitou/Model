@@ -52,7 +52,7 @@ The server exposes tools (names as registered by the server):
 | `model_query` | Find entities by key/filters (same semantics as `model query`). |
 | `model_context` | One entity plus callers/callees and `file:line` sites. |
 | `model_impact` | Propagation from seeds (direction, depth, kinds). |
-| `model_analysis` | `metrics`, `cycles`, `unused`, or `degrees`. |
+| `model_analysis` | `metrics`, `code-metrics` (LOC and cyclomatic complexity), `cycles`, `unused`, or `degrees`. |
 | `model_rebuild` | Reload JSON from disk or rebuild from `--root` if configured, then swap the model in memory. |
 
 Tool results are JSON text content (pretty-printed). On errors the server returns

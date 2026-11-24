@@ -74,7 +74,7 @@ struct ImpactArgs {
 
 #[derive(Deserialize, JsonSchema)]
 struct AnalysisArgs {
-    /// One of `metrics`, `cycles`, `unused`, `degrees`.
+    /// One of `metrics`, `code-metrics`, `cycles`, `unused`, `degrees`.
     name: String,
     /// Relation kinds, for example `calls,references`.
     kinds: Option<String>,
@@ -181,7 +181,9 @@ impl ModelMcp {
         json_result(&v)
     }
 
-    #[tool(description = "Run an analysis: metrics, cycles, unused, or degrees. Returns JSON.")]
+    #[tool(
+        description = "Run an analysis: metrics, code-metrics (LOC and cyclomatic complexity), cycles, unused, or degrees. Returns JSON."
+    )]
     fn model_analysis(
         &self,
         Parameters(args): Parameters<AnalysisArgs>,

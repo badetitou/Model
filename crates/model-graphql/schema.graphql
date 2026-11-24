@@ -52,6 +52,14 @@ type Annotation implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -156,6 +164,14 @@ type AnnotationType implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -264,6 +280,14 @@ type Class implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -372,6 +396,14 @@ type Comment implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -476,6 +508,14 @@ type Constant implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -580,6 +620,14 @@ type Constructor implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -707,6 +755,14 @@ interface Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -828,6 +884,14 @@ type Enum implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -922,6 +986,14 @@ type EnumConstant implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -1040,6 +1112,14 @@ type Field implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -1144,6 +1224,14 @@ type File implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -1252,6 +1340,14 @@ type Function implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -1356,6 +1452,14 @@ type HttpCall implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -1460,6 +1564,14 @@ type HttpEndpoint implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -1564,6 +1676,14 @@ type Interface implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -1677,6 +1797,14 @@ type LocalVariable implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -1781,6 +1909,14 @@ type Method implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -1927,6 +2063,14 @@ type Namespace implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -2054,6 +2198,14 @@ type Parameter implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -2158,6 +2310,14 @@ type PharoClass implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -2266,6 +2426,14 @@ type PharoExtensionMethod implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -2370,6 +2538,14 @@ type PharoMethod implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -2474,6 +2650,14 @@ type PharoTrait implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -2582,6 +2766,14 @@ type Property implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -2705,6 +2897,14 @@ type PythonModule implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -3221,6 +3421,14 @@ type Record implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -3385,6 +3593,14 @@ type RustEnumVariant implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -3489,6 +3705,14 @@ type RustImpl implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -3654,6 +3878,14 @@ type Struct implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -3762,6 +3994,14 @@ type Trait implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -3870,6 +4110,14 @@ type TsAbstractClass implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -3978,6 +4226,14 @@ type TsArrowFunction implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -4082,6 +4338,14 @@ type TsInterface implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -4190,6 +4454,14 @@ type TsModule implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -4298,6 +4570,14 @@ type TsNamespace implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -4406,6 +4686,14 @@ type TsTypeAlias implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -4510,6 +4798,14 @@ type TypeAlias implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -4614,6 +4910,14 @@ type TypeParameter implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.
@@ -4718,6 +5022,14 @@ type Variable implements Entity {
 	Language-specific facts (annotations, decorators...).
 	"""
 	props: JSON!
+	"""
+	Lines spanned by the entity's source extent (0 without a source).
+	"""
+	numberOfLinesOfCode: Int!
+	"""
+	1 + decision points for a callable; the sum of callable children for a container.
+	"""
+	cyclomaticComplexity: Int!
 	parent: Entity
 	"""
 	Enclosing entities, innermost first.

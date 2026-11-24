@@ -4,8 +4,8 @@
 
 use anyhow::{Result, bail};
 use model_analysis::{
-    Cycle, CycleOptions, Degree, DegreeOptions, Direction, Metrics, PropagateOptions, Propagation,
-    Unused, UnusedOptions,
+    CodeMetrics, CodeMetricsOptions, Cycle, CycleOptions, Degree, DegreeOptions, Direction,
+    Metrics, PropagateOptions, Propagation, Unused, UnusedOptions,
 };
 use model_core::{EntityRef, Model, RelationKind};
 use serde_json::{Value, json};
@@ -222,7 +222,7 @@ pub fn impact(
     })
 }
 
-/// `metrics`, `cycles`, `unused` or `degrees`, as a JSON value.
+/// `metrics`, `code-metrics`, `cycles`, `unused` or `degrees`, as a JSON value.
 pub fn analysis(
     model: &Model,
     name: &str,
@@ -234,6 +234,15 @@ pub fn analysis(
             &Metrics::default(),
             model,
         )?)?),
+        "code-metrics" => {
+            let report = model_analysis::run(
+                &CodeMetrics {
+                    options: CodeMetricsOptions { limit },
+                },
+                model,
+            )?;
+            Ok(serde_json::to_value(report)?)
+        }
         "cycles" => {
             let opts = CycleOptions {
                 kinds: (!kinds.is_empty()).then_some(kinds),
@@ -293,6 +302,8 @@ pub fn analysis(
             );
             Ok(json!({ "ranked": ranked }))
         }
-        other => bail!("unknown analysis {other:?} (metrics, cycles, unused, degrees)"),
+        other => {
+            bail!("unknown analysis {other:?} (metrics, code-metrics, cycles, unused, degrees)")
+        }
     }
 }

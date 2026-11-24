@@ -24,4 +24,4 @@ pub use metamodel::{KindId, KindInfo, Metamodel, TraitMask};
 pub use model::{EntityRef, MemoryStats, Model, RelationRef};
 pub use relation::{Provenance, RelationId, RelationKind, SiteFlags};
 pub use source::Range;
-pub use value::{Props, Value};
+pub use value::{BRANCHES_PROP, Props, Value};

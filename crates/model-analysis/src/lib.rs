@@ -11,6 +11,7 @@
 
 use model_core::Model;
 
+mod code_metrics;
 mod cycles;
 mod degree;
 mod derived;
@@ -19,6 +20,10 @@ mod metrics;
 mod quotient;
 mod unused;
 
+pub use code_metrics::{
+    CodeMetrics, CodeMetricsOptions, CodeMetricsReport, MetricRow, MetricTotals,
+    cyclomatic_complexity, lines_of_code,
+};
 pub use cycles::{Cycle, CycleOptions, Cycles};
 pub use degree::{Degree, DegreeOptions, Degrees};
 pub use derived::{DerivedRelation, DerivedRelations, InterfaceCalls};

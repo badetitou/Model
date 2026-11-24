@@ -31,7 +31,7 @@ Usage:
   model context <model.json> --key <key> [--relation <kind> ...] [--limit <n>] [--pretty]
   model impact <model.json> --seed <key> ... [--direction callers|callees|both]
                             [--depth <n>] [--kinds <kind,kind>] [--limit <n>] [--pretty]
-  model analysis <model.json> <metrics|cycles|unused|degrees>
+  model analysis <model.json> <metrics|code-metrics|cycles|unused|degrees>
                  [--kinds <kind,kind>] [--limit <n>] [--pretty]
   model help
 

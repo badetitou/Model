@@ -16,7 +16,8 @@ Structure (`../Structure`), its first client.
   `builder` (`ModelBuilder`: get-or-create by key, relations deduplicated,
   every occurrence site kept), `model` (frozen compact `Model`: interned
   strings, fixed rows, CSR relations/sites; views `EntityRef`/`RelationRef`),
-  `serial` (JSON, loaded through the builder), `strings` (interner).
+  `serial` (JSON, loaded through the builder), `strings` (interner),
+  `BRANCHES_PROP` (frontend fact behind cyclomatic complexity).
   `examples/memory.rs` measures the storage cost (design §3.2). `KindInfo` also
   carries optional `graphql_type`/`graphql_root` (concept names, set by the
   languages' data, serialised in the metamodel).
@@ -34,8 +35,9 @@ Structure (`../Structure`), its first client.
   runs a grammar's query (capture roles, nesting by extent), `apply.rs` makes
   entities/keys and resolves uses by name (`FragmentSet::compose`); per-file
   serialisable `Fragment` (`Extractor`, `load_fragments`, `FragmentStore`); `grammars.rs` registry (features
-  `java`, `typescript`, `python`); `queries/*.scm`. Captures documented in its
-  README. `tests/fixtures.rs` needs `MODEL_FIXTURES` (absolute path, e.g.
+  `java`, `typescript`, `python`); `queries/*.scm` (`@complexity.branch` →
+  `complexity.branches` int prop). Captures documented in its README.
+  `tests/fixtures.rs` needs `MODEL_FIXTURES` (absolute path, e.g.
   Structure's `fixtures/`), skipped otherwise; `examples/build_model.rs`.
 - `crates/model-lang-pharo` — direct Tonel frontend (`extract` on disk,
   `extract_sources` in memory): STON headers → classes/traits/methods,
@@ -74,12 +76,16 @@ Structure (`../Structure`), its first client.
 - `crates/model-cli` — bin `model` (`main.rs` dispatch, `commands.rs`, `load.rs`, `output.rs`):
   `detect`, `build` (atomic `--out`, default `--reindex never`), `query`,
   `context` (entity + callers + callees in one call), `impact`, `analysis`
-  (`metrics|cycles|unused|degrees`); JSON on stdout, progress on stderr,
+  (`metrics|code-metrics|cycles|unused|degrees`); JSON on stdout, progress on stderr,
   `MODEL_TIMING=1` reports the per-invocation load of `model.json` (measured
   ~1.9 s and ~1.1 GB peak RSS on a 212 MB export). Tests in `tests/cli.rs`
   drive the binary with `CARGO_BIN_EXE_model` and write fixtures under unique
   temp dirs. Stateless by design; a long-lived client should hold the model in
   memory rather than reload it.
+- `crates/model-analysis` — read-only `Analysis` over a frozen `Model`:
+  `Metrics` (structural counts), `CodeMetrics` (LOC from ranges, cyclomatic
+  complexity from `BRANCHES_PROP`), degrees, cycles, unused, impact, quotient,
+  `InterfaceCalls`. GraphQL and Moose export use the same helpers.
 - `crates/model-session` — `Session::require(&Scope, &Requirement)`: traits →
   layers (`layers.rs`: structure / resolution / derived, declarative, a trait
   needs resolution iff it carries relations), scope → files
@@ -112,31 +118,36 @@ Structure (`../Structure`), its first client.
   `ImportReport`; tolerant streaming reader `json`, FM3→kind/relation tables
   in `mapping`; entities keyed `moose:<id>`, props `moose.id`/`moose.fm3`/
   `moose.<prop>`) and `diff(left, right)` → `DiffReport` by FM3 class,
-  archetype and relation. Depends on core, traits, fm3 only.
+  archetype and relation. Depends on core, analysis, traits, fm3.
   `examples/import.rs`; `MOOSE_JSON=file cargo test -p model-moose` runs a
   real export. Export: `export_json`/`export_path` (`export.rs`, streaming,
-  hand-written JSON; class/container/domain tables in `mapping`; anchors need
+  hand-written JSON; class/container/domain tables in `mapping`; LOC and
+  cyclomatic complexity computed by `model-analysis`; anchors need
   the source files, see the module doc); `tests/export.rs` validates every
   property against the full FamixJava FM3 fixture and round-trips through the
   importer. `examples/export.rs`. Acceptance in Moose: load with
   `FamixJavaModel new importFromJSONStream:`.
 - `crates/model-ffi` — C ABI (cdylib + rlib) over a frozen `Model` for foreign
-  importers (Pharo UFFI). Depends on `model-core` (+ `serde_json` to open a
-  `model.json`) only: no language, no Famix. Optional feature `build` (off by
+  importers (Pharo UFFI). Depends on `model-core` + `model-analysis` (+ `serde_json`
+  to open a `model.json`): no language, no Famix. Optional feature `build` (off by
   default; test it with `cargo test -p model-ffi --features build`) adds
   `model_build`: sources → handle in-process via `model-factory`, no JSON, no
   cache, no indexer unless asked; hence `model-ffi` is published after
   `model-factory`. `model_open` → handle; flat
   columns (entities, relations, CSR sites, kinds/languages, `StrRef` strings
-  pointing into the model); `model_entity_props_json`; `model_char_offsets`
-  (byte columns → 1-based inclusive char offsets, Moose anchors). `unsafe` is
+  pointing into the model); `model_entity_props_json`; `model_entity_metrics`
+  and `model_entity_metrics_batch` (LOC + cyclomatic complexity);
+  `model_char_offsets` (byte columns → 1-based inclusive char offsets, Moose
+  anchors). `unsafe` is
   allowed here only, each block with `// SAFETY:` (user's agreement, 2026-11).
   `KindInfo.fm3` is empty for models built from sources: the client maps kind
-  names to FM3 classes. Pharo side: Tonel sources in `pharo/src`
-  (`ModelLibrary` UFFI binding, `ModelImporter`, `BaselineOfModelMooseImporter`
-  depending on `github://moosetechnology/Famix:development/src`, groups
-  `Minimal` + `ModelJava`); parity with the JSON import checked on a small
-  Java project. Never read columns with
+  names to FM3 classes. Pharo side: the separate repository
+  [Model-Moose-Importer](https://github.com/badetitou/Model-Moose-Importer) holds
+  the Tonel sources (`ModelLibrary` UFFI binding, `ModelImporter`,
+  `BaselineOfModelMooseImporter` depending on
+  `github://moosetechnology/Famix:development/src`, groups `Minimal` +
+  `ModelJava`); parity with the JSON import checked on a small Java project.
+  Never read columns with
   `FFIExternalArray fromPointer:type:size:` (crashed the image): copy with
   `LibC memCopy:to:size:`.
 - `crates/model-detect` — `detect(root)`: languages, file counts, project

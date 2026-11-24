@@ -3,9 +3,11 @@
 //! [`model_session::Session`] ensures them (running only the layers they
 //! need, on the configured scope) and the query then runs on that model.
 //!
-//! A query that only reads `methods { name }` needs the structure layer:
-//! no SCIP index is read and no indexer is started. One that follows
-//! `outgoing(kind: "calls")` needs resolution.
+//! A query that only reads `methods { name numberOfLinesOfCode
+//! cyclomaticComplexity }` needs the structure layer: metrics are derived from
+//! facts the structure extraction already carries, so no SCIP index is read
+//! and no indexer is started. One that follows `outgoing(kind: "calls")` needs
+//! resolution.
 //!
 //! Fields not in the tables below are assumed to need every trait: a new
 //! field can cost performance until it is listed, never correctness. One
@@ -47,6 +49,8 @@ const ENTITY_FIELDS: &[&str] = &[
     "range",
     "nameRange",
     "props",
+    "numberOfLinesOfCode",
+    "cyclomaticComplexity",
     "entity",
     "entityByKey",
     "entities",

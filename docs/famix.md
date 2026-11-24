@@ -71,7 +71,8 @@ A model (or metamodel) is a JSON array of entities:
   Forward references are allowed (importers accept dangling references until
   the end of the file).
 - Primitive values are JSON strings, numbers and booleans. Derived properties
-  are not exported.
+  are not exported, except `numberOfLinesOfCode` and `cyclomaticComplexity`
+  computed by `model-analysis` at export time.
 - Because properties are opposites, the file lists only one end of each pair
   (usually the container or the owning side); the importer rebuilds the other.
 - A metamodel is exported in the same way, with `FM3` equal to `FM3.Package`,
@@ -142,7 +143,7 @@ classes that use the trait, from `FamixJavaGenerator`.
 | Trait | Properties | Composed by | Model | Status |
 |---|---|---|---|---|
 | `TNamedEntity` | `name` | everything named | `name` | covered |
-| `TSourceEntity` | `sourceAnchor`, `numberOfLinesOfCode` | everything with source | `file`, `range`; LOC = lines of `range` | covered / derivable |
+| `TSourceEntity` | `sourceAnchor`, `numberOfLinesOfCode` | everything with source | `file`, `range`; LOC = lines of `range` (`model_analysis::lines_of_code`, also exported to Moose) | covered / derivable |
 | `THasSignature` | `signature` | Method, Invocation, Lambda | the SCIP-like key includes parameter types | derivable |
 | `THasVisibility` | `visibility` | Class, Interface, Enum, Method, Attribute, AnnotationType | `props["visibility"]` is defined, but the Java query does not set it | gap (TS modifier query) |
 | `TCanBeAbstract` | `isAbstract` | Class, Method | none | gap (TS modifier query) |
@@ -180,7 +181,7 @@ classes that use the trait, from `FamixJavaGenerator`.
 | `TClass` | `isTestCase` (derived: JUnit) | Class | none | derivable (annotation `@Test` / supertype) |
 | `TSourceLanguage` | `sourceLanguage` | model | `language` | covered |
 | `TFileAnchor`, `TIndexedFileNavigation` | `fileName`, `startPos`, `endPos`, `encoding` | anchors | `file`, `range` | covered / derivable |
-| `TClassMetrics`, `TMethodMetrics`, `TLCOMMetrics`, `TCohesionCouplingMetrics` | `numberOfMethods`, `cyclomaticComplexity`, ... | Class, Method | analyses (design §7) | out of scope for the model |
+| `TClassMetrics`, `TMethodMetrics`, `TLCOMMetrics`, `TCohesionCouplingMetrics` | `numberOfMethods`, `cyclomaticComplexity`, ... | Class, Method | `CodeMetrics` + `@complexity.branch` facts | LOC and cyclomatic complexity derived and exported; the rest out of scope |
 | `TFile`, `TFolder`, `TFileSystemEntity`, `TFileNavigation` | | | `File` entity | out of scope |
 | `TTemplate`, `TTemplateUser`, `TFileInclude`, `TDereferencedInvocation`, `TGlobalVariable`, `TFunction`, `TModule`, `TTraitUsage`, `TTrait`, `TTypeAlias` | | other languages (C, C++, TypeScript, Pharo) | `Function`, `Variable`, `Trait`, `TypeAlias` kinds | covered where the kind exists; the rest is for generalisation (#13) |
 

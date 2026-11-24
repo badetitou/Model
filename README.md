@@ -273,10 +273,15 @@ fn print_call_counts(model: &Model, class_name: &str) {
 ## Moose from Pharo, without JSON
 
 [`model-ffi`](crates/model-ffi) exposes a frozen `Model` as flat arrays over a
-C ABI; the Pharo package [`Model-Moose-Importer`](pharo/README.md) reads them
-through UFFI and creates the FamixJava objects directly. Two entry points: a
-`model.json`, or the sources themselves (library built with
-`--features build`, the model is built in-process and no file is written).
+C ABI; the Pharo package
+[`Model-Moose-Importer`](https://github.com/badetitou/Model-Moose-Importer), in
+its own repository, reads them through UFFI and creates the FamixJava objects
+directly. Two entry points: a `model.json`, or the sources themselves (library
+built with `--features build`, the model is built in-process and no file is
+written). Both entry points also expose code metrics through
+`model_entity_metrics` / `model_entity_metrics_batch`, so importers can fill
+`numberOfLinesOfCode` and `cyclomaticComplexity` without re-reading the
+sources.
 
 ```bash
 cargo build --release -p model-ffi --features build
@@ -300,8 +305,8 @@ On `java/util` of the JDK (370 files, 65 k entities, 122 k sites), same image:
 Typings, accesses, invocations and references match the JSON import exactly;
 the remaining differences (file comments, `Parametric*` classes, implicit
 `self`) and what is not done yet are listed in the
-[importer README](pharo/README.md#parity-with-the-json-import). Only FamixJava
-has been tried.
+[importer README](https://github.com/badetitou/Model-Moose-Importer#parity-with-the-json-import).
+Only FamixJava has been tried.
 
 ## The metamodel
 
@@ -351,7 +356,7 @@ edges, and a "which crate do I need?" table).
 | [`model-index`](https://github.com/badetitou/Model/tree/main/crates/model-index) | runs SCIP indexers, staleness, document cache |
 | [`model-lang-pharo`](https://github.com/badetitou/Model/tree/main/crates/model-lang-pharo) | direct Tonel frontend: classes, methods, references, resolved sends |
 | [`model-lang-rust`](https://github.com/badetitou/Model/tree/main/crates/model-lang-rust) | rust-analyzer SCIP frontend: `impl` blocks, overrides, Rust kinds |
-| [`model-analysis`](https://github.com/badetitou/Model/tree/main/crates/model-analysis) | `Analysis` trait: metrics, degrees, cycles, unused, quotient, impact, derived relations |
+| [`model-analysis`](https://github.com/badetitou/Model/tree/main/crates/model-analysis) | `Analysis` trait: structural and code metrics (LOC, cyclomatic complexity), degrees, cycles, unused, quotient, impact, derived relations |
 | [`model-factory`](https://github.com/badetitou/Model/tree/main/crates/model-factory) | facade: detect → index → extract → link; `model_factory::analysis` re-export |
 | [`model-cli`](https://github.com/badetitou/Model/tree/main/crates/model-cli) | `model detect`, `build`, `query`, `context`, `impact`, `analysis` (JSON, agents) — [docs](docs/cli.md) |
 | [`model-session`](https://github.com/badetitou/Model/tree/main/crates/model-session) | demand-driven import: `require(scope, traits)` runs only the layers needed |
@@ -468,7 +473,7 @@ object type, a list root and a by-key lookup (`records`, `parameters`,
 | [Design](docs/design.md) | storage, pipeline, measurements |
 | [Baseline](docs/baseline.md) | measurements before epic #1 |
 | [VerveineJ comparison](docs/verveinej-comparison.md) | Model's Moose export measured against VerveineJ |
-| [Pharo importer](pharo/README.md) | loading a model into Moose from Pharo through FFI, without JSON |
+| [Pharo importer](https://github.com/badetitou/Model-Moose-Importer) | loading a model into Moose from Pharo through FFI, without JSON (separate repository) |
 
 ## Development
 
@@ -492,12 +497,13 @@ The demo GIF is recorded from [`docs/demo.tape`](https://github.com/badetitou/Mo
 
 ## Roadmap
 
-`model-analysis` is available as a generic socle (metrics, fan-in/fan-out,
-cycles, unused entities, quotient, propagation, derived relations), Pharo is
-modelled by a direct frontend, and rebuilds are incremental through the
-per-file fragment cache. `model-cli` now exposes those facts to scripts and
-agents. Next: a long-lived in-memory client, GraphQL analysis fields, and a
-persisted binary format for very large models. See
+`model-analysis` is available as a generic socle (structural and code metrics,
+fan-in/fan-out, cycles, unused entities, quotient, propagation, derived
+relations), Pharo is modelled by a direct frontend, and rebuilds are incremental
+through the per-file fragment cache. `model-cli`, the MCP server, GraphQL and
+the Moose export expose those facts to scripts, agents and clients. Next: a
+long-lived in-memory client and a persisted binary format for very large
+models. See
 [`docs/design.md`](https://github.com/badetitou/Model/blob/main/docs/design.md).
 
 ## License

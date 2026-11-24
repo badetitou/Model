@@ -29,6 +29,7 @@ baseline. Model adds a few captures.
 | `@reference.throws` + `@name` | `throws` clause type of the enclosing method |
 | `@access.read` / `.write` / `.read_write` / `.receiver` + `@name` | use of a variable by name: `accesses` with the matching site flags; resolved to a parameter or local of the enclosing member, else a field of an enclosing type, dropped when unknown |
 | `@prop.<key>` | the captured text is added to the `<key>` list prop of the innermost enclosing definition(s) |
+| `@complexity.branch` | a cyclomatic decision point; unique nodes are counted and stored as the `complexity.branches` int prop of the innermost enclosing member (Java, TypeScript, Python queries) |
 
 ## Fine kinds are data
 

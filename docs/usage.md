@@ -20,7 +20,7 @@ output you can reproduce, see [examples.md](examples.md).
 | [design.md](design.md) | storage layout, pipeline, measurements, design decisions |
 | [baseline.md](baseline.md) | the measurements taken before epic #1 |
 | [verveinej-comparison.md](verveinej-comparison.md) | the measured comparison of Model's Moose export with VerveineJ's, on VerveineJ's own sources |
-| [Pharo importer](../pharo/README.md) | load a model into Moose from Pharo through FFI, without JSON |
+| [Pharo importer](https://github.com/badetitou/Model-Moose-Importer) | load a model into Moose from Pharo through FFI, without JSON (separate repository) |
 
 The Rust snippets below are kept compiling by
 `crates/model-moose/tests/usage.rs` and `crates/model-session/tests/usage.rs`;

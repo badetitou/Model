@@ -174,6 +174,16 @@ fn analyses_run_on_a_saved_model() {
         .clone();
     assert!(ranked.iter().any(|r| r["key"] == CALL && r["out"] == 1));
     assert!(ranked.iter().any(|r| r["key"] == TARGET && r["in"] == 1));
+
+    let out = run(
+        fx.path(),
+        &["analysis", "model.json", "code-metrics", "--limit", "2"],
+    );
+    let value = json(&out);
+    assert_eq!(value["analysis"], "code-metrics");
+    assert_eq!(value["result"]["loc"], 4);
+    assert_eq!(value["result"]["cyclomatic"], 2);
+    assert_eq!(value["result"]["top"].as_array().expect("top").len(), 2);
 }
 
 #[test]

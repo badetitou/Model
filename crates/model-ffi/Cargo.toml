@@ -22,5 +22,6 @@ build = ["dep:model-factory"]
 
 [dependencies]
 model-core.workspace = true
+model-analysis.workspace = true
 serde_json.workspace = true
 model-factory = { workspace = true, optional = true }

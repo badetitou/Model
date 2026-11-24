@@ -60,6 +60,7 @@ async fn entity_by_key_with_containment_and_props() {
               ancestors { name }
               children { totalCount edges { node { kind name } } }
               methods: children(kind: METHOD) { totalCount }
+              numberOfLinesOfCode cyclomaticComplexity
            } }"#,
     )
     .await;
@@ -85,6 +86,34 @@ async fn entity_by_key_with_containment_and_props() {
         serde_json::json!({"kind": "CLASS", "name": "Inner"})
     );
     assert_eq!(e["methods"]["totalCount"], 2);
+    assert!(e["numberOfLinesOfCode"].as_u64().unwrap() > 0);
+    // `run` and `helper`, the two direct callable children of A.
+    assert_eq!(e["cyclomaticComplexity"], 2);
+}
+
+#[tokio::test]
+async fn code_metrics_are_typed_entity_fields() {
+    let mut b = ModelBuilder::new();
+    extract_sources(
+        &mut b,
+        &[(
+            "src/C.java",
+            "package p; class C { void f(boolean x) { if (x) return; } }",
+        )],
+        &ExtractOptions::default(),
+    )
+    .unwrap();
+    let s = schema(Arc::new(b.build()));
+    let d = run(
+        &s,
+        r#"{ entity(key: "model java . . p/C#f().") {
+              numberOfLinesOfCode cyclomaticComplexity props
+            } }"#,
+    )
+    .await;
+    assert_eq!(d["entity"]["numberOfLinesOfCode"], 1);
+    assert_eq!(d["entity"]["cyclomaticComplexity"], 2);
+    assert_eq!(d["entity"]["props"]["complexity.branches"], 1);
 }
 
 #[tokio::test]

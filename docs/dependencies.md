@@ -29,7 +29,8 @@ flowchart TB
 ```
 
 This is a **layering** view, not an edge list: some crates skip a layer
-(`analysis → core`, `moose → fm3`, `ffi → core`). The exact edges are in the
+(`analysis → core`, `moose → fm3`, `ffi → core`), while the Moose export and the
+FFI also use `model-analysis` for code metrics. The exact edges are in the
 tables below. Optional and dev-only edges are deliberately left out of the
 picture.
 
@@ -83,7 +84,7 @@ rust-analyzer only encodes in symbol names.
 
 | Crate | Normal | Optional | Dev | Role |
 |---|---|---|---|---|
-| [model-analysis](../crates/model-analysis) | core | — | — | metrics, degrees, cycles, unused, impact, derived relations |
+| [model-analysis](../crates/model-analysis) | core | — | — | structural and code metrics, degrees, cycles, unused, impact, derived relations |
 | [model-factory](../crates/model-factory) | analysis, core, detect, index, lang-java, lang-pharo, lang-python, lang-rust, lang-typescript, link, scip, treesitter | — | — | facade: detect → index → extract → link |
 
 `model-factory` is the only crate that pulls every source of facts. Clients
@@ -97,8 +98,8 @@ should depend on it rather than assembling the frontends themselves.
 | [model-mcp](../crates/model-mcp) | analysis, cli, core, factory | — | — | MCP server keeping a model in memory |
 | [model-session](../crates/model-session) | core, factory, traits | — | — | `require(scope, traits)`, only the needed layers |
 | [model-graphql](../crates/model-graphql) | analysis, core, traits | factory, session (feature `server`, on by default) | lang-pharo, treesitter | GraphQL server / executable schema |
-| [model-moose](../crates/model-moose) | core, fm3, traits | — | fm3 (duplicate), treesitter | Moose JSON import/export and diff |
-| [model-ffi](../crates/model-ffi) | core | factory (feature `build`) | — | C ABI over a frozen `Model` |
+| [model-moose](../crates/model-moose) | core, analysis, fm3, traits | — | fm3 (duplicate), treesitter | Moose JSON import/export and diff |
+| [model-ffi](../crates/model-ffi) | core, analysis | factory (feature `build`) | — | C ABI over a frozen `Model` |
 | [model-wasm](../crates/model-wasm) | core, graphql (without `server`), lang-java, lang-pharo, lang-python, lang-typescript, treesitter | — | — | in-browser build + GraphQL |
 
 Dev edges do not change what a downstream user compiles. They matter for local
@@ -119,7 +120,7 @@ frontends.
 | Build a whole codebase | [model-factory](../crates/model-factory) | [model-session](../crates/model-session) for on-demand |
 | Run generic analyses | [model-analysis](../crates/model-analysis) | re-exported as `model_factory::analysis` |
 | Exchange with Moose / Famix | [model-fm3](../crates/model-fm3), [model-traits](../crates/model-traits) | [model-moose](../crates/model-moose) |
-| Embed in Pharo through UFFI | [model-ffi](../crates/model-ffi) | feature `build` to build from sources |
+| Embed in Pharo through UFFI | [model-ffi](../crates/model-ffi) | feature `build` to build from sources; [Model-Moose-Importer](https://github.com/badetitou/Model-Moose-Importer) on the Pharo side |
 | Run in a browser | [model-wasm](../crates/model-wasm) | GraphQL without the `server` feature |
 
 ## Invariants and maintenance

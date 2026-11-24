@@ -126,3 +126,18 @@
     (generic_type (identifier) @name)
   ])
   (#not-match? @name "^(int|str|float|bool|bytes|complex|list|dict|set|frozenset|tuple|object|None|Any|Optional|Union|List|Dict|Set|Tuple|Callable|Iterable|Iterator|Sequence|Mapping|Type|Self)$")) @reference.declared_type)))
+
+; Cyclomatic complexity: one decision point per branch. Comprehension `for`
+; and `if` clauses count, as do `and`/`or` and `match` cases.
+[
+  (if_statement)
+  (elif_clause)
+  (for_statement)
+  (while_statement)
+  (except_clause)
+  (match_statement)
+  (case_clause)
+  (boolean_operator)
+  (for_in_clause)
+  (if_clause)
+] @complexity.branch

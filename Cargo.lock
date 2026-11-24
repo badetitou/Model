@@ -1119,6 +1119,7 @@ dependencies = [
 name = "model-ffi"
 version = "0.8.0"
 dependencies = [
+ "model-analysis",
  "model-core",
  "model-factory",
  "serde_json",
@@ -1262,6 +1263,7 @@ dependencies = [
 name = "model-moose"
 version = "0.8.0"
 dependencies = [
+ "model-analysis",
  "model-core",
  "model-fm3",
  "model-traits",

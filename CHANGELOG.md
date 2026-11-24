@@ -10,6 +10,18 @@
   `Implements`/`Overrides` relations, Rust modules and enum variants.
   Wired into `model-factory` and the release list; two new GraphQL concepts
   (`RustImpl`, `RustEnumVariant`).
+- Code metrics: LOC (source range span) and cyclomatic complexity (frontend
+  branch facts, Java/TypeScript/Python). Available through `model-analysis`
+  (`CodeMetrics`, `lines_of_code`, `cyclomatic_complexity`), the CLI/MCP
+  `code-metrics` analysis, typed GraphQL fields `numberOfLinesOfCode` and
+  `cyclomaticComplexity`, the Moose export, and the FFI for importers.
+
+### Changed
+
+- The `pharo/` directory has been removed: the Tonel sources of the Pharo
+  importer now live in the separate
+  [Model-Moose-Importer](https://github.com/badetitou/Model-Moose-Importer)
+  repository. Documentation links point there.
 
 ## 0.8.0 — 2026-11-24
 
@@ -108,11 +120,13 @@ goes from fourteen to fifteen crates.
   the model of a source tree in-process through `model-factory` and returns the
   same handle as `model_open`; `model_has_build`, `model_build_report`. No
   cache and no indexer unless asked.
-- `pharo/`: Tonel sources (`ModelLibrary` UFFI binding, `ModelImporter`) and
+- `pharo/` (now
+  [Model-Moose-Importer](https://github.com/badetitou/Model-Moose-Importer)):
+  Tonel sources (`ModelLibrary` UFFI binding, `ModelImporter`) and
   `BaselineOfModelMooseImporter` (groups `Minimal` and `ModelJava`). On
   java/util: 8.7 s through Moose JSON, 2.3 s from a `model.json`, 2.5 s from the
   sources in one call. Remaining differences with the JSON import are listed in
-  `pharo/README.md`.
+  [the importer README](https://github.com/badetitou/Model-Moose-Importer#parity-with-the-json-import).
 
 ### Fixed
 

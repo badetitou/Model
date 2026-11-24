@@ -690,6 +690,29 @@ const ENTITY_SPECS: &[Spec] = &[
         },
     },
     Spec {
+        name: "numberOfLinesOfCode",
+        ty: || TypeRef::named_nn(TypeRef::INT),
+        args: no_args,
+        iface_desc: Some("Lines spanned by the entity's source extent (0 without a source)."),
+        obj_desc: Some("Lines spanned by the entity's source extent (0 without a source)."),
+        resolve: |c| val(model_analysis::lines_of_code(ent(c)?.1)),
+    },
+    Spec {
+        name: "cyclomaticComplexity",
+        ty: || TypeRef::named_nn(TypeRef::INT),
+        args: no_args,
+        iface_desc: Some(
+            "1 + decision points for a callable; the sum of callable children for a container.",
+        ),
+        obj_desc: Some(
+            "1 + decision points for a callable; the sum of callable children for a container.",
+        ),
+        resolve: |c| {
+            let (sh, e) = ent(c)?;
+            val(model_analysis::cyclomatic_complexity(&sh.model, e.id()))
+        },
+    },
+    Spec {
         name: "parent",
         ty: || TypeRef::named("Entity"),
         args: no_args,

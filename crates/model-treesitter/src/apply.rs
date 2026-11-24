@@ -4,8 +4,8 @@
 use std::collections::HashMap;
 
 use model_core::{
-    Descriptor, EntityId, EntityKind, KindId, LanguageId, ModelBuilder, Provenance, Range,
-    RelationKind, SiteFlags, SymbolKey, TraitMask, Value,
+    BRANCHES_PROP, Descriptor, EntityId, EntityKind, KindId, LanguageId, ModelBuilder, Provenance,
+    Range, RelationKind, SiteFlags, SymbolKey, TraitMask, Value,
 };
 
 use crate::ExtractStats;
@@ -199,6 +199,17 @@ pub(crate) fn apply(
                         v.push(value);
                     }
                 }
+            }
+        }
+
+        for branch in &f.branches {
+            let owner = branch.owner.map_or(file, |i| ids[i]);
+            let entry = b
+                .props_mut(owner)
+                .entry(BRANCHES_PROP.to_string())
+                .or_insert(Value::Int(0));
+            if let Value::Int(n) = entry {
+                *n += 1;
             }
         }
 
