@@ -66,6 +66,15 @@ Structure (`../Structure`), its first client.
   for indexed languages) → link (`Lift`, or `Create` without grammar).
   `examples/build.rs`: defaults to `--reindex never`; never run indexers or
   builds on fixtures (the user does).
+- `crates/model-cli` — bin `model` (`main.rs` dispatch, `commands.rs`, `load.rs`, `output.rs`):
+  `detect`, `build` (atomic `--out`, default `--reindex never`), `query`,
+  `context` (entity + callers + callees in one call), `impact`, `analysis`
+  (`metrics|cycles|unused|degrees`); JSON on stdout, progress on stderr,
+  `MODEL_TIMING=1` reports the per-invocation load of `model.json` (measured
+  ~1.9 s and ~1.1 GB peak RSS on a 212 MB export). Tests in `tests/cli.rs`
+  drive the binary with `CARGO_BIN_EXE_model` and write fixtures under unique
+  temp dirs. Stateless by design; a long-lived client should hold the model in
+  memory rather than reload it.
 - `crates/model-session` — `Session::require(&Scope, &Requirement)`: traits →
   layers (`layers.rs`: structure / resolution / derived, declarative, a trait
   needs resolution iff it carries relations), scope → files

@@ -16,6 +16,8 @@ members = [
     "crates/model-lang-java",
     "crates/model-lang-typescript",
     "crates/model-factory",
+    "crates/model-cli",
+    "crates/model-mcp",
     "crates/model-session",
     "crates/model-analysis",
     "crates/model-graphql",
@@ -44,6 +46,7 @@ model-lang-python = { path = "crates/model-lang-python", version = "0.7.0" }
 model-lang-java = { path = "crates/model-lang-java", version = "0.7.0" }
 model-lang-typescript = { path = "crates/model-lang-typescript", version = "0.7.0" }
 model-factory = { path = "crates/model-factory", version = "0.7.0" }
+model-cli = { path = "crates/model-cli", version = "0.7.0" }
 model-session = { path = "crates/model-session", version = "0.7.0" }
 model-analysis = { path = "crates/model-analysis", version = "0.7.0" }
 model-graphql = { path = "crates/model-graphql", version = "0.7.0", default-features = false }
