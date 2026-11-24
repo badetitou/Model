@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "model": {
+      "command": "${CLAUDE_PLUGIN_DATA}/bin/model-mcp",
+      "args": ["--model", "${CLAUDE_PLUGIN_DATA}/model.json"],
+      "env": {}
+    }
+  }
+}

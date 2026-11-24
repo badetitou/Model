@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `model-cli` (new crate, bin `model`): `detect` a source tree, `build` a model
+  with atomic JSON output, `query` and `context` an entity, `impact` a seed, and
+  run `metrics`, `cycles`, `unused` or `degrees`. Data commands print JSON for
+  scripts and agents; `MODEL_TIMING=1` reports the cost of reloading a saved
+  model on each stateless invocation.
+
 ## 0.7.0 — 2026-11-23
 
 Model in the browser, and the analyses visible over GraphQL. A new private

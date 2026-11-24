@@ -163,6 +163,26 @@ Useful flags:
 | `--index-command LANGUAGE=COMMAND` | your own command produces the index of a language (also `MODEL_INDEX_COMMAND`); see [usage](docs/usage.md) |
 | `--json model.json` | export the model |
 
+**Use the command line** — `model-cli` builds a model once, then queries the
+saved JSON. Install with `cargo install model-cli` when a published version is
+available (see [docs/cli.md](docs/cli.md) for details and the source-checkout
+alternative `cargo run -q -p model-cli -- …`).
+
+```sh
+model detect ../Structure --json
+model build ../Structure --out model.json --reindex never
+model query model.json --kind method --limit 20
+model context model.json --key '<entity key>'
+model impact model.json --seed '<entity key>' --direction callers
+model analysis model.json cycles
+```
+
+`MODEL_TIMING=1` prints the time spent loading `model.json`. A CLI is stateless:
+that load is paid on **every** invocation — measured at ~1.9 s and ~1.1 GB peak
+RSS on a 212 MB export (455k entities, 1.25M relations). Scripts and agents
+making several queries should keep the model in memory through the library,
+[GraphQL](#explore-it-over-graphql), or the [MCP server](docs/mcp.md).
+
 **Explore it over GraphQL** (GraphiQL included):
 
 ```sh
@@ -328,6 +348,7 @@ go into `props`, and plugins can add relations under their own name.
 | [`model-lang-pharo`](https://github.com/badetitou/Model/tree/main/crates/model-lang-pharo) | direct Tonel frontend: classes, methods, references, resolved sends |
 | [`model-analysis`](https://github.com/badetitou/Model/tree/main/crates/model-analysis) | `Analysis` trait: metrics, degrees, cycles, unused, quotient, impact, derived relations |
 | [`model-factory`](https://github.com/badetitou/Model/tree/main/crates/model-factory) | facade: detect → index → extract → link; `model_factory::analysis` re-export |
+| [`model-cli`](https://github.com/badetitou/Model/tree/main/crates/model-cli) | `model detect`, `build`, `query`, `context`, `impact`, `analysis` (JSON, agents) — [docs](docs/cli.md) |
 | [`model-session`](https://github.com/badetitou/Model/tree/main/crates/model-session) | demand-driven import: `require(scope, traits)` runs only the layers needed |
 | [`model-fm3`](https://github.com/badetitou/Model/tree/main/crates/model-fm3) | reads Moose FM3 metamodels exported as JSON |
 | [`model-traits`](https://github.com/badetitou/Model/tree/main/crates/model-traits) | traits as data, generated from the FamixJava FM3; `has_trait` / `of_trait` |
@@ -465,9 +486,9 @@ The demo GIF is recorded from [`docs/demo.tape`](https://github.com/badetitou/Mo
 `model-analysis` is available as a generic socle (metrics, fan-in/fan-out,
 cycles, unused entities, quotient, propagation, derived relations), Pharo is
 modelled by a direct frontend, and rebuilds are incremental through the
-per-file fragment cache. Next: a `model-cli`
-(`model detect|build|query <path>`), GraphQL analysis fields, and a persisted
-binary format for very large models. See
+per-file fragment cache. `model-cli` now exposes those facts to scripts and
+agents. Next: a long-lived in-memory client, GraphQL analysis fields, and a
+persisted binary format for very large models. See
 [`docs/design.md`](https://github.com/badetitou/Model/blob/main/docs/design.md).
 
 ## License

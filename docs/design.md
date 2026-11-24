@@ -61,7 +61,7 @@ model-core         metamodel + builder + navigation API      (serde only)
         ^
   model-session    `require(scope, traits)`: only the layers needed ✅
         ^
-  model-cli        `model detect|build|query <path>`             ⏳
+  model-cli        `model detect|build|query|context|impact|analysis` ✅
   model-graphql    GraphQL plugin (part 2)                      ✅
 ```
 
@@ -719,8 +719,8 @@ Each step is one PR, Structure's tests and goldens staying green:
    converts `Model` to its IR, then classify/matrix/impact move to `Model`
    directly and `structure-ir`'s `Graph` is removed. Language detection in
    Structure uses `model-detect` (gaining multi-language roots).
-6. **model-graphql** ✅; **model-analysis** ✅ (generic socle); **model-cli**
-   to do.
+6. **model-graphql** ✅; **model-analysis** ✅ (generic socle); **model-cli** ✅
+   (JSON commands over a saved model).
 
 ## 10. Famix-like models (epic #1)
 
@@ -734,7 +734,11 @@ separate `model-moose` crate.
 ## 11. Open questions
 
 - Persisted binary format (bincode-like columns, or memory-mapped) for big
-  models and the GraphQL server; JSON is 2.3× the in-memory size.
+  models and the GraphQL server; JSON is 2.3× the in-memory size. `model-cli`
+  deserialises through the builder on every invocation (`MODEL_TIMING=1`
+  reports the cost: ~1.9 s and ~1.1 GB peak RSS for a 212 MB export with 455k
+  entities), so a session making several queries needs a long-lived client
+  holding the frozen model instead.
 - Incremental rebuild: **decided for tree-sitter facts (§5.1)**, open for the
   rest. A file's fragment can be replaced and the model composed again
   without reading any other file; composition itself is still a full pass
