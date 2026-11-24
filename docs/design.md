@@ -66,10 +66,14 @@ model-core         metamodel + builder + navigation API      (serde only)
   model-graphql    GraphQL plugin (part 2)                      ✅
 ```
 
-Dependencies only point up to `model-core`. Grammar crates live behind Cargo
-features (`java`, `python`, `typescript`; all enabled by default) so a
-client only compiles the grammars it needs (Structure's WASM build in
-particular).
+Dependencies only point up to `model-core` (other `model-*` crates go through
+the layers above it). Grammar crates live behind Cargo features (`java`,
+`python`, `typescript`; all enabled by default) so a client only compiles the
+grammars it needs (Structure's WASM build in particular).
+
+The exact dependency edges — normal, optional features and dev-only — are in
+[dependencies.md](dependencies.md). That page is the source to update when a
+crate gains or loses a dependency.
 
 ## 3. Metamodel (`model-core`)
 

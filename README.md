@@ -337,6 +337,10 @@ go into `props`, and plugins can add relations under their own name.
 
 ## Crates
 
+The crate list with roles is below; the dependency graph is in
+[docs/dependencies.md](docs/dependencies.md) (layers, exact normal/optional/dev
+edges, and a "which crate do I need?" table).
+
 | Crate | Role |
 |---|---|
 | [`model-core`](https://github.com/badetitou/Model/tree/main/crates/model-core) | metamodel, SCIP-like keys, `ModelBuilder`, compact `Model`, JSON |
@@ -454,8 +458,11 @@ object type, a list root and a by-key lookup (`records`, `parameters`,
 | Document | For |
 |---|---|
 | [Usage guide](docs/usage.md) | the APIs of the 0.8.0 release, with a "which document for what" table |
+| [Crate dependencies](docs/dependencies.md) | which `model-*` crate depends on which, with optional/dev edges |
 | [Examples](docs/examples.md) | nine end-to-end scenarios on a bundled sample project, all runnable |
 | [On-demand import](docs/on-demand.md) | demand-driven layers, scopes, caching |
+| [CLI](docs/cli.md) | `model detect|build|query|context|impact|analysis` |
+| [MCP server](docs/mcp.md) | stdio MCP server that keeps a model in memory for agents |
 | [Traits](docs/traits.md) | the traits of each language's kinds |
 | [Famix](docs/famix.md) | Famix/Fame analysis and conformity matrix |
 | [Design](docs/design.md) | storage, pipeline, measurements |

@@ -9,14 +9,18 @@ output you can reproduce, see [examples.md](examples.md).
 | Document | Read it to... |
 |---|---|
 | [README](../README.md) | understand what Model is, build a first model, see the crates |
+| [dependencies.md](dependencies.md) | see which `model-*` crate depends on which, including optional features and dev-only edges |
 | **usage.md** (this page) | look up an API: kinds, traits, relations, sessions, GraphQL, fragments, Moose, index command |
 | [examples.md](examples.md) | follow nine end-to-end scenarios on a sample project (`docs/examples/shop`), with commands, output and pitfalls |
 | [on-demand.md](on-demand.md) | understand on-demand import: which query costs which layer, scopes, caching, troubleshooting |
+| [cli.md](cli.md) | install and use `model detect|build|query|context|impact|analysis` |
+| [mcp.md](mcp.md) | use the stdio MCP server that keeps a model in memory for agents |
 | [traits.md](traits.md) | see which traits the kinds of each language carry |
 | [famix.md](famix.md) | compare Model with FamixJava / Fame (analysis written before epic #1: its "Gap" tables are history) |
 | [design.md](design.md) | storage layout, pipeline, measurements, design decisions |
 | [baseline.md](baseline.md) | the measurements taken before epic #1 |
 | [verveinej-comparison.md](verveinej-comparison.md) | the measured comparison of Model's Moose export with VerveineJ's, on VerveineJ's own sources |
+| [Pharo importer](../pharo/README.md) | load a model into Moose from Pharo through FFI, without JSON |
 
 The Rust snippets below are kept compiling by
 `crates/model-moose/tests/usage.rs` and `crates/model-session/tests/usage.rs`;
