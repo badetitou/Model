@@ -1,9 +1,10 @@
 //! C ABI over a frozen [`Model`](model_core::Model), for foreign importers
 //! (Pharo through UFFI, ...).
 //!
-//! Depends on `model-core` only (plus `model-factory` behind the optional
-//! `build` feature): it exposes raw columns and tables, with no
-//! knowledge of any language or of Famix. Mapping to a target metamodel
+//! Depends on `model-core` and `model-analysis` (plus `model-factory`
+//! behind the optional `build` feature): it exposes raw columns, tables and
+//! derived code metrics, with no knowledge of any language or of Famix.
+//! Mapping to a target metamodel
 //! (FM3 class per kind, containers, associations) is the client's business,
 //! driven by [`KindInfo`](model_core::KindInfo) (`kind_fm3`).
 //!
@@ -367,6 +368,95 @@ pub unsafe extern "C" fn model_entity_props_json(
     }
 }
 
+/// LOC and cyclomatic complexity of an entity, as computed by
+/// `model_analysis`. Writes `*loc` and `*cyclomatic`; returns 0, or -1 with
+/// the reason in `model_last_error` for a null handle, null output pointer
+/// or unknown entity.
+///
+/// # Safety
+/// `h` is null or a live handle from `model_open` (not shared with another
+/// thread); `loc` and `cyclomatic` are null or writable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn model_entity_metrics(
+    h: *const Handle,
+    entity: u32,
+    loc: *mut u32,
+    cyclomatic: *mut u32,
+) -> i32 {
+    if loc.is_null() || cyclomatic.is_null() {
+        set_error("null argument");
+        return -1;
+    }
+    // SAFETY: `h` is null or a live, unshared handle by the caller's contract.
+    let Some(h) = (unsafe { handle(h) }) else {
+        set_error("null handle");
+        return -1;
+    };
+    let id = EntityId::from_index(entity);
+    let Some(e) = h.model.entity(id) else {
+        set_error("unknown entity");
+        return -1;
+    };
+    let lines = model_analysis::lines_of_code(e);
+    let cyclo = model_analysis::cyclomatic_complexity(&h.model, id);
+    // SAFETY: `loc` and `cyclomatic` are writable by the caller's contract.
+    unsafe {
+        *loc = lines;
+        *cyclomatic = cyclo;
+    }
+    0
+}
+
+/// LOC and cyclomatic complexity for `count` consecutive entities starting at
+/// `first`, written to `locs` and `cyclos` (each `count` `u32`, in entity id
+/// order). Unknown ids get `0`. Returns 0, or -1 with the reason in
+/// `model_last_error` for a null handle or null output pointer.
+///
+/// # Safety
+/// `h` is null or a live handle from `model_open` (not shared with another
+/// thread); `locs` and `cyclos` are each null (only when `count` is 0) or
+/// writable for `count` `u32`, without overlapping.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn model_entity_metrics_batch(
+    h: *const Handle,
+    first: u32,
+    count: u32,
+    locs: *mut u32,
+    cyclos: *mut u32,
+) -> i32 {
+    if count > 0 && (locs.is_null() || cyclos.is_null()) {
+        set_error("null argument");
+        return -1;
+    }
+    // SAFETY: `h` is null or a live, unshared handle by the caller's contract.
+    let Some(h) = (unsafe { handle(h) }) else {
+        set_error("null handle");
+        return -1;
+    };
+    if count == 0 {
+        return 0;
+    }
+    // SAFETY: both buffers are writable for `count` u32 and do not overlap,
+    // by the caller's contract (and `count > 0` here).
+    let (locs, cyclos) = unsafe {
+        (
+            std::slice::from_raw_parts_mut(locs, count as usize),
+            std::slice::from_raw_parts_mut(cyclos, count as usize),
+        )
+    };
+    for (i, (loc, cyclo)) in locs.iter_mut().zip(cyclos).enumerate() {
+        let Some(index) = first.checked_add(u32::try_from(i).unwrap_or(u32::MAX)) else {
+            break;
+        };
+        let id = EntityId::from_index(index);
+        if let Some(e) = h.model.entity(id) {
+            *loc = model_analysis::lines_of_code(e);
+            *cyclo = model_analysis::cyclomatic_complexity(&h.model, id);
+        }
+    }
+    0
+}
+
 /// Converts `n` ranges of the source file `path` (flat quadruples as in the
 /// columns) to character offsets, as the Moose `IndexedFileAnchor` wants
 /// them: `out[2 * i]` is the 1-based offset of the first character,
@@ -467,6 +557,52 @@ mod tests {
             assert_eq!(json, br#"{"x":1}"#);
             assert!(model_entity_props_json(h, 99, &mut len).is_null());
             assert_eq!(len, 0);
+            model_free(h);
+        }
+    }
+
+    fn metrics_json() -> String {
+        use model_core::{BRANCHES_PROP, EntityKind, ModelBuilder, Range, Value};
+        let mut b = ModelBuilder::new();
+        let c = b.entity("k C", EntityKind::Class, "C");
+        let m = b.entity("k m", EntityKind::Method, "m");
+        b.set_parent(m, Some(c));
+        b.set_source(c, "C.java", Range::new(1, 0, 8, 0), None);
+        b.set_source(m, "C.java", Range::new(2, 0, 6, 0), None);
+        b.set_prop(m, BRANCHES_PROP, Value::Int(2));
+        serde_json::to_string(&b.build()).expect("serialise")
+    }
+
+    #[test]
+    fn entity_metrics_over_the_abi() {
+        let path = temp("metrics.json", &metrics_json());
+        let c = CString::new(path.to_str().expect("utf8")).expect("cstring");
+        // SAFETY: valid path; output pointers are writable; handle freed once.
+        unsafe {
+            let h = model_open(c.as_ptr());
+            assert!(!h.is_null());
+            let mut loc = 0;
+            let mut cyclo = 0;
+            assert_eq!(model_entity_metrics(h, 0, &mut loc, &mut cyclo), 0);
+            assert_eq!(loc, 8);
+            assert_eq!(cyclo, 3); // the `m` child: 1 + 2 branches
+            assert_eq!(model_entity_metrics(h, 1, &mut loc, &mut cyclo), 0);
+            assert_eq!(loc, 5);
+            assert_eq!(cyclo, 3);
+            assert_eq!(model_entity_metrics(h, 99, &mut loc, &mut cyclo), -1);
+            let mut locs = [0u32; 2];
+            let mut cyclos = [0u32; 2];
+            assert_eq!(
+                model_entity_metrics_batch(h, 0, 2, locs.as_mut_ptr(), cyclos.as_mut_ptr()),
+                0
+            );
+            assert_eq!(locs, [8, 5]);
+            assert_eq!(cyclos, [3, 3]);
+            // A zero-length batch accepts null buffers (no slice is built).
+            assert_eq!(
+                model_entity_metrics_batch(h, 0, 0, std::ptr::null_mut(), std::ptr::null_mut()),
+                0
+            );
             model_free(h);
         }
     }

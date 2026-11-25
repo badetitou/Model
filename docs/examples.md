@@ -1,9 +1,10 @@
 # Examples: a cookbook
 
-Nine end-to-end scenarios on one small project, with the exact commands, the
-output to expect and what can go wrong. Every command here was run on the
+Ten end-to-end scenarios on one small project, with the exact commands, the
+output to expect and what can go wrong. Scenarios a–i were run on the
 0.4.0 release branch and the output quoted is the real one (timings
-aside). The scenarios that have a Rust program or a test behind them say so:
+aside); scenario j is new and its output is intentionally omitted. The
+scenarios that have a Rust program or a test behind them say so:
 `cargo test --workspace` runs them, so this page cannot drift from the code.
 
 New here? Read the [README](../README.md) first, then this page; the
@@ -20,6 +21,7 @@ New here? Read the [README](../README.md) first, then this page; the
 | [g](#g-a-project-scip-java-cannot-drive) | `--index-command` | `build` example |
 | [h](#h-declare-a-new-language) | query file, `kinds.json`, concept names | `new_concept` example + test |
 | [i](#i-generic-analyses) | degrees, cycles, unused, impact | `tour` example |
+| [j](#j-project-the-graph-and-ask-graph-questions) | `model.graph/1` projection, path, explain, communities | `model graph` commands |
 
 ## The sample project
 
@@ -721,6 +723,79 @@ to add with `DerivedRelations::apply`, or is requested through a session with
 [`crates/model-factory/tests/tour.rs`](../crates/model-factory/tests/tour.rs)
 runs the tour and asserts these lines.
 
+## j. Project the graph and ask graph questions
+
+The sample is small (80 entities, 77 relations, 81 sites — scenario a), but it
+is enough to exercise every `model graph` command. **Output is omitted here**:
+run the commands in your checkout to see the result instead of relying on
+quoted numbers.
+
+```sh
+# 1. Build model.json, as in scenarios a and e.
+cargo run -q -p model-factory --example build -- docs/examples/shop --no-scip --no-cache --json /tmp/shop.json
+
+# 2. Full projection to a file.
+cargo run -q -p model-cli -- graph projection /tmp/shop.json --out /tmp/shop.graph.json --pretty
+
+# 3. Markdown report: summary, communities, top god nodes, cross-community
+#    relations and suggested questions (output omitted).
+cargo run -q -p model-cli -- graph report /tmp/shop.json --top 10
+
+# 4. Find the keys to connect; copy them from this query (output omitted).
+cargo run -q -p model-cli -- query /tmp/shop.json --name plus --kind method
+
+# 5. A path between two keys, and the neighborhood of one key (output omitted).
+cargo run -q -p model-cli -- graph path /tmp/shop.json \
+  --from '<plus-key from step 4>' --to '<caller-key from step 4>' \
+  --direction both --depth 5 --pretty
+cargo run -q -p model-cli -- graph explain /tmp/shop.json \
+  --key '<plus-key from step 4>' --limit 10 --pretty
+
+# 6. Communities alone (output omitted); --top 0, the default, means no cap.
+cargo run -q -p model-cli -- graph communities /tmp/shop.json --pretty
+
+# 7. Determinism: rerun with the same options; `cmp` is silent if bytes match.
+cargo run -q -p model-cli -- graph projection /tmp/shop.json --out /tmp/shop.graph.2.json --pretty
+cmp /tmp/shop.graph.json /tmp/shop.graph.2.json
+```
+
+What to look for:
+
+- The projection has exactly the five sections `schema`, `summary`,
+  `communities`, `nodes`, `edges`, with `"schema": "model.graph/1"`. A node
+  such as `Money` has a stable key as `id` (`model java . . shop/model/Money#`
+  in this sample), `kind` `class` and `fine_kind` `record`. Its `line` is
+  **1-based**, unlike the 0-based `range` in `/tmp/shop.json`.
+- `summary` reports `producer` (`model 0.8.0`), the `entities`, `relations`,
+  `sites`, `communities` and `modularity` counts, and the `options` used.
+  Community ids are numbers, and node `community` holds that number.
+- Externals from scenario a (`String`, `List`, `Map`, `Exception`, `HashMap`)
+  are nodes too, with `external: true`; every edge `from`/`to` is one of the
+  listed node ids. Edge `weight` counts occurrence sites and `sites[].flags`
+  carries `read`/`write`/`receiver` — `revisions += 1` and `lines.add(line)`
+  of scenario a are the ones to check. Provenance here is `tree_sitter`: the
+  sample has no SCIP index.
+- `report` is Markdown, not JSON. It ranks god nodes by degree
+  (`Degrees::ranked()`); this is a ranking, not a confidence or architecture
+  judgement. Communities are a partition of the same small graph, so do not
+  read more into them than the numbers say.
+- `path` walks relations between the two keys; with name-based relations an
+  ambiguous call such as `order.price()` is absent (scenario a), so a path
+  through it may be empty. Try `--direction callers` or `--direction callees`
+  and a smaller `--depth` to narrow the search.
+- `explain` shows the limited neighborhood of one key, optionally filtered by
+  `--kinds`. If a neighbor is an external stub, it appears as a node, not a
+  dangling id.
+- `communities` prints the partition with modularity and the full `total`;
+  labels look like `src/main/java/shop/model/Money.java:plus` (with a `#n`
+  suffix when a label collides).
+- `cmp` in step 7 prints nothing: same model, same options, byte-identical
+  output — no timestamps, no run-dependent ordering.
+
+Each CLI command reloads `/tmp/shop.json`; for many graph questions keep the
+model in memory through the library, GraphQL or the MCP server. The reference
+for the format and the commands is [graph.md](graph.md).
+
 ## What I could not run
 
 - A real VerveineJ export (scenario f): the stand-in is Model's own export;
@@ -729,3 +804,5 @@ runs the tour and asserts these lines.
   (scenario g); and any scip-java run.
 - The jpetstore/vscode figures in the README (they need Structure's fixtures,
   which this page does not use).
+- The graph scenario (j) output: the commands are reproducible, but their
+  output is intentionally omitted from this page.

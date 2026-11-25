@@ -140,3 +140,19 @@
 
 (method_invocation object: [(identifier) @name (field_access object: (this) field: (identifier) @name)]) @access.receiver
 (field_access object: (identifier) @name) @access.receiver
+
+; Cyclomatic complexity: one decision point per branch. `@complexity.branch`
+; needs no `@name`; model-treesitter counts unique captured nodes and stores
+; the count on the enclosing method.
+[
+  (if_statement)
+  (for_statement)
+  (enhanced_for_statement)
+  (while_statement)
+  (do_statement)
+  (switch_expression)
+  (catch_clause)
+  (ternary_expression)
+] @complexity.branch
+
+(binary_expression operator: ["&&" "||"]) @complexity.branch

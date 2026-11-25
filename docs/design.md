@@ -75,6 +75,35 @@ The exact dependency edges — normal, optional features and dev-only — are in
 [dependencies.md](dependencies.md). That page is the source to update when a
 crate gains or loses a dependency.
 
+### 2.1 Graph projection layer
+
+`model-analysis` also derives a deterministic graph view of an already-built
+frozen `Model` (`model.graph/1`): `path`, `explain` (neighborhood),
+Louvain-like `communities` and god nodes from the existing
+`Degrees::ranked()`. It sits between the analyses and the CLI, with external
+consumers at the end:
+
+```
+frozen Model
+     │  read-only, no re-parse, no indexer
+     ▼
+model-analysis: path · explain · communities · god nodes
+     ▼
+model-cli: model graph projection|report|path|explain|communities
+     ▼
+model.graph/1 JSON ──► external consumers (Fluid, LLM-hosted tools, scripts)
+   `graph report` is a Markdown view over that same projection
+```
+
+No new crate or dependency: nodes are the model's entities (stable keys,
+externals included), edges are its relations with occurrence sites as weight,
+and community/god-node facts are computed by the same analysis crate (§7).
+The same in-memory analyses are exposed by the MCP tools `model_path`,
+`model_explain`, `model_communities` and `model_god_nodes`. `model build` still
+produces `model.json`; this repository generates no
+visualization and claims no compatibility with another graph format. Full
+reference: [graph.md](graph.md).
+
 ## 3. Metamodel (`model-core`)
 
 ```
@@ -157,8 +186,8 @@ containment rules), generated from the FM3 JSON of FamixJava by
 the FM3 traits it aggregates). The generated table also lists, per FM3 class,
 the traits it inherits, so a frontend defines a kind with
 `mask_of_fm3_class("Famix-Java-Entities.Method")`. Derived metrics are not
-stored props; derived relations are kept (they give containment through
-their container opposite).
+stored props (the raw frontend fact `complexity.branches` is); derived
+relations are kept (they give containment through their container opposite).
 Tree-sitter models get their masks from data: `archetype_traits.json` for
 the default kinds of the archetypes, `kinds.json` for the fine kinds
 ([usage.md](usage.md) §2).
@@ -593,12 +622,20 @@ pub trait Analysis {
 | Analysis | Output |
 |---|---|
 | `Metrics` | counts by entity kind, relation kind/provenance, language, file, site |
+| `CodeMetrics` | LOC (source range span) and cyclomatic complexity (from frontend branch facts), totals, per file/language, ranked entities |
 | `Degree` / `Degrees` | fan-in/fan-out, filtered by kinds/provenance, weighted by sites, ranked |
 | `Cycle` / `Cycles` | dependency SCCs (iterative Tarjan), default `Calls` + `References` |
 | `Unused` | isolated entities; `Calls`, `References`, `Implements` connect ancestors too |
 | `Propagation` / `Impact` | BFS distance from seeds, direction (callers/callees/both), max depth |
 | `quotient` / `QuotientAnalysis` | collapse entities by an arbitrary `EntityRef → group` function |
 | `InterfaceCalls` | derived calls to implementations of interface methods |
+
+Tree-sitter queries capture decision points as `@complexity.branch`; the
+extractor stores their count as the `complexity.branches` prop of the owning
+member (Java, TypeScript, Python). `model-analysis` derives LOC and cyclomatic
+complexity from ranges and those counts; GraphQL exposes both as typed entity
+fields for clients such as Fluid, and the Moose export writes them as
+`numberOfLinesOfCode` / `cyclomaticComplexity`.
 
 `InterfaceCalls` is deliberately an analysis, not a linker: it returns
 `DerivedRelation`s carrying the original call sites, which the caller can add

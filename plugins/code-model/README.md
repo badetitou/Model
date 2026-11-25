@@ -1,6 +1,7 @@
 # code-model plugin
 
-Claude Code plugin for code-model MCP tools.
+Claude Code plugin for code-model MCP tools. For OpenCode, see the equivalent
+[`opencode-code-model`](../opencode-code-model/) plugin.
 
 ## Install
 
@@ -29,6 +30,14 @@ claude --plugin-dir ./plugins/code-model
 ```
 
 Or copy the binary to `${CLAUDE_PLUGIN_DATA}/bin/model-mcp` yourself.
+
+## Skills and agent
+
+The plugin ships `skills/model-context`, `skills/model-impact`,
+`skills/model-architecture` and `skills/graph-exploration` (paths,
+neighbourhoods, communities, god nodes and data-only graph export), plus the
+`impact-reviewer` agent in `agents/`. See the repo's `docs/mcp.md` for the full
+tool list.
 
 ## Optional rebuild
 

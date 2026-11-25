@@ -57,3 +57,19 @@
   (identifier) @prop.decorators
   (call_expression function: (identifier) @prop.decorators)
 ])
+
+; Cyclomatic complexity: one decision point per branch. `@complexity.branch`
+; needs no `@name`; model-treesitter counts unique captured nodes and stores
+; the count on the enclosing member.
+[
+  (if_statement)
+  (for_statement)
+  (for_in_statement)
+  (while_statement)
+  (do_statement)
+  (switch_statement)
+  (catch_clause)
+  (ternary_expression)
+] @complexity.branch
+
+(binary_expression operator: ["&&" "||" "??"]) @complexity.branch

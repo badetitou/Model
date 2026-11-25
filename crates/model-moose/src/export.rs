@@ -25,7 +25,10 @@
 //!   `self` as receiver of calls a method makes to a method of its own
 //!   enclosing type (an approximation: Model does not keep the receiver of
 //!   a call); owners of type parameters become `Parametric*` classes.
-//! - **Not written**: derived properties, metrics, the association chain
+//! - **Computed**: `numberOfLinesOfCode` (source range span) and
+//!   `cyclomaticComplexity` (`model-analysis`; decision points come from
+//!   frontends). Imported `moose.*` values take precedence.
+//! - **Not written**: other derived properties, the association chain
 //!   (`previous`/`next`), signatures (unless imported), receivers other than
 //!   `self`, generics' arguments.
 //!
@@ -628,6 +631,17 @@ impl<'a, W: Write> Exporter<'a, W> {
             });
             if let Some(v) = v {
                 self.put_value(prop, v)?;
+                continue;
+            }
+            match *prop {
+                "numberOfLinesOfCode" => {
+                    self.put_int(prop, model_analysis::lines_of_code(e) as i64)?;
+                }
+                "cyclomaticComplexity" => {
+                    let cyclo = model_analysis::cyclomatic_complexity(self.m, e.id());
+                    self.put_int(prop, cyclo as i64)?;
+                }
+                _ => {}
             }
         }
         Ok(())

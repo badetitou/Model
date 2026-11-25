@@ -335,11 +335,29 @@ pub fn export_container(child: &str, parent: &str) -> Option<&'static str> {
         .map(|r| r.property)
 }
 
-/// Stored primitive properties of Famix, by property name: the classes that
-/// own it. A `moose.<name>` prop of an entity (set by the importer) is
-/// written back when its class is listed. `visibility` is read as is.
-/// Derived properties and metrics are never written.
+/// Primitive properties of Famix, by property name: the classes that own it.
+/// A `moose.<name>` prop of an entity (set by the importer) is written back
+/// when its class is listed. `visibility` is read as is. LOC and cyclomatic
+/// complexity are computed from the model when no imported value exists.
 pub const PRIMITIVE_PROPS: &[(&str, &[&str])] = &[
+    (
+        "numberOfLinesOfCode",
+        &[
+            "Class",
+            "ParametricClass",
+            "Exception",
+            "Interface",
+            "ParametricInterface",
+            "Enum",
+            "AnnotationType",
+            "Method",
+            "ParametricMethod",
+            "Attribute",
+            "Parameter",
+            "LocalVariable",
+        ],
+    ),
+    ("cyclomaticComplexity", &["Method", "ParametricMethod"]),
     (
         "visibility",
         &[

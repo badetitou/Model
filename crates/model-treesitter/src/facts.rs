@@ -56,6 +56,16 @@ pub(crate) struct Prop {
     pub value: String,
 }
 
+/// A decision point of cyclomatic complexity (`if`, loop, `catch`, logical
+/// operator...). Counted at extraction, where the syntax tree is available;
+/// `model-analysis` turns the count into a metric on the owning entity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Branch {
+    /// Innermost enclosing member; `None` = the file.
+    pub owner: Option<usize>,
+    pub site: Range,
+}
+
 /// Everything extraction learns from one file, and nothing about any other:
 /// the unit that is cached per file and composed into a model.
 ///
@@ -78,12 +88,13 @@ pub struct Fragment {
     pub(crate) defs: Vec<Def>,
     pub(crate) uses: Vec<Use>,
     pub(crate) props: Vec<Prop>,
+    pub(crate) branches: Vec<Branch>,
     /// Parsed with syntax errors (still extracted).
     pub has_errors: bool,
 }
 
 /// Version of the fragment layout; part of the cache tag.
-pub(crate) const FORMAT: u32 = 1;
+pub(crate) const FORMAT: u32 = 2;
 
 /// A `Fine` kind is stored as its name.
 mod fine_name {
@@ -178,7 +189,8 @@ pub(crate) fn archetype_traits() -> &'static std::collections::BTreeMap<String, 
 
 /// Role of a capture name. Accepts the tree-sitter tags convention
 /// (`definition.*`, `reference.call|class|implementation`, `name`) plus
-/// Model's own (`namespace`, `relation.*`, `reference.type`, `prop.*`).
+/// Model's own (`namespace`, `relation.*`, `reference.type`, `prop.*`,
+/// `complexity.branch`).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Role {
     Name,
@@ -188,6 +200,8 @@ pub(crate) enum Role {
     /// Identifier of the entity a `declared_type` use types.
     Typed,
     Prop(String),
+    /// A cyclomatic decision point; no `@name` needed.
+    Branch,
     Ignored,
 }
 
@@ -201,6 +215,9 @@ pub(crate) fn role(capture: &str) -> Role {
     }
     if capture == "namespace" {
         return Role::Namespace;
+    }
+    if capture == "complexity.branch" {
+        return Role::Branch;
     }
     if let Some(key) = capture.strip_prefix("prop.") {
         return Role::Prop(key.to_string());
@@ -288,6 +305,7 @@ pub(crate) fn read(
     let mut defs: Vec<Def> = Vec::new();
     let mut uses: Vec<(UseKind, String, Range, Option<Range>)> = Vec::new();
     let mut props: Vec<(String, String, Range)> = Vec::new();
+    let mut branches: Vec<Range> = Vec::new();
     let mut cursor = QueryCursor::new();
     let mut matches = cursor.matches(query, root, src);
     while let Some(m) = matches.next() {
@@ -320,6 +338,13 @@ pub(crate) fn read(
                     uses.push((*kind, text(n, src), range(n), typed));
                 }
                 Role::Prop(key) => props.push((key.clone(), text(c.node, src), range(c.node))),
+                Role::Branch => {
+                    // A node can be captured by several patterns; count it once.
+                    let site = range(c.node);
+                    if !branches.contains(&site) {
+                        branches.push(site);
+                    }
+                }
                 Role::Name | Role::Typed | Role::Ignored => {}
             }
         }
@@ -401,6 +426,13 @@ pub(crate) fn read(
             value,
         })
         .collect();
+    let branches = branches
+        .into_iter()
+        .map(|site| Branch {
+            owner: owner(site),
+            site,
+        })
+        .collect();
     Ok(Fragment {
         path: path.to_string(),
         language: grammar.language.to_string(),
@@ -409,6 +441,7 @@ pub(crate) fn read(
         defs,
         uses,
         props,
+        branches,
         has_errors: root.has_error(),
     })
 }

@@ -1,5 +1,6 @@
 use model_core::{
-    EntityKind as K, Model, ModelBuilder, Provenance, Range, RelationKind as R, Value,
+    BRANCHES_PROP, EntityKind as K, Model, ModelBuilder, Provenance, Range, RelationKind as R,
+    Value,
 };
 
 use crate::{
@@ -870,4 +871,37 @@ fn python_imports_decorators_fields_properties_async() {
         );
     }
     assert_eq!(typed.len(), 3, "{typed:?}");
+}
+
+#[test]
+fn branch_facts_are_counted_on_methods() {
+    for (path, source, count) in [
+        (
+            "A.java",
+            "class A { int f(boolean x, boolean y) { if (x && y) return 1; return 2; } }",
+            2,
+        ),
+        (
+            "a.ts",
+            "export function f(x: boolean, y: boolean): number { if (x && y) return 1; return 0; }",
+            2,
+        ),
+        (
+            "a.py",
+            "def f(x, y):\n    if x and y:\n        return 1\n    return 0\n",
+            2,
+        ),
+    ] {
+        let (m, _) = model(&[(path, source)]);
+        let f = m
+            .entities()
+            .find(|e| e.name() == "f")
+            .unwrap_or_else(|| panic!("no f in {path}"));
+        assert_eq!(
+            f.props().get(BRANCHES_PROP),
+            Some(&Value::Int(count)),
+            "{path}: {:?}",
+            f.props()
+        );
+    }
 }

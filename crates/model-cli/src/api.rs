@@ -4,13 +4,145 @@
 
 use anyhow::{Result, bail};
 use model_analysis::{
-    Cycle, CycleOptions, Degree, DegreeOptions, Direction, Metrics, PropagateOptions, Propagation,
-    Unused, UnusedOptions,
+    CodeMetrics, CodeMetricsOptions, CommunityOptions, Cycle, CycleOptions, Degree, DegreeOptions,
+    Direction, Metrics, Neighborhood, NeighborhoodOptions, PathOptions, PathQuery,
+    PropagateOptions, Propagation, Unused, UnusedOptions,
 };
 use model_core::{EntityRef, Model, RelationKind};
 use serde_json::{Value, json};
 
-use crate::output::{ContextOut, EntityOut, ImpactOut, NeighborOut, ReachedOut, RelationOut, Side};
+use crate::graph::{community_out, key_of, node_ref, provenance_name};
+use crate::output::{
+    ContextOut, EntityOut, ImpactOut, NeighborOut as OutputNeighborOut, ReachedOut, RelationOut,
+    Side,
+};
+
+pub use crate::graph::{
+    CommunityListOut, CommunityOut, ExplainOut, GraphOptions, GraphPathOut, GraphProjection,
+    GraphSummary, HopOut, NeighborOut, NodeRefOut, ReportOptions, SiteOut,
+};
+
+/// Thin wrapper around [`crate::graph::projection`], for callers of `model_cli::api`.
+pub fn projection(model: &Model, options: &GraphOptions) -> GraphProjection {
+    crate::graph::projection(model, options)
+}
+
+/// Thin wrapper around [`crate::graph::report`], for callers of `model_cli::api`.
+pub fn report(model: &Model, options: &ReportOptions) -> String {
+    crate::graph::report(model, options)
+}
+
+/// Shortest path between two keys. An unreachable pair has an empty path.
+pub fn path_between(
+    model: &Model,
+    from_key: &str,
+    to_key: &str,
+    options: &PathOptions,
+) -> Result<GraphPathOut> {
+    let from = entity_by_key(model, from_key, "source")?;
+    let to = entity_by_key(model, to_key, "target")?;
+    let found = model_analysis::run(
+        &PathQuery {
+            from: from.id(),
+            to: to.id(),
+            options: options.clone(),
+        },
+        model,
+    )?;
+    let Some(found) = found else {
+        return Ok(GraphPathOut {
+            nodes: Vec::new(),
+            hops: Vec::new(),
+        });
+    };
+    let nodes = found
+        .nodes
+        .into_iter()
+        .filter_map(|id| model.entity(id).map(node_ref))
+        .collect();
+    let hops = found
+        .hops
+        .iter()
+        .map(|hop| HopOut {
+            from: key_of(model, hop.from),
+            to: key_of(model, hop.to),
+            kind: hop.kind.as_str().to_string(),
+            provenance: provenance_name(hop.provenance).to_string(),
+            file: hop.file.clone(),
+            line: hop.line,
+        })
+        .collect();
+    Ok(GraphPathOut { nodes, hops })
+}
+
+/// Local relations around one entity. Neighbour degrees ignore `options.limit`.
+pub fn explain_entity(
+    model: &Model,
+    key: &str,
+    options: &NeighborhoodOptions,
+) -> Result<ExplainOut> {
+    let entity = entity_by_key(model, key, "explained")?;
+    let found = model_analysis::run(
+        &Neighborhood {
+            entity: entity.id(),
+            options: options.clone(),
+        },
+        model,
+    )?;
+    let neighbors = found
+        .neighbors
+        .iter()
+        .filter_map(|neighbor| {
+            model.entity(neighbor.entity).map(|other| NeighborOut {
+                id: other.key().to_string(),
+                name: other.name().to_string(),
+                side: match neighbor.side {
+                    model_analysis::Side::Incoming => "incoming",
+                    model_analysis::Side::Outgoing => "outgoing",
+                }
+                .to_string(),
+                kind: neighbor.kind.as_str().to_string(),
+                provenance: provenance_name(neighbor.provenance).to_string(),
+                weight: neighbor.weight,
+                sites: neighbor
+                    .sites
+                    .iter()
+                    .map(|site| SiteOut {
+                        file: site.file.clone(),
+                        line: site.line,
+                        flags: site.flags.clone(),
+                    })
+                    .collect(),
+            })
+        })
+        .collect();
+    Ok(ExplainOut {
+        entity: node_ref(entity),
+        in_degree: found.in_degree,
+        out_degree: found.out_degree,
+        neighbors,
+    })
+}
+
+/// Detected communities, with the partition's modularity and total count.
+pub fn community_list(model: &Model, options: &CommunityOptions) -> CommunityListOut {
+    let found = model_analysis::communities(model, options);
+    CommunityListOut {
+        communities: found
+            .groups
+            .iter()
+            .map(|c| community_out(model, c))
+            .collect(),
+        modularity: found.modularity,
+        total: found.groups.len(),
+    }
+}
+
+fn entity_by_key<'m>(model: &'m Model, key: &str, role: &str) -> Result<EntityRef<'m>> {
+    model
+        .by_key(key)
+        .ok_or_else(|| anyhow::anyhow!("no {role} entity with key {key:?} in this model"))
+}
 
 /// Filters accepted by `model query`. Empty means "no constraint".
 #[derive(Debug, Default)]
@@ -130,18 +262,18 @@ pub fn context(
     } else {
         relations.to_vec()
     };
-    let mut callers: Vec<NeighborOut> = e
+    let mut callers: Vec<OutputNeighborOut> = e
         .incoming()
         .filter(|r| wanted.contains(r.kind()))
-        .map(|r| NeighborOut {
+        .map(|r| OutputNeighborOut {
             relation: crate::output::relation(r, Side::In),
             entity: crate::output::entity(r.from(), None),
         })
         .collect();
-    let mut callees: Vec<NeighborOut> = e
+    let mut callees: Vec<OutputNeighborOut> = e
         .outgoing()
         .filter(|r| wanted.contains(r.kind()))
-        .map(|r| NeighborOut {
+        .map(|r| OutputNeighborOut {
             relation: crate::output::relation(r, Side::Out),
             entity: crate::output::entity(r.to(), None),
         })
@@ -222,7 +354,7 @@ pub fn impact(
     })
 }
 
-/// `metrics`, `cycles`, `unused` or `degrees`, as a JSON value.
+/// `metrics`, `code-metrics`, `cycles`, `unused` or `degrees`, as a JSON value.
 pub fn analysis(
     model: &Model,
     name: &str,
@@ -234,6 +366,15 @@ pub fn analysis(
             &Metrics::default(),
             model,
         )?)?),
+        "code-metrics" => {
+            let report = model_analysis::run(
+                &CodeMetrics {
+                    options: CodeMetricsOptions { limit },
+                },
+                model,
+            )?;
+            Ok(serde_json::to_value(report)?)
+        }
         "cycles" => {
             let opts = CycleOptions {
                 kinds: (!kinds.is_empty()).then_some(kinds),
@@ -293,6 +434,8 @@ pub fn analysis(
             );
             Ok(json!({ "ranked": ranked }))
         }
-        other => bail!("unknown analysis {other:?} (metrics, cycles, unused, degrees)"),
+        other => {
+            bail!("unknown analysis {other:?} (metrics, code-metrics, cycles, unused, degrees)")
+        }
     }
 }

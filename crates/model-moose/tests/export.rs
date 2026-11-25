@@ -182,6 +182,25 @@ fn output_is_a_valid_famix_file() {
     assert!(classes.contains_key("Comment"));
     assert!(classes.contains_key("TypeParameter"));
     assert!(classes.contains_key("ParametricClass"));
+    let methods: Vec<&Value> = objects
+        .iter()
+        .filter(|o| o["FM3"] == "Famix-Java-Entities.Method")
+        .collect();
+    assert!(!methods.is_empty());
+    for m in &methods {
+        assert!(m["numberOfLinesOfCode"].as_u64().unwrap() > 0, "{m}");
+        assert!(m["cyclomaticComplexity"].as_u64().unwrap() >= 1, "{m}");
+    }
+    let types: Vec<&Value> = objects
+        .iter()
+        .filter(|o| o["FM3"] == "Famix-Java-Entities.Class")
+        .collect();
+    assert!(
+        types
+            .iter()
+            .filter(|t| t["isStub"] != true)
+            .all(|t| t["numberOfLinesOfCode"].as_u64().unwrap() > 0)
+    );
 }
 
 #[test]

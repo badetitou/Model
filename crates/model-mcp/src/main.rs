@@ -2,9 +2,11 @@
 //! stdio MCP server that keeps the model in memory, so queries and analyses
 //! never pay the JSON reload cost a stateless CLI incurs on every call.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use model_analysis::{CommunityOptions, Direction, NeighborhoodOptions, PathOptions};
+use model_cli::graph::provenance_from_name;
 use model_cli::output::kinds;
 use model_factory::BuildOptions;
 use model_factory::index::{CustomIndex, Reindex};
@@ -28,6 +30,35 @@ fn json_result(value: &Value) -> Result<CallToolResult, rmcp::ErrorData> {
 
 fn to_err(e: anyhow::Error) -> rmcp::ErrorData {
     rmcp::ErrorData::internal_error(e.to_string(), None)
+}
+
+fn direction_arg(value: Option<&str>) -> Result<Direction, rmcp::ErrorData> {
+    match value {
+        None | Some("both") => Ok(Direction::Both),
+        Some("callers") => Ok(Direction::Callers),
+        Some("callees") => Ok(Direction::Callees),
+        Some(other) => Err(rmcp::ErrorData::invalid_params(
+            format!("direction must be callers|callees|both, not {other:?}"),
+            None,
+        )),
+    }
+}
+
+fn provenance_arg(value: Option<&str>) -> Result<Option<model_core::Provenance>, rmcp::ErrorData> {
+    match value {
+        None => Ok(None),
+        Some(name) => provenance_from_name(name).map(Some).ok_or_else(|| {
+            rmcp::ErrorData::invalid_params(
+                format!("provenance must be tree_sitter|scip|frontend|derived, not {name:?}"),
+                None,
+            )
+        }),
+    }
+}
+
+fn opt_kinds(value: Option<&str>) -> Option<Vec<model_core::RelationKind>> {
+    let parsed = value.map(kinds).unwrap_or_default();
+    (!parsed.is_empty()).then_some(parsed)
 }
 
 #[derive(Deserialize, JsonSchema, Default)]
@@ -74,12 +105,60 @@ struct ImpactArgs {
 
 #[derive(Deserialize, JsonSchema)]
 struct AnalysisArgs {
-    /// One of `metrics`, `cycles`, `unused`, `degrees`.
+    /// One of `metrics`, `code-metrics`, `cycles`, `unused`, `degrees`.
     name: String,
     /// Relation kinds, for example `calls,references`.
     kinds: Option<String>,
     /// Maximum results for lists (0 means no limit). Defaults to 50.
     limit: Option<usize>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct PathArgs {
+    /// Exact key of the entity to start from.
+    from: String,
+    /// Exact key of the entity to reach.
+    to: String,
+    /// Relation kinds to walk, for example `calls,references`. Empty means all.
+    kinds: Option<String>,
+    /// Maximum number of hops (omit for full reach).
+    depth: Option<usize>,
+    /// `callers`, `callees`, or `both`. Defaults to `both`.
+    direction: Option<String>,
+    /// Relation provenance: `tree_sitter`, `scip`, `frontend`, or `derived`.
+    provenance: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct ExplainArgs {
+    /// Exact entity key to explain.
+    key: String,
+    /// Relation kinds to include, for example `calls,references`. Empty means all.
+    kinds: Option<String>,
+    /// Maximum neighbours to return. Defaults to 50.
+    limit: Option<usize>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct CommunitiesArgs {
+    /// Maximum communities to return (0 means all). Defaults to 50.
+    top: Option<usize>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct GodNodesArgs {
+    /// Maximum ranked entities to return (0 means all). Defaults to 50.
+    limit: Option<usize>,
+    /// Relation kinds counted, for example `calls,references`. Empty means all.
+    kinds: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+struct ExportGraphArgs {
+    /// Directory to write `projection.json` and `REPORT.md` into (created if needed).
+    directory: String,
+    /// Number of ranked nodes/relations in the report (0 means all). Defaults to 50.
+    top: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -181,7 +260,9 @@ impl ModelMcp {
         json_result(&v)
     }
 
-    #[tool(description = "Run an analysis: metrics, cycles, unused, or degrees. Returns JSON.")]
+    #[tool(
+        description = "Run an analysis: metrics, code-metrics (LOC and cyclomatic complexity), cycles, unused, or degrees. Returns JSON."
+    )]
     fn model_analysis(
         &self,
         Parameters(args): Parameters<AnalysisArgs>,
@@ -197,6 +278,88 @@ impl ModelMcp {
     }
 
     #[tool(
+        description = "Shortest dependency path between two exact entity keys (direction, kinds, depth, provenance). Use after model_query finds the keys."
+    )]
+    fn model_path(
+        &self,
+        Parameters(args): Parameters<PathArgs>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        let options = PathOptions {
+            kinds: opt_kinds(args.kinds.as_deref()),
+            provenance: provenance_arg(args.provenance.as_deref())?,
+            max_depth: args.depth,
+            direction: direction_arg(args.direction.as_deref())?,
+        };
+        let value = self
+            .state
+            .path(&args.from, &args.to, &options)
+            .map_err(to_err)?;
+        json_result(&value)
+    }
+
+    #[tool(
+        description = "Explain one entity: incoming/outgoing neighbours grouped by relation, with occurrence sites (file:line). Filter by kinds and limit."
+    )]
+    fn model_explain(
+        &self,
+        Parameters(args): Parameters<ExplainArgs>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        let options = NeighborhoodOptions {
+            kinds: opt_kinds(args.kinds.as_deref()),
+            limit: Some(args.limit.unwrap_or(50)),
+            ..NeighborhoodOptions::default()
+        };
+        let value = self.state.explain(&args.key, &options).map_err(to_err)?;
+        json_result(&value)
+    }
+
+    #[tool(
+        description = "List detected communities in the code model (groups of related entities, with size and cohesion). Use for high-level structure questions."
+    )]
+    fn model_communities(
+        &self,
+        Parameters(args): Parameters<CommunitiesArgs>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        let options = CommunityOptions::default();
+        let value = self
+            .state
+            .communities(&options, args.top.unwrap_or(50))
+            .map_err(to_err)?;
+        json_result(&value)
+    }
+
+    #[tool(
+        description = "Rank the most connected entities ('god nodes') by total degree, with in/out counts and file:line. Optional kinds filter and limit."
+    )]
+    fn model_god_nodes(
+        &self,
+        Parameters(args): Parameters<GodNodesArgs>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        let value = self
+            .state
+            .god_nodes(
+                args.kinds.as_deref().map(kinds).unwrap_or_default(),
+                args.limit.unwrap_or(50),
+            )
+            .map_err(to_err)?;
+        json_result(&value)
+    }
+
+    #[tool(
+        description = "Export a data-only graph snapshot under a directory: projection.json (model.graph/1) and REPORT.md. No visualization or image is generated."
+    )]
+    fn model_export_graph(
+        &self,
+        Parameters(args): Parameters<ExportGraphArgs>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        let value = self
+            .state
+            .export_graph(Path::new(&args.directory), args.top.unwrap_or(50))
+            .map_err(to_err)?;
+        json_result(&value)
+    }
+
+    #[tool(
         description = "Reload the model from disk or rebuild from the configured source root (swaps it in memory). Call after editing code when a root is configured."
     )]
     fn model_rebuild(&self) -> Result<CallToolResult, rmcp::ErrorData> {
@@ -205,7 +368,7 @@ impl ModelMcp {
     }
 }
 #[tool_handler(
-    instructions = "Use model_query/model_context/model_impact/model_analysis against the in-memory code model. Call model_status first if unsure whether a model is loaded. Rebuild with model_rebuild after code changes (only if started with --root)."
+    instructions = "Use model_query/model_context/model_impact/model_analysis against the in-memory code model, plus model_path/model_explain/model_communities/model_god_nodes for graph exploration and model_export_graph to write a data-only snapshot (projection.json + REPORT.md, no visualization). Call model_status first if unsure whether a model is loaded. Rebuild with model_rebuild after code changes (only if started with --root)."
 )]
 impl ServerHandler for ModelMcp {}
 

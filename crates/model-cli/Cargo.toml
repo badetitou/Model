@@ -15,6 +15,7 @@ categories = ["development-tools", "command-line-utilities"]
 model-analysis.workspace = true
 model-core.workspace = true
 model-factory.workspace = true
+model-traits.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
