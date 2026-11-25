@@ -1,0 +1,19 @@
+{
+  "name": "opencode-code-model",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenCode plugin for the code-model MCP server: context, impact, architecture and graph skills.",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "files": [
+    "index.ts",
+    "agents",
+    "skills",
+    "README.md"
+  ],
+  "dependencies": {
+    "@opencode/plugin": "^2.4.1"
+  }
+}

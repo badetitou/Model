@@ -1,6 +1,7 @@
 # code-model plugin
 
-Claude Code plugin for code-model MCP tools.
+Claude Code plugin for code-model MCP tools. For OpenCode, see the equivalent
+[`opencode-code-model`](../opencode-code-model/) plugin.
 
 ## Install
 

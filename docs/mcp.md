@@ -152,6 +152,22 @@ From the repo root (if `claude` CLI is installed):
 claude plugin validate --strict plugins/code-model
 ```
 
+## OpenCode plugin (`opencode-code-model`)
+
+The OpenCode equivalent lives in [`plugins/opencode-code-model/`](../plugins/opencode-code-model/)
+and is loaded by the repository's `opencode.json`. It registers the same `model`
+MCP server plus the four skills (`model-context`, `model-impact`,
+`model-architecture`, `graph-exploration`) and a `/model-impact-review` command
+implementing the `impact-reviewer` workflow. The agent file is also available
+at `.opencode/agents/impact-reviewer.md` for direct subagent use.
+
+Binary discovery happens in plugin `setup` (`options.binary`, `$MODEL_MCP_BIN`,
+`PATH`, then `target/{release,debug}/model-mcp`); `model.json` defaults to
+`<project>/model.json` and `--root` defaults to the project, enabling
+`model_rebuild`. An existing `mcp.servers.model` configuration is preserved.
+OpenCode V2 has no plugin `SessionStart`/`Stop` hooks, so use `model_rebuild`
+for a live refresh. See the plugin README for all options.
+
 ## Relationship to the CLI
 
 | Concern | `model` CLI | `model-mcp` |
