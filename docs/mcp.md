@@ -53,10 +53,39 @@ The server exposes tools (names as registered by the server):
 | `model_context` | One entity plus callers/callees and `file:line` sites. |
 | `model_impact` | Propagation from seeds (direction, depth, kinds). |
 | `model_analysis` | `metrics`, `code-metrics` (LOC and cyclomatic complexity), `cycles`, `unused`, or `degrees`. |
+| `model_path` | Shortest dependency path between two exact entity keys (direction, kinds, depth, provenance). |
+| `model_explain` | One entity's incoming/outgoing relations grouped by kind, with occurrence sites (`file:line`). |
+| `model_communities` | Detected communities (groups of related entities) with sizes and cohesion. |
+| `model_god_nodes` | Most connected entities by total degree, with in/out counts and `file:line`. |
+| `model_export_graph` | Write `projection.json` and `REPORT.md` under a directory (data only, no visualization). |
 | `model_rebuild` | Reload JSON from disk or rebuild from `--root` if configured, then swap the model in memory. |
 
 Tool results are JSON text content (pretty-printed). On errors the server returns
 an MCP error with a message.
+
+## Graph exploration
+
+The five graph tools answer questions that span many entities rather than one:
+
+1. Use `model_query` to resolve names to exact keys when needed.
+2. `model_path` finds the shortest dependency chain between two keys;
+   `direction` accepts `callers`, `callees`, or `both` (default), `kinds`
+   defaults to all relations, and `depth`/`provenance` narrow the walk.
+3. `model_explain` returns the local neighbourhood of one key with relation
+   sites; `model_god_nodes` ranks structural hotspots by in/out degree.
+4. `model_communities` lists the model's partition into related groups, useful
+   for orientation before drilling into a subsystem.
+
+`model_export_graph { "directory": "..." }` creates the directory if needed and
+writes two files:
+
+- `projection.json` — a deterministic `model.graph/1` document (nodes, edges,
+  communities, summary) that any client can read.
+- `REPORT.md` — a Markdown report with the summary, communities, most connected
+  nodes and strongest cross-community relations.
+
+No visualization is generated here: the server writes data and Markdown only.
+Rendering (graphs, diagrams, images) is left to the caller.
 
 ## Claude Code plugin (`code-model`)
 
@@ -110,9 +139,10 @@ to include `--root`; see `model-mcp --help`).
 ### Skills and agent
 
 The plugin ships skills under `skills/` (`model-context`, `model-impact`,
-`model-architecture`) and an agent `agents/impact-reviewer.md` to guide usage of
-the MCP tools. Hooks run with the plugin enabled; keep plugin state under
-`${CLAUDE_PLUGIN_DATA}`, not inside the plugin directory.
+`model-architecture`, `graph-exploration`) and an agent
+`agents/impact-reviewer.md` to guide usage of the MCP tools. Hooks run with the
+plugin enabled; keep plugin state under `${CLAUDE_PLUGIN_DATA}`, not inside the
+plugin directory.
 
 ### Validation
 

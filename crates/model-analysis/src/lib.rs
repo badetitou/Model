@@ -12,11 +12,14 @@
 use model_core::Model;
 
 mod code_metrics;
+mod communities;
 mod cycles;
 mod degree;
 mod derived;
 mod impact;
 mod metrics;
+mod neighborhood;
+mod path;
 mod quotient;
 mod unused;
 
@@ -24,11 +27,16 @@ pub use code_metrics::{
     CodeMetrics, CodeMetricsOptions, CodeMetricsReport, MetricRow, MetricTotals,
     cyclomatic_complexity, lines_of_code,
 };
+pub use communities::{Communities, CommunitiesAnalysis, Community, CommunityOptions, communities};
 pub use cycles::{Cycle, CycleOptions, Cycles};
 pub use degree::{Degree, DegreeOptions, Degrees};
 pub use derived::{DerivedRelation, DerivedRelations, InterfaceCalls};
 pub use impact::{Direction, Impact, PropagateOptions, Propagation, seeds_where};
 pub use metrics::Metrics;
+pub use neighborhood::{
+    Explanation, Neighbor, Neighborhood, NeighborhoodOptions, Side, SiteRef, explain,
+};
+pub use path::{GraphPath, PathHop, PathOptions, PathQuery, path};
 pub use quotient::{GroupEdge, Quotient, QuotientAnalysis, quotient};
 pub use unused::{Unused, UnusedOptions};
 

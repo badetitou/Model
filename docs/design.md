@@ -75,6 +75,35 @@ The exact dependency edges — normal, optional features and dev-only — are in
 [dependencies.md](dependencies.md). That page is the source to update when a
 crate gains or loses a dependency.
 
+### 2.1 Graph projection layer
+
+`model-analysis` also derives a deterministic graph view of an already-built
+frozen `Model` (`model.graph/1`): `path`, `explain` (neighborhood),
+Louvain-like `communities` and god nodes from the existing
+`Degrees::ranked()`. It sits between the analyses and the CLI, with external
+consumers at the end:
+
+```
+frozen Model
+     │  read-only, no re-parse, no indexer
+     ▼
+model-analysis: path · explain · communities · god nodes
+     ▼
+model-cli: model graph projection|report|path|explain|communities
+     ▼
+model.graph/1 JSON ──► external consumers (Fluid, LLM-hosted tools, scripts)
+   `graph report` is a Markdown view over that same projection
+```
+
+No new crate or dependency: nodes are the model's entities (stable keys,
+externals included), edges are its relations with occurrence sites as weight,
+and community/god-node facts are computed by the same analysis crate (§7).
+The same in-memory analyses are exposed by the MCP tools `model_path`,
+`model_explain`, `model_communities` and `model_god_nodes`. `model build` still
+produces `model.json`; this repository generates no
+visualization and claims no compatibility with another graph format. Full
+reference: [graph.md](graph.md).
+
 ## 3. Metamodel (`model-core`)
 
 ```

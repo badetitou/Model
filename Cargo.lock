@@ -1072,6 +1072,7 @@ dependencies = [
  "model-analysis",
  "model-core",
  "model-factory",
+ "model-traits",
  "serde",
  "serde_json",
 ]

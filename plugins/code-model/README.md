@@ -30,6 +30,14 @@ claude --plugin-dir ./plugins/code-model
 
 Or copy the binary to `${CLAUDE_PLUGIN_DATA}/bin/model-mcp` yourself.
 
+## Skills and agent
+
+The plugin ships `skills/model-context`, `skills/model-impact`,
+`skills/model-architecture` and `skills/graph-exploration` (paths,
+neighbourhoods, communities, god nodes and data-only graph export), plus the
+`impact-reviewer` agent in `agents/`. See the repo's `docs/mcp.md` for the full
+tool list.
+
 ## Optional rebuild
 
 `hooks/hooks.json` also has an async `Stop` hook (`scripts/rebuild.sh`) as a placeholder; for a live model prefer calling the `model_rebuild` MCP tool when the server was started with `--root`.

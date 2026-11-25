@@ -64,6 +64,9 @@ Namespace ⊃ Class ⊃ Method
   reads borrow the model and never allocate.
 - **Stable identity.** Entities are keyed by SCIP symbols (or SCIP-like keys for
   languages without an indexer), so two builds are comparable.
+- **Graph-ready output.** A deterministic `model.graph/1` JSON projection with
+  paths, neighborhoods, communities and god nodes, plus a Markdown report, for
+  external tools to consume ([docs/graph.md](docs/graph.md)).
 - **Straight into Pharo.** A Pharo image can load a model into Moose through
   UFFI, from a `model.json` or from the sources, with no Moose JSON round trip:
   3.5 to 4x faster than the Moose JSON import on `java/util` (see
@@ -464,9 +467,10 @@ object type, a list root and a by-key lookup (`records`, `parameters`,
 |---|---|
 | [Usage guide](docs/usage.md) | the APIs of the 0.8.0 release, with a "which document for what" table |
 | [Crate dependencies](docs/dependencies.md) | which `model-*` crate depends on which, with optional/dev edges |
-| [Examples](docs/examples.md) | nine end-to-end scenarios on a bundled sample project, all runnable |
+| [Examples](docs/examples.md) | ten end-to-end scenarios on a bundled sample project (scenario j's output omitted) |
 | [On-demand import](docs/on-demand.md) | demand-driven layers, scopes, caching |
-| [CLI](docs/cli.md) | `model detect|build|query|context|impact|analysis` |
+| [CLI](docs/cli.md) | `model detect|build|query|context|impact|analysis|graph` |
+| [Graph engine](docs/graph.md) | `model.graph/1` projection: paths, neighborhoods, communities, god nodes |
 | [MCP server](docs/mcp.md) | stdio MCP server that keeps a model in memory for agents |
 | [Traits](docs/traits.md) | the traits of each language's kinds |
 | [Famix](docs/famix.md) | Famix/Fame analysis and conformity matrix |

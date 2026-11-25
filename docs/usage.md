@@ -11,9 +11,10 @@ output you can reproduce, see [examples.md](examples.md).
 | [README](../README.md) | understand what Model is, build a first model, see the crates |
 | [dependencies.md](dependencies.md) | see which `model-*` crate depends on which, including optional features and dev-only edges |
 | **usage.md** (this page) | look up an API: kinds, traits, relations, sessions, GraphQL, fragments, Moose, index command |
-| [examples.md](examples.md) | follow nine end-to-end scenarios on a sample project (`docs/examples/shop`), with commands, output and pitfalls |
+| [examples.md](examples.md) | follow ten end-to-end scenarios on a sample project (`docs/examples/shop`), with commands, output and pitfalls (scenario j's output omitted) |
 | [on-demand.md](on-demand.md) | understand on-demand import: which query costs which layer, scopes, caching, troubleshooting |
-| [cli.md](cli.md) | install and use `model detect|build|query|context|impact|analysis` |
+| [cli.md](cli.md) | install and use `model detect|build|query|context|impact|analysis|graph` |
+| [graph.md](graph.md) | project a saved model into the deterministic `model.graph/1` graph: paths, neighborhoods, communities, god nodes |
 | [mcp.md](mcp.md) | use the stdio MCP server that keeps a model in memory for agents |
 | [traits.md](traits.md) | see which traits the kinds of each language carry |
 | [famix.md](famix.md) | compare Model with FamixJava / Fame (analysis written before epic #1: its "Gap" tables are history) |
@@ -466,3 +467,25 @@ research.
   extensions, stubs and metaclasses are missing ([traits.md](traits.md)).
 - [famix.md](famix.md) §3 is the analysis made *before* the epic: its "Gap"
   tables describe what was missing then.
+
+## 9. Graph projection and graph analyses
+
+The reference is [graph.md](graph.md). `model-analysis` adds deterministic,
+read-only graph analyses over a frozen `Model`: `path`, `explain` (neighborhood),
+Louvain-like `communities`, and god nodes taken from the existing
+`Degrees::ranked()`. `model-cli` exposes them as
+`model graph projection|report|path|explain|communities <model.json>`; the
+projection format is `model.graph/1` (stable entity keys as node ids, 1-based
+lines, byte-identical output, externals included as nodes).
+
+These analyses run on an already-built model: `model build` is still how
+`model.json` is produced, and a session or the MCP server keeps the model in
+memory for repeated queries instead of reloading it. `graph projection`, `path`,
+`explain` and `communities` print JSON; `graph report` prints Markdown. The
+graph layer has no external dependency, generates no visualization, and makes
+no compatibility claim with other graph formats.
+
+With the MCP server, the same in-memory analyses are available as the tools
+`model_path`, `model_explain`, `model_communities` and `model_god_nodes`, and
+`model_export_graph` writes a full `model.graph/1` projection plus the Markdown
+report to a directory; see [mcp.md](mcp.md) for the tool list and arguments.

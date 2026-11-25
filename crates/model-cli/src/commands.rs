@@ -3,17 +3,20 @@
 //! logic lives in `model_cli::api`, shared with the MCP server.
 
 use std::env::Args;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
-use model_analysis::Direction as ImpactDirection;
-use model_core::RelationKind;
+use model_analysis::{
+    CommunityOptions, Direction as ImpactDirection, NeighborhoodOptions, PathOptions,
+};
+use model_core::{Provenance, RelationKind};
 use model_factory::index::{CustomIndex, Reindex};
 use model_factory::{BuildOptions, Progress};
 use serde::Serialize;
 
-use crate::api::{self, Query};
+use crate::api::{self, GraphOptions, GraphProjection, Query, ReportOptions};
 use crate::load;
 use crate::output::{self, AnalysisOut, Side};
 
@@ -387,5 +390,224 @@ pub fn analysis(args: &mut Args) -> Result<()> {
         analysis: &name,
         result,
     };
+    output::print_json(&out, pretty)
+}
+
+/// Writes UTF-8 text to a file (atomically) or to stdout when the path is `-`.
+fn write_text(path: &Path, text: &str) -> Result<()> {
+    if path == Path::new("-") {
+        let mut out = std::io::stdout().lock();
+        out.write_all(text.as_bytes())?;
+        return Ok(());
+    }
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent).with_context(|| format!("creating {}", parent.display()))?;
+    let name = path
+        .file_name()
+        .context("output path has no file name")?
+        .to_string_lossy();
+    let tmp = parent.join(format!(".{name}.tmp-{}", std::process::id()));
+    if let Err(e) = std::fs::write(&tmp, text) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e).with_context(|| format!("writing {}", tmp.display()));
+    }
+    if let Err(e) = std::fs::rename(&tmp, path) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e).with_context(|| format!("replacing {}", path.display()));
+    }
+    Ok(())
+}
+
+fn write_projection(
+    path: Option<PathBuf>,
+    projection: &GraphProjection,
+    pretty: bool,
+) -> Result<()> {
+    match path {
+        Some(path) if path.as_path() != Path::new("-") => {
+            if pretty {
+                write_text(&path, &(serde_json::to_string_pretty(projection)? + "\n"))
+            } else {
+                load::write_json(&path, projection)
+            }
+        }
+        _ => output::print_json(projection, pretty),
+    }
+}
+
+fn graph_provenance(value: &str) -> Result<Provenance> {
+    crate::graph::provenance_from_name(value)
+        .ok_or_else(|| anyhow::anyhow!("expected tree_sitter|scip|frontend|derived, not {value:?}"))
+}
+
+fn graph_direction(value: &str) -> Result<ImpactDirection> {
+    match value {
+        "callers" => Ok(ImpactDirection::Callers),
+        "callees" => Ok(ImpactDirection::Callees),
+        "both" => Ok(ImpactDirection::Both),
+        other => bail!("expected callers|callees|both, not {other:?}"),
+    }
+}
+
+pub fn graph(args: &mut Args) -> Result<()> {
+    let usage = "usage: model graph <projection|report|path|explain|communities> [options]";
+    let subcommand = next(args, usage)?;
+    match subcommand.as_str() {
+        "projection" => graph_projection(args),
+        "report" => graph_report(args),
+        "path" => graph_path(args),
+        "explain" => graph_explain(args),
+        "communities" => graph_communities(args),
+        "-h" | "--help" => {
+            println!("{usage}");
+            Ok(())
+        }
+        other => bail!(
+            "unknown graph subcommand {other:?} (projection, report, path, explain, communities)"
+        ),
+    }
+}
+
+fn graph_projection(args: &mut Args) -> Result<()> {
+    let usage = "usage: model graph projection <model.json> [--out <file|->] [--kinds <kind,kind>] [--provenance <name>] [--no-communities] [--no-props] [--no-sites] [--pretty]";
+    let path = PathBuf::from(next(args, usage)?);
+    let mut out = None;
+    let mut options = GraphOptions::default();
+    let mut pretty = false;
+    while let Some(a) = args.next() {
+        match a.as_str() {
+            "--out" => out = Some(PathBuf::from(next(args, "--out <file|->")?)),
+            "--kinds" => options.kinds = Some(output::kinds(&next(args, "--kinds <kind,kind>")?)),
+            "--provenance" => {
+                let name = next(args, "--provenance <name>")?;
+                options.provenance = Some(graph_provenance(&name)?);
+            }
+            "--no-communities" => options.with_communities = false,
+            "--no-props" => options.with_props = false,
+            "--no-sites" => options.with_sites = false,
+            "--pretty" => pretty = true,
+            "-h" | "--help" => {
+                println!("{usage}");
+                return Ok(());
+            }
+            _ => bail!("unexpected argument {a:?}"),
+        }
+    }
+    let model = load::model(&path)?;
+    let projection = api::projection(&model, &options);
+    write_projection(out, &projection, pretty)
+}
+
+fn graph_report(args: &mut Args) -> Result<()> {
+    let usage = "usage: model graph report <model.json> [--out <file|->] [--top <n>]";
+    let path = PathBuf::from(next(args, usage)?);
+    let mut out = None;
+    let mut top = ReportOptions::default().top;
+    while let Some(a) = args.next() {
+        match a.as_str() {
+            "--out" => out = Some(PathBuf::from(next(args, "--out <file|->")?)),
+            "--top" => top = next(args, "--top <n>")?.parse()?,
+            "-h" | "--help" => {
+                println!("{usage}");
+                return Ok(());
+            }
+            _ => bail!("unexpected argument {a:?}"),
+        }
+    }
+    let model = load::model(&path)?;
+    let text = api::report(&model, &ReportOptions { top });
+    write_text(out.as_deref().unwrap_or(Path::new("-")), &text)
+}
+
+fn graph_path(args: &mut Args) -> Result<()> {
+    let usage = "usage: model graph path <model.json> --from <key> --to <key> [--kinds <kind,kind>] [--depth <n>] [--direction callers|callees|both] [--provenance <tree_sitter|scip|frontend|derived>] [--pretty]";
+    let path = PathBuf::from(next(args, usage)?);
+    let mut from = None;
+    let mut to = None;
+    let mut options = PathOptions::default();
+    let mut pretty = false;
+    while let Some(a) = args.next() {
+        match a.as_str() {
+            "--from" => from = Some(next(args, "--from <key>")?),
+            "--to" => to = Some(next(args, "--to <key>")?),
+            "--kinds" => options.kinds = Some(output::kinds(&next(args, "--kinds <kind,kind>")?)),
+            "--depth" => {
+                let depth: usize = next(args, "--depth <n>")?.parse()?;
+                options.max_depth = (depth > 0).then_some(depth);
+            }
+            "--direction" => {
+                options.direction =
+                    graph_direction(&next(args, "--direction <callers|callees|both>")?)?;
+            }
+            "--provenance" => {
+                options.provenance = Some(graph_provenance(&next(args, "--provenance <name>")?)?);
+            }
+            "--pretty" => pretty = true,
+            "-h" | "--help" => {
+                println!("{usage}");
+                return Ok(());
+            }
+            _ => bail!("unexpected argument {a:?}"),
+        }
+    }
+    let from = from.context("model graph path needs --from <key>")?;
+    let to = to.context("model graph path needs --to <key>")?;
+    let model = load::model(&path)?;
+    let out = api::path_between(&model, &from, &to, &options)?;
+    output::print_json(&out, pretty)
+}
+
+fn graph_explain(args: &mut Args) -> Result<()> {
+    let usage = "usage: model graph explain <model.json> --key <key> [--kinds <kind,kind>] [--limit <n>] [--pretty]";
+    let path = PathBuf::from(next(args, usage)?);
+    let mut key = None;
+    let mut options = NeighborhoodOptions::default();
+    let mut pretty = false;
+    while let Some(a) = args.next() {
+        match a.as_str() {
+            "--key" => key = Some(next(args, "--key <key>")?),
+            "--kinds" => options.kinds = Some(output::kinds(&next(args, "--kinds <kind,kind>")?)),
+            "--limit" => {
+                let limit: usize = next(args, "--limit <n>")?.parse()?;
+                options.limit = (limit > 0).then_some(limit);
+            }
+            "--pretty" => pretty = true,
+            "-h" | "--help" => {
+                println!("{usage}");
+                return Ok(());
+            }
+            _ => bail!("unexpected argument {a:?}"),
+        }
+    }
+    let key = key.context("model graph explain needs --key <key>")?;
+    let model = load::model(&path)?;
+    let out = api::explain_entity(&model, &key, &options)?;
+    output::print_json(&out, pretty)
+}
+
+fn graph_communities(args: &mut Args) -> Result<()> {
+    let usage = "usage: model graph communities <model.json> [--top <n>] [--pretty]";
+    let path = PathBuf::from(next(args, usage)?);
+    let mut top = 0usize;
+    let mut pretty = false;
+    while let Some(a) = args.next() {
+        match a.as_str() {
+            "--top" => top = next(args, "--top <n>")?.parse()?,
+            "--pretty" => pretty = true,
+            "-h" | "--help" => {
+                println!("{usage}");
+                return Ok(());
+            }
+            _ => bail!("unexpected argument {a:?}"),
+        }
+    }
+    let model = load::model(&path)?;
+    let mut out = api::community_list(&model, &CommunityOptions::default());
+    if top > 0 {
+        out.communities.truncate(top);
+    }
     output::print_json(&out, pretty)
 }

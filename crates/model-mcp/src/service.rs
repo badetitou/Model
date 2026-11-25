@@ -1,18 +1,38 @@
 //! The in-memory state behind the MCP tools: a frozen `Model` is loaded once
 //! and swapped atomically on rebuild, so queries never pay the JSON reload.
 
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
-use model_analysis::Direction;
-use model_cli::api::{self, Query};
+use model_analysis::{
+    CommunityOptions, Degree, DegreeOptions, Direction, NeighborhoodOptions, PathOptions,
+};
+use model_cli::api::{self, GraphOptions, Query, ReportOptions};
 use model_cli::load;
 use model_cli::output::{AnalysisOut, ContextOut, EntityOut, ImpactOut, Side};
 use model_core::{Model, RelationKind};
 use model_factory::{BuildOptions, Progress};
 use serde_json::{Value, json};
+
+/// Caps a serialised list of records without losing the surrounding summary.
+/// Accepts both a bare array and an object with a named array field.
+fn cap_list(mut value: Value, top: usize, field: &str) -> Value {
+    if top == 0 {
+        return value;
+    }
+    let list = match &mut value {
+        Value::Array(items) => Some(items),
+        Value::Object(map) => map.get_mut(field).and_then(Value::as_array_mut),
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => None,
+    };
+    if let Some(items) = list {
+        items.truncate(top);
+    }
+    value
+}
 
 /// Where the server looks for its model and, optionally, the sources it can
 /// rebuild from.
@@ -195,6 +215,122 @@ impl State {
         })
     }
 
+    /// Shortest dependency path between two entities, with explicit keys.
+    pub fn path(&self, from: &str, to: &str, options: &PathOptions) -> Result<Value> {
+        let inner = self
+            .inner
+            .read()
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        let model = inner
+            .model
+            .as_ref()
+            .context("no model loaded: run model_rebuild (or start with --model/--root)")?;
+        Ok(serde_json::to_value(api::path_between(
+            model, from, to, options,
+        )?)?)
+    }
+
+    /// One entity's incoming/outgoing relations, with occurrence sites.
+    pub fn explain(&self, key: &str, options: &NeighborhoodOptions) -> Result<Value> {
+        let inner = self
+            .inner
+            .read()
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        let model = inner
+            .model
+            .as_ref()
+            .context("no model loaded: run model_rebuild (or start with --model/--root)")?;
+        Ok(serde_json::to_value(api::explain_entity(
+            model, key, options,
+        )?)?)
+    }
+
+    /// Detected communities; `top` caps the returned list (0 = no cap).
+    pub fn communities(&self, options: &CommunityOptions, top: usize) -> Result<Value> {
+        let inner = self
+            .inner
+            .read()
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        let model = inner
+            .model
+            .as_ref()
+            .context("no model loaded: run model_rebuild (or start with --model/--root)")?;
+        let value = serde_json::to_value(api::community_list(model, options))?;
+        Ok(cap_list(value, top, "communities"))
+    }
+
+    /// Entities with the highest total degree ("god nodes"), with evidence.
+    pub fn god_nodes(&self, kinds: Vec<RelationKind>, limit: usize) -> Result<Value> {
+        let inner = self
+            .inner
+            .read()
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        let model = inner
+            .model
+            .as_ref()
+            .context("no model loaded: run model_rebuild (or start with --model/--root)")?;
+        let options = DegreeOptions {
+            kinds: (!kinds.is_empty()).then_some(kinds),
+            ..DegreeOptions::default()
+        };
+        let degrees = model_analysis::run(&Degree { options }, model)?;
+        let ranked: Vec<Value> = degrees
+            .ranked()
+            .into_iter()
+            .take(if limit == 0 { usize::MAX } else { limit })
+            .map(|(id, total)| {
+                let entity = model.entity(id);
+                json!({
+                    "key": entity.map(|e| e.key()).unwrap_or_default(),
+                    "name": entity.map(|e| e.name()).unwrap_or_default(),
+                    "kind": entity.map(|e| e.kind_name()).unwrap_or_default(),
+                    "in": degrees.in_degree(id),
+                    "out": degrees.out_degree(id),
+                    "total": total,
+                    "file": entity.and_then(|e| e.file()),
+                    "line": entity
+                        .and_then(|e| e.range())
+                        .map(|r| r.start_line.saturating_add(1)),
+                })
+            })
+            .collect();
+        Ok(json!({ "count": ranked.len(), "ranked": ranked }))
+    }
+
+    /// Writes the graph projection and its Markdown report under `directory`.
+    /// No layout or rendering is produced here: both files are data for the
+    /// caller to visualise (or not) as it sees fit.
+    pub fn export_graph(&self, directory: &Path, top: usize) -> Result<Value> {
+        let inner = self
+            .inner
+            .read()
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        let model = inner
+            .model
+            .as_ref()
+            .context("no model loaded: run model_rebuild (or start with --model/--root)")?;
+        fs::create_dir_all(directory)
+            .with_context(|| format!("creating {}", directory.display()))?;
+        let projection = api::projection(model, &GraphOptions::default());
+        let summary = &projection.summary;
+        let projection_path = directory.join("projection.json");
+        let report_path = directory.join("REPORT.md");
+        fs::write(&projection_path, serde_json::to_vec_pretty(&projection)?)
+            .with_context(|| format!("writing {}", projection_path.display()))?;
+        let report = api::report(model, &ReportOptions { top });
+        fs::write(&report_path, report)
+            .with_context(|| format!("writing {}", report_path.display()))?;
+        Ok(json!({
+            "projection": projection_path.display().to_string(),
+            "report": report_path.display().to_string(),
+            "schema": projection.schema,
+            "entities": summary.entities,
+            "relations": summary.relations,
+            "sites": summary.sites,
+            "communities": summary.communities,
+        }))
+    }
+
     /// Reloads `model.json`, or rebuilds from `--root` when one was given,
     /// then swaps the frozen model in one write.
     pub fn rebuild(&self) -> Result<Value> {
@@ -248,5 +384,157 @@ impl State {
             "rebuilds": inner.rebuilds,
             "elapsed_ms": start.elapsed().as_millis() as u64,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use model_analysis::{CommunityOptions, NeighborhoodOptions, PathOptions};
+    use model_core::{EntityKind, ModelBuilder, Provenance, Range, RelationKind};
+    use model_factory::BuildOptions;
+
+    use super::{Config, State};
+
+    const A: &str = "model java . . p/A#a().";
+    const B: &str = "model java . . p/B#b().";
+
+    static NEXT_FIXTURE: AtomicUsize = AtomicUsize::new(0);
+
+    struct Fixture {
+        dir: PathBuf,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            let seq = NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed);
+            let dir = std::env::temp_dir().join(format!("model-mcp-{}-{seq}", std::process::id()));
+            fs::create_dir_all(&dir).expect("create temp dir");
+            let mut builder = ModelBuilder::new();
+            let a = builder.entity(A, EntityKind::Method, "a");
+            let b = builder.entity(B, EntityKind::Method, "b");
+            for (id, file, line) in [(a, "A.java", 2), (b, "B.java", 4)] {
+                builder.set_source(
+                    id,
+                    file,
+                    Range::new(line, 0, line, 2),
+                    Some(Range::new(line, 1, line, 2)),
+                );
+            }
+            builder.occurrence(
+                &RelationKind::Calls,
+                a,
+                b,
+                Provenance::Scip,
+                Range::new(5, 4, 5, 10),
+            );
+            let model = builder.build();
+            fs::write(
+                dir.join("model.json"),
+                serde_json::to_vec(&model).expect("serialise fixture"),
+            )
+            .expect("write fixture");
+            Fixture { dir }
+        }
+
+        fn state(&self) -> State {
+            State::new(Config {
+                model_path: self.dir.join("model.json"),
+                root: None,
+                build: BuildOptions::default(),
+            })
+            .expect("load fixture")
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    #[test]
+    fn graph_queries_return_json() {
+        let fx = Fixture::new();
+        let state = fx.state();
+        let kinds = vec![RelationKind::Calls];
+
+        let path = state
+            .path(
+                A,
+                B,
+                &PathOptions {
+                    kinds: Some(kinds.clone()),
+                    ..PathOptions::default()
+                },
+            )
+            .expect("path");
+        assert!(path.is_object(), "path: {path}");
+
+        let explain = state
+            .explain(
+                A,
+                &NeighborhoodOptions {
+                    kinds: Some(kinds.clone()),
+                    ..NeighborhoodOptions::default()
+                },
+            )
+            .expect("explain");
+        assert!(explain.is_object(), "explain: {explain}");
+        assert!(explain.to_string().contains(B), "explain: {explain}");
+
+        let communities = state
+            .communities(&CommunityOptions::default(), 5)
+            .expect("communities");
+        assert!(!communities.is_null(), "communities: {communities}");
+
+        let gods = state.god_nodes(kinds, 1).expect("god nodes");
+        assert_eq!(gods["ranked"].as_array().map(Vec::len), Some(1), "{gods}");
+    }
+
+    #[test]
+    fn export_graph_writes_projection_and_report() {
+        let fx = Fixture::new();
+        let state = fx.state();
+        let target = fx.dir.join("export").join("nested");
+
+        let out = state.export_graph(&target, 5).expect("export graph");
+        let projection_path = target.join("projection.json");
+        let report_path = target.join("REPORT.md");
+        assert_eq!(
+            out["projection"],
+            serde_json::json!(projection_path.display().to_string())
+        );
+        assert_eq!(
+            out["report"],
+            serde_json::json!(report_path.display().to_string())
+        );
+        assert_eq!(out["entities"], serde_json::json!(2));
+        assert_eq!(out["relations"], serde_json::json!(1));
+
+        let projection: serde_json::Value =
+            serde_json::from_slice(&fs::read(&projection_path).expect("projection file"))
+                .expect("projection JSON");
+        assert_eq!(projection["schema"], serde_json::json!("model.graph/1"));
+        let report = fs::read_to_string(&report_path).expect("report file");
+        assert!(report.contains("# Model graph report"), "{report}");
+    }
+
+    #[test]
+    fn graph_queries_require_a_loaded_model() {
+        let fx = Fixture::new();
+        let state = State::new(Config {
+            model_path: fx.dir.join("missing.json"),
+            root: None,
+            build: BuildOptions::default(),
+        })
+        .expect("empty state");
+        let err = state
+            .path(A, B, &PathOptions::default())
+            .expect_err("no model");
+        assert!(err.to_string().contains("no model loaded"), "{err}");
     }
 }
